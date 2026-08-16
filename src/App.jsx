@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext, useMemo } from "react";
+import React, { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
 import {
   Home, Plus, Users, User, Search, Bell, MessageCircle, ArrowLeft, X, Menu,
   Image as ImageIcon, Type as TypeIcon, CalendarDays, Settings, ChevronRight,
@@ -8,6 +8,10 @@ import {
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as postService from "./services/postService.js";
+import * as profileService from "./services/profileService.js";
+import * as dogService from "./services/dogService.js";
+import * as groupService from "./services/groupService.js";
+import * as socialService from "./services/socialService.js";
 import { supabase } from "./services/supabaseClient.js";
 
 /* ============================================================
@@ -90,18 +94,10 @@ function ThemeProvider({ children }) {
 // const dog = { id, nom, race, age, photo, description };
 
 const api = {
-  // --- Groupes/chiens/profil/modération (encore locaux — prochaines sessions) ---
-  // Publications/likes/commentaires/sauvegardes sont désormais réellement branchés
-  // sur postService.js — ce qui reste ici n'est PAS persisté, ne jamais le présenter
-  // comme tel.
-  followUser: async (username) => { /* TODO: connect to backend */ return true; },
-  unfollowUser: async (username) => { /* TODO: connect to backend */ return true; },
-  createGroup: async (groupData) => { /* TODO: connect to backend */ return { ...groupData, id: `local-${Date.now()}`, nombreMembres: 1 }; },
-  createDog: async (dogData) => { /* TODO: connect to backend */ return { ...dogData, id: `local-${Date.now()}` }; },
-  updateProfile: async (profileData) => { /* TODO: connect to backend */ return profileData; },
-  joinGroup: async (groupId) => { /* TODO: connect to backend */ return true; },
-  reportContent: async (report) => { /* TODO: connect to a real moderation backend */ return { ...report, id: `local-${Date.now()}` }; },
-  blockUser: async (author) => { /* TODO: connect to backend */ return true; },
+  // Follow/unfollow, groupes, chiens, profil, blocage et signalement sont
+  // désormais réellement branchés (socialService.js / groupService.js /
+  // dogService.js / profileService.js) — seule l'assistance reste ici, faute
+  // de table dédiée côté base.
   submitHelpRequest: async (request) => { /* TODO: connect to backend / support inbox */ return true; },
 };
 
@@ -348,7 +344,7 @@ function getCandidatePosts(posts) {
   return posts; // point d'entrée unique — deviendra un vrai fetch paginé côté backend
 }
 function filterSafety(posts, blockedAuthors, hiddenPostIds) {
-  return posts.filter((p) => p.contentRating !== "restricted" && !blockedAuthors.includes(p.nom) && !hiddenPostIds.includes(p.id));
+  return posts.filter((p) => p.contentRating !== "restricted" && !blockedAuthors.includes(p.username) && !hiddenPostIds.includes(p.id));
 }
 function filterAge(posts, viewerIsMinor) {
   return posts.filter((p) => isContentVisible(p.contentRating || "normal", viewerIsMinor));
@@ -356,7 +352,7 @@ function filterAge(posts, viewerIsMinor) {
 function calculateScores(posts, ctx) {
   const { following = [], interests = [], now = Date.now() } = ctx;
   return posts.map((p) => {
-    const affinity = following.includes(p.nom) ? 1 : 0;
+    const affinity = following.includes(p.username) ? 1 : 0;
     const ageHours = p.createdAt ? (now - p.createdAt) / 36e5 : null;
     const recency = ageHours === null ? 0.6 : Math.max(0, 1 - ageHours / 72); // décroît sur 72h
     const interaction = Math.min(1, ((p.likes || 0) + (p.commentaires || 0) * 2) / 20);
@@ -373,7 +369,7 @@ function diversifyFeed(posts) {
   // Round-robin par auteur : évite d'afficher plusieurs contenus du même auteur d'affilée,
   // tout en conservant le classement par score au sein de chaque auteur.
   const byAuthor = {};
-  posts.forEach((p) => { (byAuthor[p.nom] = byAuthor[p.nom] || []).push(p); });
+  posts.forEach((p) => { const key = p.username || p.nom; (byAuthor[key] = byAuthor[key] || []).push(p); });
   const queues = Object.values(byAuthor);
   const result = [];
   let added = true;
@@ -416,6 +412,7 @@ function mapPostRow(row) {
   return {
     id: row.id,
     nom: row.profiles?.nom || row.profiles?.username || "Utilisateur",
+    username: row.profiles?.username || null,
     avatar: row.profiles?.avatar_url || null,
     texte: row.texte,
     image: row.post_media?.[0]?.url || null,
@@ -437,9 +434,9 @@ const PRACTICE_TYPES = ["Approche", "Affût", "Battue", "Chasse au chien", "Gibi
 const GROUP_CATEGORIES = ["Grand gibier", "Petit gibier", "Gibier d'eau", "Chiens de chasse", "Approche", "Affût", "Battue", "Matériel", "Photographie", "Nature"];
 
 // --- Modération -------------------------------------------------------------
-// Motifs de signalement proposés à l'utilisateur. La liste elle-même n'est pas une
-// donnée fictive (c'est une taxonomie), mais chaque signalement réel reste local tant
-// que `api.reportContent` n'est pas connecté à un vrai système de modération.
+// Motifs de signalement proposés à l'utilisateur — taxonomie alignée sur la
+// contrainte CHECK de la colonne "reason" (table reports, 001_init.sql).
+// Signalements réellement persistés via socialService.reportContent().
 const REPORT_REASONS = [
   "Violence", "Braconnage", "Contenu illégal", "Harcèlement", "Haine / discrimination",
   "Spam", "Arnaque", "Contenu sexuel", "Mineur en danger", "Usurpation d'identité", "Autre",
@@ -498,39 +495,9 @@ const FAQ_ITEMS = [
   { q: "Mes données sont-elles publiques ?", a: "Vous contrôlez la visibilité de votre compte et de vos informations dans Paramètres > Confidentialité." },
 ];
 
-// Groupes prédéfinis — communautés thématiques créées par PISTE (pas des utilisateurs).
-// nombreMembres démarre à 0 et n'évolue qu'avec de vraies actions "Rejoindre" en session ;
-// aucune valeur n'est inventée. À remplacer par des données backend le moment venu.
-//
-// `imageUrl` est le seul champ à renseigner pour activer la photo de fond de chaque carte
-// (ex: "/images/groupes/chevreuil.jpg" ou une URL de stockage distant). Tant qu'il vaut
-// `null`, un fond neutre de substitution s'affiche automatiquement — jamais d'emoji.
-const PREDEFINED_GROUPS = [
-  { id: "grp-chevreuil", nom: "Chevreuil", imageUrl: null, description: "Approche, affût et suivi du chevreuil." }, // photo suggérée : chevreuil en sous-bois
-  { id: "grp-grand-gibier", nom: "Grand gibier", imageUrl: null, description: "Cerf, chevreuil, sanglier : tout le grand gibier." }, // photo suggérée : forêt / grand gibier
-  { id: "grp-petit-gibier", nom: "Petit gibier", imageUrl: null, description: "Lièvre, lapin, perdrix et compagnie." }, // photo suggérée : lièvre en plaine
-  { id: "grp-sanglier", nom: "Sanglier", imageUrl: null, description: "Battues, techniques et retours d'expérience." }, // photo suggérée : sanglier / sous-bois dense
-  { id: "grp-gibier-eau", nom: "Gibier d'eau", imageUrl: null, description: "Hutte, canards et chasse à la sauvagine." }, // photo suggérée : marais / hutte
-  { id: "grp-gibier-plumes", nom: "Gibier à plumes", imageUrl: null, description: "Faisan, perdrix, bécasse et gibier ailé." }, // photo suggérée : faisan en vol
-  { id: "grp-chiens-arret", nom: "Chiens d'arrêt", imageUrl: null, description: "Dressage et pratique avec les chiens d'arrêt." }, // photo suggérée : chien d'arrêt en action
-  { id: "grp-chiens-courants", nom: "Chiens courants", imageUrl: null, description: "Meutes et chiens courants en action." }, // photo suggérée : meute en forêt
-  { id: "grp-chiens-chasse", nom: "Chiens de chasse", imageUrl: null, description: "Tout ce qui concerne l'auxiliaire à quatre pattes." }, // photo suggérée : portrait de chien de chasse
-  { id: "grp-cuisine", nom: "Cuisine du gibier", imageUrl: null, description: "Recettes et préparations autour du gibier." }, // photo suggérée : plat de gibier dressé
-  { id: "grp-techniques", nom: "Techniques de chasse", imageUrl: null, description: "Approche, affût, battue : échangez sur les techniques." }, // photo suggérée : chasseur à l'affût
-  { id: "grp-territoires", nom: "Territoires & biotopes", imageUrl: null, description: "Connaître et lire son territoire de chasse." }, // photo suggérée : paysage de territoire
-  { id: "grp-observation", nom: "Observation & nature", imageUrl: null, description: "Observer la faune, en dehors des jours de chasse." }, // photo suggérée : jumelles / observation
-  { id: "grp-materiel", nom: "Matériel & équipement", imageUrl: null, description: "Armes, optiques, accessoires et matériel." }, // photo suggérée : équipement moderne
-  { id: "grp-vetements", nom: "Vêtements & équipement outdoor", imageUrl: null, description: "S'équiper pour le terrain, par tous les temps." }, // photo suggérée : tenue outdoor
-  { id: "grp-photo", nom: "Photo & vidéo", imageUrl: null, description: "Immortaliser les sorties et partager ses images." }, // photo suggérée : appareil photo en extérieur
-  { id: "grp-4x4", nom: "4x4 & véhicules", imageUrl: null, description: "Véhicules et équipements pour accéder au terrain." }, // photo suggérée : 4x4 en chemin forestier
-  { id: "grp-sorties", nom: "Sorties & territoires", imageUrl: null, description: "Organiser et retrouver des sorties de chasse." }, // photo suggérée : groupe en sortie
-  { id: "grp-passionnes", nom: "Chasse entre passionnés", imageUrl: null, description: "Rencontres et échanges entre passionnés." }, // photo suggérée : moment convivial terrain
-  { id: "grp-gestion", nom: "Gestion du territoire", imageUrl: null, description: "Aménagement et gestion cynégétique du territoire." }, // photo suggérée : aménagement forestier
-  { id: "grp-faune", nom: "Faune sauvage", imageUrl: null, description: "Connaissance et suivi de la faune sauvage." }, // photo suggérée : faune en milieu naturel
-  { id: "grp-environnement", nom: "Nature & environnement", imageUrl: null, description: "Biodiversité, environnement et milieux naturels." }, // photo suggérée : paysage naturel
-  { id: "grp-reglementation", nom: "Réglementation & permis", imageUrl: null, description: "Droit de la chasse, permis et réglementation." }, // photo suggérée : document / carnet de battue
-  { id: "grp-debutants", nom: "Débutants & conseils", imageUrl: null, description: "Poser ses questions et progresser en chasse." }, // photo suggérée : accompagnement terrain
-];
+// Les groupes (les 24 prédéfinis + ceux créés par les utilisateurs) sont
+// chargés depuis Supabase via groupService.fetchGroups() — voir MainApp.
+// Les 24 groupes prédéfinis sont déjà en base (insérés par 001_init.sql).
 
 // Système de badges profil — élégant, différent d'un emoji, prêt pour une attribution
 // automatique future à partir d'attributs vérifiés côté backend (statut chasseur vérifié,
@@ -1175,7 +1142,7 @@ function ScreenFil({ posts, profile, liked, saved, commentsByPost, following, on
   const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], now: Date.now() };
   const visible =
     tab === "pourtoi" ? buildFeed(posts, ctx) :
-    tab === "abonnements" ? buildFeed(posts.filter((p) => following.includes(p.nom)), ctx) :
+    tab === "abonnements" ? buildFeed(posts.filter((p) => following.includes(p.username)), ctx) :
     buildFeed(posts, { ...ctx, following: [] }); // Découvrir : pas de biais d'affinité, priorité récence/qualité/diversité
 
   return (
@@ -1209,7 +1176,7 @@ function ScreenFil({ posts, profile, liked, saved, commentsByPost, following, on
           onDelete={() => { onDelete(sheet.post.id); setSheet(null); }}
           onReport={() => setSheet({ type: "report", post: sheet.post })}
           onHide={() => { onHide(sheet.post.id); setSheet(null); }}
-          onBlock={() => { onBlock(sheet.post.nom); setSheet(null); }}
+          onBlock={() => { onBlock(sheet.post.username); setSheet(null); }}
         />
       )}
       {sheet?.type === "report" && (
@@ -1222,9 +1189,9 @@ function ScreenFil({ posts, profile, liked, saved, commentsByPost, following, on
         <AuthorProfileSheet
           author={sheet.post.nom}
           isSelf={sheet.post.nom === meName}
-          isFollowing={following.includes(sheet.post.nom)}
+          isFollowing={following.includes(sheet.post.username)}
           onClose={() => setSheet(null)}
-          onToggleFollow={() => onToggleFollow(sheet.post.nom)}
+          onToggleFollow={() => onToggleFollow(sheet.post.username)}
         />
       )}
     </div>
@@ -1304,7 +1271,7 @@ function ScreenVideo({ videos, profile, liked, commentsByPost, following, onTogg
           onDelete={() => { onDelete(sheet.post.id); setSheet(null); }}
           onReport={() => setSheet({ type: "report", post: sheet.post })}
           onHide={() => { onHide(sheet.post.id); setSheet(null); }}
-          onBlock={() => { onBlock(sheet.post.nom); setSheet(null); }}
+          onBlock={() => { onBlock(sheet.post.username); setSheet(null); }}
         />
       )}
       {sheet?.type === "report" && (
@@ -1317,9 +1284,9 @@ function ScreenVideo({ videos, profile, liked, commentsByPost, following, onTogg
         <AuthorProfileSheet
           author={sheet.post.nom}
           isSelf={sheet.post.nom === meName}
-          isFollowing={following.includes(sheet.post.nom)}
+          isFollowing={following.includes(sheet.post.username)}
           onClose={() => setSheet(null)}
-          onToggleFollow={() => onToggleFollow(sheet.post.nom)}
+          onToggleFollow={() => onToggleFollow(sheet.post.username)}
         />
       )}
     </div>
@@ -1405,11 +1372,18 @@ function CreateGroupForm({ onClose, onCreated }) {
   const [description, setDescription] = useState("");
   const [categorie, setCategorie] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const submit = async () => {
     setSaving(true);
-    const g = await api.createGroup({ nom, description, categorie, imageUrl: null });
-    setSaving(false);
-    onCreated(g);
+    setError("");
+    try {
+      const g = await groupService.createGroup({ nom, description, categorie, imageUrl: null });
+      onCreated(g);
+    } catch (e) {
+      setError(e.message || "Impossible de créer ce groupe pour le moment.");
+    } finally {
+      setSaving(false);
+    }
   };
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 46, background: colors.background, display: "flex", flexDirection: "column" }}>
@@ -1423,6 +1397,7 @@ function CreateGroupForm({ onClose, onCreated }) {
         <TextField label="Description" value={description} onChange={setDescription} placeholder="Décrivez l'objet de ce groupe." textarea />
         <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>CATÉGORIE</div>
         <div className="flex flex-wrap gap-2">{GROUP_CATEGORIES.map((c) => <Chip key={c} label={c} active={categorie === c} onClick={() => setCategorie(categorie === c ? null : c)} />)}</div>
+        {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error, marginTop: 16 }}>{error}</div>}
       </div>
       <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button disabled={!nom || saving} onClick={submit}>{saving ? "Création..." : "Créer le groupe"}</Button></div>
     </div>
@@ -1701,11 +1676,38 @@ function ProfileEditor({ profile, onClose, onSave }) {
   const { colors } = useTheme();
   const [form, setForm] = useState({ ...profile });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(profile.avatar || null);
+  const fileInputRef = useRef(null);
+
+  const pickAvatar = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
   const submit = async () => {
     setSaving(true);
-    const saved = await api.updateProfile(form); // TODO: connect to backend
-    setSaving(false);
-    onSave(saved);
+    setError("");
+    try {
+      let avatarUrl = profile.avatar;
+      if (avatarFile) {
+        avatarUrl = await profileService.uploadAvatar(avatarFile);
+      }
+      const saved = await profileService.updateProfile({
+        nom: form.nom,
+        username: form.username,
+        bio: form.bio,
+        localisation: form.localisation,
+      });
+      onSave({ ...saved, avatar: avatarUrl, interets: form.interets });
+    } catch (e) {
+      setError(e.message || "Impossible d'enregistrer le profil pour le moment.");
+    } finally {
+      setSaving(false);
+    }
   };
   const toggleInterest = (i) => setForm({ ...form, interets: form.interets.includes(i) ? form.interets.filter((x) => x !== i) : [...form.interets, i] });
   return (
@@ -1716,10 +1718,14 @@ function ProfileEditor({ profile, onClose, onSave }) {
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><Camera size={20} color={colors.textFaint} /></div>
         </div>
         <div style={{ padding: "0 20px" }}>
-          <div style={{ width: 72, height: 72, borderRadius: RADIUS.md, background: colors.surface, border: `3px solid ${colors.background}`, marginTop: -30, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-            <User size={28} color={colors.textFaint} />
+          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickAvatar} style={{ display: "none" }} />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{ width: 72, height: 72, borderRadius: RADIUS.md, background: colors.surface, border: `3px solid ${colors.background}`, marginTop: -30, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer", padding: 0, overflow: "hidden" }}
+          >
+            {avatarPreview ? <img src={avatarPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={28} color={colors.textFaint} />}
             <div style={{ position: "absolute", bottom: -4, right: -4, width: 24, height: 24, borderRadius: 8, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Camera size={12} color={colors.onAccent} /></div>
-          </div>
+          </button>
           <div style={{ marginTop: 16 }}>
             <TextField label="Nom" value={form.nom} onChange={(v) => setForm({ ...form, nom: v })} placeholder="Votre nom" />
             <TextField label="Nom d'utilisateur" value={form.username} onChange={(v) => setForm({ ...form, username: v })} placeholder="handle" />
@@ -1727,6 +1733,7 @@ function ProfileEditor({ profile, onClose, onSave }) {
             <TextField label="Localisation" value={form.localisation} onChange={(v) => setForm({ ...form, localisation: v })} placeholder="Département" />
             <div style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginBottom: 8 }}>Centres d'intérêt</div>
             <div className="flex flex-wrap gap-2" style={{ marginBottom: 20 }}>{INTERESTS.map((i) => <Chip key={i} label={i} active={form.interets.includes(i)} onClick={() => toggleInterest(i)} />)}</div>
+            {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error, marginBottom: 12 }}>{error}</div>}
           </div>
         </div>
       </div>
@@ -1743,11 +1750,18 @@ function DogFormScreen({ onClose, onSaved }) {
   const [specialite, setSpecialite] = useState(null);
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const submit = async () => {
     setSaving(true);
-    const dog = await api.createDog({ nom, race, age, sexe, specialite, description, photo: null }); // TODO: connect to backend
-    setSaving(false);
-    onSaved(dog);
+    setError("");
+    try {
+      const dog = await dogService.createDog({ nom, race, age, sexe, specialite, description });
+      onSaved(dog);
+    } catch (e) {
+      setError(e.message || "Impossible d'enregistrer ce chien pour le moment.");
+    } finally {
+      setSaving(false);
+    }
   };
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column" }}>
@@ -1769,6 +1783,7 @@ function DogFormScreen({ onClose, onSaved }) {
           {["Chien d'arrêt", "Chien courant", "Chien de rapport", "Chien de rouge", "Autre"].map((s) => <Chip key={s} label={s} active={specialite === s} onClick={() => setSpecialite(specialite === s ? null : s)} />)}
         </div>
         <TextField label="Description" value={description} onChange={setDescription} placeholder="Quelques mots sur votre compagnon de chasse." textarea />
+        {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error }}>{error}</div>}
       </div>
       <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button disabled={!nom || saving} onClick={submit}>{saving ? "Enregistrement..." : "Enregistrer"}</Button></div>
     </div>
@@ -1886,7 +1901,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, liked, saved, 
           onDelete={() => { onDelete(sheet.post.id); setSheet(null); }}
           onReport={() => setSheet({ type: "report", post: sheet.post })}
           onHide={() => { onHide(sheet.post.id); setSheet(null); }}
-          onBlock={() => { onBlock(sheet.post.nom); setSheet(null); }}
+          onBlock={() => { onBlock(sheet.post.username); setSheet(null); }}
         />
       )}
       {sheet?.type === "report" && (
@@ -2291,7 +2306,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const [dogs, setDogs] = useState([]);
   // Groupes prédéfinis PISTE : vraies catégories de la communauté, 0 membre tant que
   // personne n'a réellement rejoint (le compteur ne reflète que de vraies actions).
-  const [groups, setGroups] = useState(() => PREDEFINED_GROUPS.map((g) => ({ ...g, nombreMembres: 0, joined: false })));
+  const [groups, setGroups] = useState([]);
   const [posts, setPosts] = useState([]);
   const [videos, setVideos] = useState([]);
   const [editingPost, setEditingPost] = useState(null);
@@ -2325,6 +2340,10 @@ function MainApp({ session, onboardingData, ageInfo }) {
     refreshPosts().catch(() => showToast("Impossible de charger le fil pour le moment."));
     postService.fetchMyLikes().then(setLikedIds).catch(() => {});
     postService.fetchMySaves().then(setSavedPostIds).catch(() => {});
+    dogService.fetchMyDogs().then(setDogs).catch(() => {});
+    groupService.fetchGroups().then(setGroups).catch(() => showToast("Impossible de charger les groupes pour le moment."));
+    socialService.fetchMyFollowing().then(setFollowing).catch(() => {});
+    socialService.fetchMyBlocks().then(setBlockedAuthors).catch(() => {});
   }, [session, profileLoaded]);
 
   const handlePublished = (type, item) => {
@@ -2341,14 +2360,17 @@ function MainApp({ session, onboardingData, ageInfo }) {
   };
 
   const toggleJoinGroup = async (groupId) => {
-    await api.joinGroup(groupId); // TODO: connect to backend
-    let willJoin = false;
-    setGroups((gs) => gs.map((g) => {
-      if (g.id !== groupId) return g;
-      willJoin = !g.joined;
-      return { ...g, joined: !g.joined, nombreMembres: (g.nombreMembres ?? 0) + (g.joined ? -1 : 1) };
-    }));
-    showToast(willJoin ? "Groupe rejoint." : "Vous avez quitté le groupe.");
+    const current = groups.find((g) => g.id === groupId);
+    if (!current) return;
+    try {
+      if (current.joined) await groupService.leaveGroup(groupId);
+      else await groupService.joinGroup(groupId);
+    } catch (e) {
+      showToast("Action impossible pour le moment.");
+      return;
+    }
+    setGroups((gs) => gs.map((g) => (g.id !== groupId ? g : { ...g, joined: !g.joined, nombreMembres: (g.nombreMembres ?? 0) + (g.joined ? -1 : 1) })));
+    showToast(current.joined ? "Vous avez quitté le groupe." : "Groupe rejoint.");
   };
 
   const bumpLikes = (id, delta) => {
@@ -2416,25 +2438,48 @@ function MainApp({ session, onboardingData, ageInfo }) {
     showToast("Publication supprimée.");
   };
   const reportContent = async (report) => {
-    const saved = await api.reportContent(report); // TODO: connect to a real moderation backend
-    setReports((r) => [{ ...saved, date: "à l'instant" }, ...r]);
+    try {
+      const saved = await socialService.reportContent(report);
+      setReports((r) => [{ ...saved, date: "à l'instant" }, ...r]);
+      showToast("Signalement envoyé.");
+    } catch (e) {
+      showToast("Impossible d'envoyer le signalement pour le moment.");
+    }
   };
-  const blockAuthor = async (nom) => {
-    await api.blockUser(nom); // TODO: connect to backend
-    setBlockedAuthors((b) => (b.includes(nom) ? b : [...b, nom]));
-    showToast(`${nom} a été bloqué.`);
+  // `username` (unique, colonne "profiles") — jamais `nom` (nom d'affichage,
+  // modifiable et non garanti unique) : voir socialService.js.
+  const blockAuthor = async (username) => {
+    if (!username) return;
+    try {
+      await socialService.blockUser(username);
+      setBlockedAuthors((b) => (b.includes(username) ? b : [...b, username]));
+      showToast(`${username} a été bloqué.`);
+    } catch (e) {
+      showToast("Impossible de bloquer cet utilisateur pour le moment.");
+    }
   };
-  const unblockAuthor = (nom) => setBlockedAuthors((b) => b.filter((x) => x !== nom));
+  const unblockAuthor = async (username) => {
+    try {
+      await socialService.unblockUser(username);
+    } catch (e) { /* le retirer localement quand même : au pire il sera re-listé au refresh */ }
+    setBlockedAuthors((b) => b.filter((x) => x !== username));
+  };
   const hidePost = (id) => { setHiddenPostIds((h) => [...h, id]); showToast("Contenu masqué."); };
-  const toggleFollow = async (nom) => {
-    const isFollowing = following.includes(nom);
-    await (isFollowing ? api.unfollowUser(nom) : api.followUser(nom)); // TODO: connect to backend
-    setFollowing((f) => (isFollowing ? f.filter((x) => x !== nom) : [...f, nom]));
-    showToast(isFollowing ? `Vous ne suivez plus ${nom}.` : `Vous suivez ${nom}.`);
+  const toggleFollow = async (username) => {
+    if (!username) return;
+    const isFollowing = following.includes(username);
+    try {
+      await (isFollowing ? socialService.unfollowUser(username) : socialService.followUser(username));
+    } catch (e) {
+      showToast("Action impossible pour le moment.");
+      return;
+    }
+    setFollowing((f) => (isFollowing ? f.filter((x) => x !== username) : [...f, username]));
+    showToast(isFollowing ? `Vous ne suivez plus ${username}.` : `Vous suivez ${username}.`);
   };
 
-  const visiblePosts = posts.filter((p) => !hiddenPostIds.includes(p.id) && !blockedAuthors.includes(p.nom));
-  const visibleVideos = videos.filter((v) => !hiddenPostIds.includes(v.id) && !blockedAuthors.includes(v.nom));
+  const visiblePosts = posts.filter((p) => !hiddenPostIds.includes(p.id) && !blockedAuthors.includes(p.username));
+  const visibleVideos = videos.filter((v) => !hiddenPostIds.includes(v.id) && !blockedAuthors.includes(v.username));
 
   const screens = {
     fil: (
