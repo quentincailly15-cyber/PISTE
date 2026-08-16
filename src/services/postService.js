@@ -133,7 +133,7 @@ export async function addComment(postId, texte, parentId = null) {
 export async function fetchCandidatePosts({ limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles(username, nom, avatar_url), post_media(url, ordre, type)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type)")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
