@@ -55,6 +55,64 @@ export async function unfollowUser(username) {
   return true;
 }
 
+/** Compte privé : au lieu d'un follow direct, crée une demande en attente
+ *  que le compte cible devra approuver (voir approveFollowRequest). */
+export async function requestFollow(username) {
+  const me = await requireUser();
+  const targetId = await resolveUserIdByUsername(username);
+  const { error } = await supabase.from("follow_requests").insert({ requester_id: me.id, target_id: targetId });
+  if (error) throw error;
+  return true;
+}
+
+/** Annule une demande d'abonnement qu'on a soi-même envoyée (encore en attente). */
+export async function cancelFollowRequest(username) {
+  const me = await requireUser();
+  const targetId = await resolveUserIdByUsername(username);
+  const { error } = await supabase.from("follow_requests").delete().eq("requester_id", me.id).eq("target_id", targetId).eq("status", "pending");
+  if (error) throw error;
+  return true;
+}
+
+/** État de la relation avec `username` du point de vue de l'utilisateur
+ *  connecté : a-t-il déjà une demande en attente vers ce compte privé ? */
+export async function fetchMyPendingRequestUsernames() {
+  const me = await requireUser();
+  const { data, error } = await supabase
+    .from("follow_requests")
+    .select("profiles!follow_requests_target_id_fkey(username)")
+    .eq("requester_id", me.id)
+    .eq("status", "pending");
+  if (error) throw error;
+  return data.map((r) => r.profiles?.username).filter(Boolean);
+}
+
+/** Demandes d'abonnement reçues, en attente d'approbation par l'utilisateur
+ *  connecté (compte privé) — sert à afficher la liste "Demandes d'abonnement". */
+export async function fetchIncomingFollowRequests() {
+  const me = await requireUser();
+  const { data, error } = await supabase
+    .from("follow_requests")
+    .select("id, created_at, profiles!follow_requests_requester_id_fkey(username, nom, avatar_url)")
+    .eq("target_id", me.id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.map((r) => ({ id: r.id, createdAt: r.created_at, username: r.profiles?.username, nom: r.profiles?.nom, avatar: r.profiles?.avatar_url }));
+}
+
+export async function approveFollowRequest(requestId) {
+  const { error } = await supabase.rpc("approve_follow_request", { request_id: requestId });
+  if (error) throw error;
+  return true;
+}
+
+export async function rejectFollowRequest(requestId) {
+  const { error } = await supabase.rpc("reject_follow_request", { request_id: requestId });
+  if (error) throw error;
+  return true;
+}
+
 /** À appeler au chargement pour retrouver les abonnements déjà en base
  *  (sans ça, `following` repartirait vide à chaque rafraîchissement). */
 export async function fetchMyFollowing() {
@@ -66,6 +124,27 @@ export async function fetchMyFollowing() {
     .eq("follower_id", userData.user.id);
   if (error) throw error;
   return data.map((r) => r.profiles?.username).filter(Boolean);
+}
+
+/** Liste des abonnés d'un utilisateur précis — pour l'écran "Abonnés" ouvert
+ *  depuis n'importe quel profil (le sien ou un profil public). */
+export async function fetchFollowers(userId) {
+  const { data, error } = await supabase
+    .from("follows")
+    .select("profiles!follows_follower_id_fkey(username, nom, avatar_url)")
+    .eq("followed_id", userId);
+  if (error) throw error;
+  return data.map((r) => r.profiles).filter(Boolean);
+}
+
+/** Liste des abonnements d'un utilisateur précis — pour l'écran "Abonnements". */
+export async function fetchFollowingList(userId) {
+  const { data, error } = await supabase
+    .from("follows")
+    .select("profiles!follows_followed_id_fkey(username, nom, avatar_url)")
+    .eq("follower_id", userId);
+  if (error) throw error;
+  return data.map((r) => r.profiles).filter(Boolean);
 }
 
 /**
@@ -141,6 +220,17 @@ export async function reportContent({ targetId, targetType, reason, description 
   const { data, error } = await supabase
     .from("reports")
     .insert({ reporter_id: me.id, target_id: targetId, target_type: targetType, reason, description })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function submitHelpRequest({ category, subject, description }) {
+  const me = await requireUser();
+  const { data, error } = await supabase
+    .from("support_requests")
+    .insert({ user_id: me.id, category, subject, description })
     .select()
     .single();
   if (error) throw error;

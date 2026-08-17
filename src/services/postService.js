@@ -6,6 +6,72 @@
 import { supabase } from "./supabaseClient.js";
 import { extractHashtags, extractMentions } from "../lib/piste_core.js";
 
+/**
+ * Capture une vraie image (première seconde) d'un fichier vidéo, côté
+ * navigateur (canvas) — sert de miniature dans les listes, plutôt que
+ * d'afficher un <video> qui reste souvent noir tant qu'on n'a pas cliqué.
+ *
+ * Sur certains navigateurs mobiles, l'événement "seeked" ne se déclenche
+ * parfois jamais sur une vidéo tout juste chargée depuis un blob — sans
+ * limite de temps, ça bloquait silencieusement TOUT l'envoi de la publication
+ * (createPost attendait cette promesse indéfiniment). D'où le timeout : la
+ * miniature est un bonus, jamais une condition pour publier la vidéo.
+ */
+function generateVideoThumbnail(file, timeoutMs = 6000) {
+  return new Promise((resolve, reject) => {
+    const videoEl = document.createElement("video");
+    // "metadata" + l'évènement "loadeddata" se sont montrés peu fiables pour
+    // déclencher une vraie capture sur mobile — "auto" charge davantage de
+    // données, et on repart de "loadedmetadata" (durée/dimensions connues,
+    // évènement beaucoup plus constant d'un navigateur à l'autre) avant de
+    // chercher l'image à capturer. L'élément est aussi attaché au DOM (cadré
+    // hors écran) : certains navigateurs ne décodent pas fiablement une vidéo
+    // qui n'y est jamais insérée.
+    videoEl.preload = "auto";
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;";
+    videoEl.src = URL.createObjectURL(file);
+    document.body.appendChild(videoEl);
+
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      URL.revokeObjectURL(videoEl.src);
+      videoEl.remove();
+    };
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      fn(arg);
+    };
+    const timer = setTimeout(() => finish(reject, new Error("Génération de la miniature trop longue.")), timeoutMs);
+
+    const capture = () => {
+      if (settled) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = videoEl.videoWidth || 320;
+      canvas.height = videoEl.videoHeight || 180;
+      canvas.getContext("2d").drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (blob) finish(resolve, blob);
+        else finish(reject, new Error("Impossible de générer une miniature."));
+      }, "image/jpeg", 0.82);
+    };
+
+    videoEl.onloadedmetadata = () => {
+      try {
+        videoEl.currentTime = Math.min(0.5, (videoEl.duration || 1) / 4);
+      } catch (e) {
+        capture(); // certains navigateurs refusent le seek : on capture la frame courante telle quelle
+      }
+    };
+    videoEl.onseeked = capture;
+    videoEl.onerror = () => finish(reject, new Error("Impossible de lire cette vidéo pour générer une miniature."));
+  });
+}
+
 export async function createPost({ texte, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], groupId = null }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
@@ -49,14 +115,35 @@ export async function createPost({ texte, type, animal, pratique, dogId, departe
     if (uploadError) throw uploadError;
     const { data: publicUrl } = supabase.storage.from("posts").getPublicUrl(path);
     const mediaType = file.type.startsWith("video") ? "video" : "image";
+
+    let thumbnailUrl = null;
+    if (mediaType === "video") {
+      try {
+        const thumbBlob = await generateVideoThumbnail(file);
+        const thumbPath = `${userData.user.id}/${post.id}/${i}-thumb.jpg`;
+        const { error: thumbUploadError } = await supabase.storage.from("posts").upload(thumbPath, thumbBlob, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: "image/jpeg",
+        });
+        if (!thumbUploadError) {
+          thumbnailUrl = supabase.storage.from("posts").getPublicUrl(thumbPath).data.publicUrl;
+        }
+      } catch (e) {
+        // Pas bloquant : la vidéo est publiée même si la miniature échoue
+        // (ex: format vidéo non décodable par le navigateur).
+      }
+    }
+
     const { error: mediaError } = await supabase.from("post_media").insert({
       post_id: post.id,
       url: publicUrl.publicUrl,
       ordre: i,
       type: mediaType,
+      thumbnail_url: thumbnailUrl,
     });
     if (mediaError) throw mediaError;
-    uploadedMedia.push({ url: publicUrl.publicUrl, type: mediaType });
+    uploadedMedia.push({ url: publicUrl.publicUrl, type: mediaType, thumbnail_url: thumbnailUrl });
   }
 
   return { ...post, mediaUrls: uploadedMedia.map((m) => m.url), media: uploadedMedia };
@@ -135,7 +222,7 @@ export async function addComment(postId, texte, parentId = null) {
 export async function fetchCandidatePosts({ limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url)")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -147,7 +234,7 @@ export async function fetchCandidatePosts({ limit = 50 } = {}) {
 export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url)")
     .eq("group_id", groupId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -159,12 +246,18 @@ export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
 export async function fetchUserPosts(userId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url)")
     .eq("author_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
   return data;
+}
+
+export async function deleteComment(commentId) {
+  const { error } = await supabase.from("comments").delete().eq("id", commentId);
+  if (error) throw error;
+  return true;
 }
 
 export async function fetchComments(postId) {
@@ -226,8 +319,20 @@ export async function fetchMyRepostedPosts() {
   if (!userData.user) return [];
   const { data, error } = await supabase
     .from("reposts")
-    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type))")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url))")
     .eq("user_id", userData.user.id)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.filter((r) => r.posts).map((r) => ({ ...r.posts, repostedAt: r.created_at }));
+}
+
+/** Publications repostées par un utilisateur précis — pour l'onglet Reposts
+ *  d'un profil public (voir fetchMyRepostedPosts pour son propre profil). */
+export async function fetchUserRepostedPosts(userId) {
+  const { data, error } = await supabase
+    .from("reposts")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url))")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data.filter((r) => r.posts).map((r) => ({ ...r.posts, repostedAt: r.created_at }));

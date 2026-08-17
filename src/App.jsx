@@ -5,8 +5,11 @@ import {
   Check, Video, Film, Dog, Repeat2, MapPin,
   Bookmark, HelpCircle, AlertTriangle, LogOut, Moon, Sun, Monitor, BarChart3,
   Heart, MessageSquare, Share2, MoreHorizontal, Camera, Play, BookOpen, Mic,
+  Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud, Target,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
+import * as traceService from "./services/traceService.js";
+import * as huntingLogService from "./services/huntingLogService.js";
 import * as postService from "./services/postService.js";
 import * as profileService from "./services/profileService.js";
 import * as dogService from "./services/dogService.js";
@@ -25,7 +28,7 @@ const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inte
 
 const THEMES = {
   light: {
-    background: "#FAFAF8",
+    background: "#EBEDDF",
     surface: "#FFFFFF",
     surfaceAlt: "#F1F1EF",
     surfaceRaised: "#FFFFFF",
@@ -39,11 +42,11 @@ const THEMES = {
     error: "#C0453A",
     errorSoft: "#F6E2DF",
     overlay: "rgba(20,18,16,0.38)",
-    navBg: "rgba(255,255,255,0.82)",
-    headerBg: "rgba(250,250,248,0.82)",
+    navBg: "rgba(255,255,255,0.55)",
+    headerBg: "rgba(250,250,248,0.55)",
   },
   dark: {
-    background: "#151515",
+    background: "#0D0F08",
     surface: "#202020",
     surfaceAlt: "#242424",
     surfaceRaised: "#2A2A2A",
@@ -57,8 +60,8 @@ const THEMES = {
     error: "#E17466",
     errorSoft: "rgba(225,116,102,0.16)",
     overlay: "rgba(0,0,0,0.6)",
-    navBg: "rgba(24,24,24,0.82)",
-    headerBg: "rgba(21,21,21,0.82)",
+    navBg: "rgba(24,24,24,0.55)",
+    headerBg: "rgba(21,21,21,0.55)",
   },
 };
 
@@ -94,14 +97,6 @@ function ThemeProvider({ children }) {
 // const comment = { id, auteur, texte, date };
 // const report = { id, targetId, targetType, reason, date };
 // const dog = { id, nom, race, age, photo, description };
-
-const api = {
-  // Follow/unfollow, groupes, chiens, profil, blocage et signalement sont
-  // désormais réellement branchés (socialService.js / groupService.js /
-  // dogService.js / profileService.js) — seule l'assistance reste ici, faute
-  // de table dédiée côté base.
-  submitHelpRequest: async (request) => { /* TODO: connect to backend / support inbox */ return true; },
-};
 
 /* ============================================================
    3. PRIMITIVES
@@ -178,12 +173,12 @@ function PisteGlyph({ type, size = 16, color }) {
 function Button({ children, onClick, disabled, variant = "primary", full = true }) {
   const { colors } = useTheme();
   const styles = {
-    primary: { background: disabled ? colors.border : colors.accent, color: disabled ? colors.textFaint : colors.onAccent, border: "none" },
-    secondary: { background: colors.surface, color: colors.text, border: `1px solid ${colors.border}` },
+    primary: { background: disabled ? colors.border : colors.accent, color: disabled ? colors.textFaint : colors.onAccent, border: "none", boxShadow: disabled ? "none" : `0 3px 12px ${colors.accent}40` },
+    secondary: { background: colors.surfaceAlt, color: colors.text, border: "none" },
     ghost: { background: "transparent", color: colors.accent, border: "none" },
   }[variant];
   return (
-    <button onClick={onClick} disabled={disabled} className="transition-transform active:scale-[0.98]" style={{ width: full ? "100%" : "auto", borderRadius: RADIUS.md, padding: "14px 22px", fontSize: 14.5, fontWeight: 700, cursor: disabled ? "default" : "pointer", ...styles }}>
+    <button onClick={onClick} disabled={disabled} className="transition-transform active:scale-[0.98]" style={{ width: full ? "100%" : "auto", borderRadius: RADIUS.pill, padding: "14px 22px", fontSize: 14.5, fontWeight: 700, cursor: disabled ? "default" : "pointer", ...styles }}>
       {children}
     </button>
   );
@@ -191,8 +186,23 @@ function Button({ children, onClick, disabled, variant = "primary", full = true 
 function IconButton({ icon: Icon, onClick, size = 36, active }) {
   const { colors } = useTheme();
   return (
-    <button onClick={onClick} className="active:scale-90 transition-transform" style={{ width: size, height: size, borderRadius: RADIUS.sm, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer" }}>
-      <Icon size={19} color={active ? colors.accent : colors.text} strokeWidth={1.8} />
+    <button
+      onClick={onClick}
+      className="active:scale-90 transition-transform"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: RADIUS.pill,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: active ? colors.accentSoft : colors.surfaceAlt,
+        border: "none",
+        cursor: "pointer",
+        transition: "background 150ms ease",
+      }}
+    >
+      <Icon size={18} color={active ? colors.accent : colors.textSecondary} strokeWidth={2} />
     </button>
   );
 }
@@ -234,27 +244,64 @@ function TextField({ label, value, onChange, placeholder, type = "text", error, 
     </div>
   );
 }
+// Conteneur en pilule englobant tous les segments (plutôt que des boutons
+// isolés) — même langage visuel que les onglets flottants d'Instants,
+// décliné avec les couleurs du thème pour rester lisible sur fond normal.
 function SegmentedControl({ options, value, onChange }) {
   const { colors } = useTheme();
   return (
-    <div className="flex gap-1.5">
+    <div className="flex" style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, gap: 2, boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
       {options.map((o) => (
-        <button key={o.key} onClick={() => onChange(o.key)} style={{ border: "none", background: value === o.key ? colors.text : "transparent", color: value === o.key ? colors.background : colors.textSecondary, borderRadius: RADIUS.pill, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          style={{
+            flex: 1,
+            border: "none",
+            background: value === o.key ? colors.surface : "transparent",
+            color: value === o.key ? colors.text : colors.textFaint,
+            borderRadius: RADIUS.pill,
+            padding: "7px 13px",
+            fontSize: 12.5,
+            fontWeight: value === o.key ? 700 : 600,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            boxShadow: value === o.key ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
+            transition: "background 150ms ease, box-shadow 150ms ease",
+          }}
+        >
           {o.label}
         </button>
       ))}
     </div>
   );
 }
-function ScreenHeader({ title, onBack, onCloseX }) {
+function ScreenHeader({ title, onBack, onCloseX, rightAction, chromeMode = "full" }) {
   const { colors } = useTheme();
+  const floating = chromeMode !== "hidden"; // toujours pilule flottante, sauf masqué au défilement
   return (
-    <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${colors.border}`, background: colors.surface }}>
+    <div
+      className="flex items-center justify-between px-4 py-3"
+      style={{
+        position: "sticky",
+        top: floating ? 8 : 0,
+        zIndex: 10,
+        background: colors.headerBg,
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        borderBottom: floating ? "none" : `1px solid ${colors.border}`,
+        margin: floating ? "0 8px" : 0,
+        borderRadius: floating ? RADIUS.pill : 0,
+        boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
+        transform: chromeMode === "hidden" ? "translateY(-130%)" : "translateY(0)",
+        transition: "transform 260ms ease, top 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+      }}
+    >
       <div className="flex items-center gap-3">
         {onBack && <IconButton icon={ArrowLeft} onClick={onBack} />}
         <span style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>{title}</span>
       </div>
-      {onCloseX && <IconButton icon={X} onClick={onCloseX} />}
+      {rightAction || (onCloseX && <IconButton icon={X} onClick={onCloseX} />)}
     </div>
   );
 }
@@ -470,7 +517,7 @@ function mapPostRow(row) {
     username: row.profiles?.username || null,
     avatar: row.profiles?.avatar_url || null,
     texte: row.texte,
-    image: row.post_media?.[0]?.type === "video" ? null : row.post_media?.[0]?.url || null,
+    image: row.post_media?.[0]?.type === "video" ? row.post_media?.[0]?.thumbnail_url || null : row.post_media?.[0]?.url || null,
     videoUrl: row.post_media?.[0]?.type === "video" ? row.post_media[0].url : null,
     type: row.type,
     animal: row.animal,
@@ -546,7 +593,7 @@ const FAQ_ITEMS = [
   { q: "Qu'est-ce qu'un Instant ?", a: "Un Instant est un format vidéo court et vertical, pensé pour partager un moment rapidement." },
   { q: "Comment fonctionnent les likes et commentaires ?", a: "Appuyez sur le cœur pour aimer une publication, ou sur l'icône de commentaire pour ouvrir la discussion et répondre." },
   { q: "Comment suivre quelqu'un ?", a: "Cette fonctionnalité sera activée avec de vrais comptes utilisateurs — la structure est déjà prête côté interface." },
-  { q: "Comment rejoindre un groupe ?", a: "Ouvrez l'onglet Groupes, choisissez une catégorie et appuyez sur « Rejoindre »." },
+  { q: "Comment rejoindre une communauté ?", a: "Ouvrez l'onglet Communautés, choisissez une catégorie et appuyez sur « Rejoindre »." },
   { q: "Comment gérer mes notifications ?", a: "Dans Paramètres > Notifications, vous pouvez activer ou désactiver chaque type d'alerte." },
   { q: "Comment supprimer mon compte ?", a: "Rendez-vous dans Paramètres > Données > Supprimer mon compte. Cette action nécessitera une confirmation une fois le backend connecté." },
   { q: "Comment signaler un contenu ?", a: "Appuyez sur les trois points d'une publication puis choisissez « Signaler » et sélectionnez un motif." },
@@ -893,12 +940,38 @@ function LoginScreen({ onBack, onSignup }) {
 /* ============================================================
    5. APP SHELL — header + nav TOUJOURS fixes
    ============================================================ */
-function Header({ onBell, onMenu, unreadCount = 0 }) {
+// chromeMode : "full" (barre normale, toujours visible) | "hidden" (masquée,
+// on défile vers le bas) | "floating" (pilule flottante détachée, on remonte)
+// — utilisé uniquement par le Fil pour un rendu immersif façon Instants ;
+// les autres écrans restent toujours en "full".
+function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full" }) {
   const { colors } = useTheme();
+  const floating = chromeMode !== "hidden"; // toujours pilule flottante, sauf masqué au défilement
   return (
-    <div style={{ position: "sticky", top: 0, zIndex: 20, background: colors.headerBg, backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", borderBottom: `1px solid ${colors.border}` }} className="flex items-center justify-between px-4 py-3">
+    <div
+      style={{
+        position: "sticky",
+        // La marge du haut sur un élément "sticky" ne crée pas un vrai espace
+        // fiable (comportement différent d'un élément "fixed") — on décale
+        // plutôt sa position elle-même pour obtenir le même détachement que
+        // la barre du bas.
+        top: floating ? 8 : 0,
+        zIndex: 20,
+        background: colors.headerBg,
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        borderBottom: floating ? "none" : `1px solid ${colors.border}`,
+        margin: floating ? "0 8px" : 0,
+        borderRadius: floating ? RADIUS.pill : 0,
+        boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
+        transform: chromeMode === "hidden" ? "translateY(-130%)" : "translateY(0)",
+        transition: "transform 260ms ease, top 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+      }}
+      className="flex items-center justify-between px-4 py-3"
+    >
       <div className="flex items-center gap-2"><Logo size={28} /><Wordmark /></div>
       <div className="flex items-center gap-1">
+        <IconButton icon={Search} onClick={onSearch} />
         <div style={{ position: "relative" }}>
           <IconButton icon={Bell} onClick={onBell} />
           {unreadCount > 0 && (
@@ -913,44 +986,72 @@ function Header({ onBell, onMenu, unreadCount = 0 }) {
   );
 }
 const NAV_HEIGHT = 66;
-function BottomNav({ active, setActive, onCreate, unreadConversations = 0 }) {
+function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chromeMode = "full" }) {
   const { colors } = useTheme();
+  const floating = chromeMode !== "hidden"; // toujours pilule flottante, sauf masqué au défilement
   const items = [
     { key: "fil", label: "Fil", icon: Home },
     { key: "video", label: "Vidéo", icon: Film },
-    { key: "groupes", label: "Groupes", icon: Users },
+    { key: "groupes", label: "Communautés", icon: Users },
     { key: "messages", label: "Messages", icon: MessageCircle },
     { key: "create", label: "Créer", icon: Plus, isCreate: true },
     { key: "profil", label: "Profil", icon: User },
   ];
   return (
     <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 40, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
-      <div style={{ width: "100%", maxWidth: 480, pointerEvents: "auto", background: colors.navBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderTop: `1px solid ${colors.border}`, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        <div className="flex items-center" style={{ paddingTop: 8, paddingBottom: 8, paddingLeft: 4, paddingRight: 4 }}>
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          pointerEvents: "auto",
+          background: colors.navBg,
+          backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)",
+          borderTop: floating ? "none" : `1px solid ${colors.border}`,
+          margin: floating ? "0 8px calc(8px + env(safe-area-inset-bottom, 0px))" : 0,
+          borderRadius: floating ? RADIUS.pill : 0,
+          boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
+          transform: chromeMode === "hidden" ? "translateY(130%)" : "translateY(0)",
+          transition: "transform 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+          paddingBottom: floating ? 4 : "env(safe-area-inset-bottom, 0px)",
+        }}
+      >
+        <div className="flex items-center justify-between" style={{ paddingTop: 8, paddingBottom: 8, paddingLeft: 10, paddingRight: 10 }}>
           {items.map((it) => {
             const Icon = it.icon;
             const isActive = active === it.key;
             if (it.isCreate) {
               return (
-                <button key={it.key} onClick={onCreate} aria-label="Créer" className="flex flex-col items-center gap-1 active:scale-95 transition-transform" style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "2px 0", minWidth: 0 }}>
-                  <div style={{ width: 26, height: 19, borderRadius: 8, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Plus size={15} color={colors.onAccent} strokeWidth={2.6} />
+                <button key={it.key} onClick={onCreate} aria-label="Créer" className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 3px 10px ${colors.accent}55` }}>
+                    <Plus size={18} color={colors.onAccent} strokeWidth={2.4} />
                   </div>
-                  <span style={{ fontSize: 9.5, fontWeight: 500, color: colors.textFaint, whiteSpace: "nowrap" }}>Créer</span>
                 </button>
               );
             }
             return (
-              <button key={it.key} onClick={() => setActive(it.key)} className="flex flex-col items-center gap-1" style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "2px 0", minWidth: 0 }}>
-                <div style={{ position: "relative" }}>
-                  <Icon size={19} strokeWidth={isActive ? 2.2 : 1.8} color={isActive ? colors.accent : colors.textFaint} />
+              <button key={it.key} onClick={() => setActive(it.key)} className="flex flex-col items-center gap-1" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", maxWidth: 64 }}>
+                <div
+                  style={{
+                    position: "relative",
+                    width: 40,
+                    height: 26,
+                    borderRadius: RADIUS.pill,
+                    background: isActive ? colors.accentSoft : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "background 200ms ease",
+                  }}
+                >
+                  <Icon size={19} strokeWidth={isActive ? 2.3 : 1.8} color={isActive ? colors.accent : colors.textFaint} />
                   {it.key === "messages" && unreadConversations > 0 && (
-                    <span style={{ position: "absolute", top: -4, right: -8, minWidth: 14, height: 14, borderRadius: 7, background: colors.accent, color: colors.onAccent, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+                    <span style={{ position: "absolute", top: -2, right: 2, minWidth: 14, height: 14, borderRadius: 7, background: colors.accent, color: colors.onAccent, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
                       {unreadConversations > 9 ? "9+" : unreadConversations}
                     </span>
                   )}
                 </div>
-                <span style={{ fontSize: 9.5, fontWeight: isActive ? 700 : 500, color: isActive ? colors.accent : colors.textFaint, whiteSpace: "nowrap" }}>{it.label}</span>
+                <span style={{ fontSize: 9.5, fontWeight: isActive ? 700 : 500, color: isActive ? colors.accent : colors.textFaint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 60 }}>{it.label}</span>
               </button>
             );
           })}
@@ -959,14 +1060,16 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0 }) {
     </div>
   );
 }
-function AppShell({ children, header, active, setActive, onCreate, unreadConversations }) {
+function AppShell({ children, header, active, setActive, onCreate, unreadConversations, chromeMode = "full", refreshKey = 0 }) {
   const { colors } = useTheme();
   return (
-    <div style={{ minHeight: "100vh", background: colors.background }}>
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", position: "relative", background: colors.background }}>
+    <div style={{ minHeight: "100dvh", background: colors.background }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100dvh", position: "relative", background: colors.background }}>
         {header}
-        <div key={active} style={{ paddingBottom: NAV_HEIGHT + 12, animation: "piste-fade-in 220ms ease" }}>{children}</div>
-        <BottomNav active={active} setActive={setActive} onCreate={onCreate} unreadConversations={unreadConversations} />
+        {/* refreshKey force un vrai remontage (donc un rechargement des données)
+            quand on retape sur l'onglet déjà actif, pas seulement un défilement. */}
+        <div key={`${active}-${refreshKey}`} style={{ paddingBottom: NAV_HEIGHT + 12, animation: "piste-fade-in 220ms ease" }}>{children}</div>
+        <BottomNav active={active} setActive={setActive} onCreate={onCreate} unreadConversations={unreadConversations} chromeMode={chromeMode} />
       </div>
       <style>{`
         @keyframes piste-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -994,10 +1097,23 @@ function Toast({ message }) {
 function ContentActionSheet({ isOwn, onClose, onDelete, onEdit, onReport, onHide, onBlock }) {
   const { colors } = useTheme();
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 62 }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 62 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
-      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, background: colors.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: "10px 20px 26px" }}>
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: "flex",
+          justifyContent: "center",
+          padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`,
+          pointerEvents: "none",
+        }}
+      >
+      <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", padding: "10px 20px 20px", position: "relative", pointerEvents: "auto" }}>
         <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "6px auto 16px" }} />
+        <div style={{ position: "absolute", top: 10, right: 12 }}><IconButton icon={X} onClick={onClose} size={30} /></div>
         {isOwn ? (
           <>
             <button onClick={onEdit} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
@@ -1015,6 +1131,7 @@ function ContentActionSheet({ isOwn, onClose, onDelete, onEdit, onReport, onHide
           </>
         )}
       </div>
+      </div>
     </div>
   );
 }
@@ -1024,14 +1141,35 @@ function ContentActionSheet({ isOwn, onClose, onDelete, onEdit, onReport, onHide
  * via un simple username, rendu une seule fois au niveau de MainApp pour
  * pouvoir réutiliser directement ses handlers (like/save/repost/commentaire).
  */
-function AuthorProfileSheet({ username, meUsername, isFollowing, bellOn, onClose, onToggleFollow, onToggleBell, onMessage, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
+function AuthorProfileSheet({ username, meUsername, isFollowing, isPending, bellOn, onClose, onToggleFollow, onRequestFollow, onToggleBell, onMessage, onOpenProfile, onOpenPlayer, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, traceGroup, onOpenTrace }) {
   const { colors } = useTheme();
   const isSelf = username === meUsername;
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
+  const [dogs, setDogs] = useState([]);
+  const [repostedPosts, setRepostedPosts] = useState([]);
+  const [tab, setTab] = useState("publications");
+  const [openDog, setOpenDog] = useState(null);
+  const [followSheet, setFollowSheet] = useState(null); // 'followers' | 'following' | null
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sheet, setSheet] = useState(null);
+  const [localMode, setLocalMode] = useState("full");
+  const tabs = [["publications", "Publications", Home], ["videos", "Vidéos", Video], ["chiens", "Chiens", Dog], ["reposts", "Reposts", Repeat2]];
+  const lastScrollTopRef = useRef(0);
+  const handleScroll = (e) => {
+    const el = e.currentTarget;
+    const top = el.scrollTop;
+    // Pas assez de contenu pour justifier l'effet immersif (ex. une communauté
+    // sans publication) : le léger dépassement de scroll ne doit pas cacher
+    // l'en-tête pour rien, alors qu'il n'y a rien de plus à voir en dessous.
+    if (el.scrollHeight - el.clientHeight < 80) { setLocalMode("full"); lastScrollTopRef.current = top; return; }
+    const delta = top - lastScrollTopRef.current;
+    if (top < 40) setLocalMode("full");
+    else if (delta > 4) setLocalMode("hidden");
+    else if (delta < -4) setLocalMode("floating");
+    lastScrollTopRef.current = top;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1041,49 +1179,91 @@ function AuthorProfileSheet({ username, meUsername, isFollowing, bellOn, onClose
       .then((p) => {
         if (cancelled) return;
         setProfile(p);
-        return postService.fetchUserPosts(p.id).then((rows) => { if (!cancelled) setPosts(rows.map(mapPostRow)); });
+        // Compte privé et pas encore un abonné approuvé : RLS renverrait de
+        // toute façon des listes vides (voir migrations 020/021), mais autant
+        // ne pas faire les requêtes pour rien.
+        const canView = isSelf || !p.isPrivate || isFollowing;
+        if (!canView) return;
+        return Promise.all([
+          postService.fetchUserPosts(p.id).then((rows) => { if (!cancelled) setPosts(rows.map(mapPostRow)); }),
+          dogService.fetchUserDogs(p.id).then((rows) => { if (!cancelled) setDogs(rows); }).catch(() => {}),
+          postService.fetchUserRepostedPosts(p.id).then((rows) => { if (!cancelled) setRepostedPosts(rows.map(mapPostRow)); }).catch(() => {}),
+        ]);
       })
       .catch((e) => { if (!cancelled) setError(e.message || "Profil introuvable."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [username]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username, isFollowing]);
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 64, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
-      <ScreenHeader title={profile?.username ? `@${profile.username}` : "Profil"} onBack={onClose} />
       {loading ? (
-        <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 40 }}>Chargement...</div>
+        <>
+          <ScreenHeader title="Profil" onBack={onClose} />
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 40 }}>Chargement...</div>
+        </>
       ) : error ? (
-        <div style={{ textAlign: "center", fontSize: 12.5, color: colors.error, marginTop: 40, padding: "0 24px" }}>{error}</div>
+        <>
+          <ScreenHeader title="Profil" onBack={onClose} />
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.error, marginTop: 40, padding: "0 24px" }}>{error}</div>
+        </>
       ) : (
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          <div style={{ width: "100%", height: 96, background: profile.imageCouverture ? `url(${profile.imageCouverture}) center/cover` : colors.surfaceAlt }} />
+        <div onScroll={handleScroll} style={{ flex: 1, overflowY: "auto" }}>
+          <ScreenHeader title={`@${profile.username}`} onBack={onClose} chromeMode={localMode} />
+          <div style={{ width: "100%", height: 124, marginTop: 10, background: profile.imageCouverture ? `url(${profile.imageCouverture}) center/cover` : `linear-gradient(135deg, ${colors.accentSoft}, ${colors.surfaceAlt})`, borderRadius: RADIUS.xl }} />
           <div className="px-4">
-            <div style={{ marginTop: -34 }}>
-              <div style={{ width: 72, height: 72, borderRadius: RADIUS.md, background: colors.surface, border: `3px solid ${colors.background}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={30} color={colors.textFaint} strokeWidth={1.6} />}
-              </div>
+            <div style={{ marginTop: -40 }}>
+              {traceGroup && traceGroup.traces.length > 0 ? (
+                <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
+                  <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
+                    <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: `3px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.16)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={32} color={colors.textFaint} strokeWidth={1.6} />}
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <div style={{ width: 80, height: 80, borderRadius: RADIUS.pill, background: colors.surface, border: `4px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.16)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={32} color={colors.textFaint} strokeWidth={1.6} />}
+                </div>
+              )}
             </div>
             <div style={{ marginTop: 10 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{profile.nom}</div>
               <div style={{ fontSize: 13, color: colors.textFaint }}>@{profile.username}</div>
               <BadgeRow badges={profile.badges} />
-              {profile.localisation && <div className="flex items-center gap-1" style={{ marginTop: 4 }}><MapPin size={13} color={colors.textFaint} /><span style={{ fontSize: 12.5, color: colors.textFaint }}>{profile.localisation}</span></div>}
-              {profile.bio && <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 8, lineHeight: 1.5 }}>{profile.bio}</div>}
-            </div>
-            <div style={{ marginTop: 16, background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: "12px 4px" }} className="flex">
-              {[["Abonnés", profile.stats.abonnes], ["Abonnements", profile.stats.abonnements], ["Publications", profile.stats.publications]].map(([label, val]) => (
-                <div key={label} style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
-                  <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
+              {profile.localisation && (
+                <div className="flex items-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px" }}>
+                  <MapPin size={12} color={colors.textFaint} /><span style={{ fontSize: 12, color: colors.textSecondary }}>{profile.localisation}</span>
                 </div>
-              ))}
+              )}
+              {profile.bio && <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 10, lineHeight: 1.5, background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "10px 12px" }}>{profile.bio}</div>}
+            </div>
+            <div style={{ marginTop: 16, background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.lg, padding: "12px 4px", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }} className="flex">
+              {[["Abonnés", profile.stats.abonnes, "followers"], ["Abonnements", profile.stats.abonnements, "following"], ["Publications", profile.stats.publications, null]].map(([label, val, statMode]) => {
+                const mode = profile.isPrivate && !isSelf && !isFollowing ? null : statMode;
+                return mode ? (
+                  <button key={label} onClick={() => setFollowSheet(mode)} style={{ flex: 1, textAlign: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
+                    <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
+                  </button>
+                ) : (
+                  <div key={label} style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
+                    <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
+                  </div>
+                );
+              })}
             </div>
             {isSelf ? (
               <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: colors.textFaint }}>C'est vous.</div>
             ) : (
               <div className="flex items-center gap-2" style={{ marginTop: 14 }}>
-                <Button full={false} variant={isFollowing ? "secondary" : "primary"} onClick={onToggleFollow}>{isFollowing ? "Abonné" : "Suivre"}</Button>
+                {profile.isPrivate && !isFollowing ? (
+                  <Button full={false} variant={isPending ? "secondary" : "primary"} onClick={onRequestFollow}>{isPending ? "Demande envoyée" : "Demander à s'abonner"}</Button>
+                ) : (
+                  <Button full={false} variant={isFollowing ? "secondary" : "primary"} onClick={onToggleFollow}>{isFollowing ? "Abonné" : "Suivre"}</Button>
+                )}
                 <Button full={false} variant="secondary" onClick={() => onMessage(profile.id, profile.nom)}>Message</Button>
                 {onToggleBell && (
                   <button
@@ -1097,33 +1277,118 @@ function AuthorProfileSheet({ username, meUsername, isFollowing, bellOn, onClose
               </div>
             )}
           </div>
-          <div className="px-2 mt-5" style={{ borderBottom: `1px solid ${colors.border}`, paddingBottom: 8 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, paddingLeft: 8 }}>PUBLICATIONS</span>
-          </div>
-          {posts.length === 0 ? (
-            <EmptyState title="Aucune publication" subtitle="Les publications de ce compte apparaîtront ici." />
+          {profile.isPrivate && !isSelf && !isFollowing ? (
+            <EmptyState title="Ce compte est privé" subtitle={`Demandez à vous abonner pour voir les publications, vidéos, chiens et reposts de @${profile.username}.`} />
           ) : (
-            <div style={{ paddingTop: 10 }}>
-              {posts.map((p) => (
-                <PostCard
-                  key={p.id}
-                  post={p}
-                  liked={liked.includes(p.id)}
-                  saved={saved.includes(p.id)}
-                  reposted={reposted.includes(p.id)}
-                  onRepost={() => onRepost(p.id)}
-                  commentCount={(commentsByPost[p.id] || []).length}
-                  onLike={() => onLike(p.id)}
-                  onSave={() => onSave(p.id)}
-                  onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
-                  onOpenActions={() => setSheet({ type: "actions", post: p })}
-                  onOpenAuthor={() => {}}
-                />
-              ))}
-            </div>
+            <>
+              <div className="px-4 mt-5">
+                <div className="flex" style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, gap: 2, boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
+                  {tabs.map(([key, label, Icon]) => (
+                    <button
+                      key={key}
+                      onClick={() => setTab(key)}
+                      className="flex items-center justify-center gap-1.5"
+                      style={{ flex: 1, padding: "7px 6px", background: tab === key ? colors.surface : "transparent", border: "none", borderRadius: RADIUS.pill, cursor: "pointer", boxShadow: tab === key ? "0 1px 4px rgba(0,0,0,0.10)" : "none", transition: "background 150ms ease, box-shadow 150ms ease" }}
+                    >
+                      <Icon size={14} color={tab === key ? colors.text : colors.textFaint} strokeWidth={1.8} />
+                      <span style={{ fontSize: 10.5, fontWeight: tab === key ? 700 : 600, color: tab === key ? colors.text : colors.textFaint, whiteSpace: "nowrap" }}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {tab === "publications" && (
+                posts.filter((p) => p.type !== "video" && p.type !== "video_courte").length === 0 ? (
+                  <EmptyState title="Aucune publication" subtitle="Les publications de ce compte apparaîtront ici." />
+                ) : (
+                  <div style={{ paddingTop: 10 }}>
+                    {posts.filter((p) => p.type !== "video" && p.type !== "video_courte").map((p) => (
+                      <PostCard
+                        key={p.id}
+                        post={p}
+                        liked={liked.includes(p.id)}
+                        saved={saved.includes(p.id)}
+                        reposted={reposted.includes(p.id)}
+                        onRepost={() => onRepost(p.id)}
+                        commentCount={(commentsByPost[p.id] || []).length}
+                        onLike={() => onLike(p.id)}
+                        onSave={() => onSave(p.id)}
+                        onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
+                        onOpenActions={() => setSheet({ type: "actions", post: p })}
+                        onOpenAuthor={() => onOpenProfile(p.username)}
+                      />
+                    ))}
+                  </div>
+                )
+              )}
+              {tab === "videos" && (
+                posts.filter((p) => p.type === "video" || p.type === "video_courte").length === 0 ? (
+                  <EmptyState title="Aucune vidéo" subtitle="Les vidéos de ce compte apparaîtront ici." />
+                ) : (
+                  <div style={{ paddingTop: 6 }}>
+                    {posts.filter((p) => p.type === "video" || p.type === "video_courte").map((v) => (
+                      <VideoCard
+                        key={v.id}
+                        video={v}
+                        liked={liked.includes(v.id)}
+                        reposted={reposted.includes(v.id)}
+                        commentCount={(commentsByPost[v.id] || []).length}
+                        onLike={() => onLike(v.id)}
+                        onRepost={() => onRepost(v.id)}
+                        onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
+                        onOpenActions={() => setSheet({ type: "actions", post: v })}
+                        onOpenAuthor={() => onOpenProfile(v.username)}
+                        onOpenPlayer={() => onOpenPlayer && onOpenPlayer(v)}
+                      />
+                    ))}
+                  </div>
+                )
+              )}
+              {tab === "chiens" && (
+                dogs.length === 0 ? (
+                  <EmptyState title="Aucun chien enregistré" subtitle="Les chiens de ce compte apparaîtront ici." />
+                ) : (
+                  <div className="px-4 pt-4 flex flex-col gap-2">
+                    {dogs.map((d) => (
+                      <button key={d.id} onClick={() => setOpenDog(d)} className="flex items-center gap-3" style={{ border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: 12, background: colors.surface, cursor: "pointer", textAlign: "left" }}>
+                        <div style={{ width: 40, height: 40, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                          {d.photo_url ? <img src={d.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={18} color={colors.textFaint} />}
+                        </div>
+                        <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>{d.nom}</span>
+                      </button>
+                    ))}
+                  </div>
+                )
+              )}
+              {tab === "reposts" && (
+                repostedPosts.length === 0 ? (
+                  <EmptyState title="Aucun repost" subtitle="Les publications repartagées par ce compte apparaîtront ici." />
+                ) : (
+                  <div style={{ paddingTop: 10 }}>
+                    {repostedPosts.map((p) => (
+                      <PostCard
+                        key={p.id}
+                        post={p}
+                        liked={liked.includes(p.id)}
+                        saved={saved.includes(p.id)}
+                        reposted={true}
+                        onRepost={() => onRepost(p.id)}
+                        commentCount={(commentsByPost[p.id] || []).length}
+                        onLike={() => onLike(p.id)}
+                        onSave={() => onSave(p.id)}
+                        onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
+                        onOpenActions={() => setSheet({ type: "actions", post: p })}
+                        onOpenAuthor={() => onOpenProfile(p.username)}
+                      />
+                    ))}
+                  </div>
+                )
+              )}
+            </>
           )}
         </div>
       )}
+      {openDog && <DogPage dog={openDog} onClose={() => setOpenDog(null)} />}
+      {followSheet && <FollowListSheet userId={profile.id} mode={followSheet} onClose={() => setFollowSheet(null)} onOpenProfile={onOpenProfile} />}
       {sheet?.type === "actions" && (
         <ContentActionSheet
           isOwn={isSelf}
@@ -1139,7 +1404,7 @@ function AuthorProfileSheet({ username, meUsername, isFollowing, bellOn, onClose
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={meUsername} />
       )}
     </div>
   );
@@ -1148,18 +1413,60 @@ function ReportSheet({ onClose, onSubmit }) {
   const { colors } = useTheme();
   const [reason, setReason] = useState(null);
   const [sent, setSent] = useState(false);
+  const Sheet = ({ children }) => (
+    <div style={{ position: "fixed", inset: 0, zIndex: 63 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: "flex",
+          justifyContent: "center",
+          padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`,
+          pointerEvents: "none",
+        }}
+      >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 460,
+          maxHeight: "82vh",
+          background: colors.headerBg,
+          backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)",
+          borderRadius: RADIUS.xl,
+          boxShadow: "0 12px 40px rgba(0,0,0,0.22)",
+          display: "flex",
+          flexDirection: "column",
+          pointerEvents: "auto",
+        }}
+      >
+        <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+        {children}
+      </div>
+      </div>
+    </div>
+  );
   if (sent) {
     return (
-      <div style={{ position: "absolute", inset: 0, zIndex: 63, background: colors.background, display: "flex", flexDirection: "column" }}>
-        <ScreenHeader title="Signalement" onCloseX={onClose} />
+      <Sheet>
+        <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Signalement</span>
+          <IconButton icon={X} onClick={onClose} size={30} />
+        </div>
         <EmptyState title="Signalement envoyé" subtitle="Merci, notre équipe examinera ce contenu. Retrouvez l'historique de vos signalements dans Paramètres > Sécurité." />
-      </div>
+      </Sheet>
     );
   }
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 63, background: colors.background, display: "flex", flexDirection: "column" }}>
-      <ScreenHeader title="Signaler" onCloseX={onClose} />
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+    <Sheet>
+      <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+        <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Signaler</span>
+        <IconButton icon={X} onClick={onClose} size={30} />
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 16px" }}>
         <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 14 }}>Pourquoi signalez-vous ce contenu ?</div>
         <div className="flex flex-col gap-2">
           {REPORT_REASONS.map((r) => (
@@ -1170,13 +1477,13 @@ function ReportSheet({ onClose, onSubmit }) {
           ))}
         </div>
       </div>
-      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}>
+      <div style={{ padding: "12px 20px 20px", borderTop: `1px solid ${colors.border}` }}>
         <Button disabled={!reason} onClick={() => { onSubmit(reason); setSent(true); }}>Envoyer le signalement</Button>
       </div>
-    </div>
+    </Sheet>
   );
 }
-function CommentsSheet({ comments, onClose, onAdd }) {
+function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername }) {
   const { colors } = useTheme();
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null); // { id, auteur } | null
@@ -1189,26 +1496,72 @@ function CommentsSheet({ comments, onClose, onAdd }) {
     setReplyTo(null);
   };
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 61, background: colors.background, display: "flex", flexDirection: "column" }}>
-      <ScreenHeader title="Commentaires" onCloseX={onClose} />
-      <div style={{ flex: 1, overflowY: "auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 61 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: "flex",
+          justifyContent: "center",
+          padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`,
+          pointerEvents: "none",
+        }}
+      >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 460,
+          height: "78vh",
+          background: colors.headerBg,
+          backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)",
+          borderRadius: RADIUS.xl,
+          boxShadow: "0 12px 40px rgba(0,0,0,0.22)",
+          display: "flex",
+          flexDirection: "column",
+          pointerEvents: "auto",
+        }}
+      >
+        <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+        <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Commentaires</span>
+          <IconButton icon={X} onClick={onClose} size={30} />
+        </div>
+        <div style={{ flex: 1, overflowY: "auto" }}>
         {comments.length === 0 ? (
           <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à réagir à cette publication." />
         ) : (
           <div style={{ padding: "8px 16px" }}>
             {topLevel.map((c) => (
               <div key={c.id} style={{ padding: "10px 0", borderBottom: `1px solid ${colors.border}` }}>
-                <div className="flex items-center gap-2" style={{ marginBottom: 3 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text }}>{c.auteur}</span>
-                  <span style={{ fontSize: 11, color: colors.textFaint }}>{c.date}</span>
+                <div className="flex items-center justify-between" style={{ marginBottom: 3 }}>
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text }}>{c.auteur}</span>
+                    <span style={{ fontSize: 11, color: colors.textFaint }}>{c.date}</span>
+                  </div>
+                  {onDelete && meUsername && c.authorUsername === meUsername && (
+                    <button onClick={() => onDelete(c.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+                      <Trash2 size={13.5} color={colors.textFaint} />
+                    </button>
+                  )}
                 </div>
                 <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{c.texte}</div>
                 <button onClick={() => setReplyTo({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: 4, padding: 0 }}>Répondre</button>
                 {repliesOf(c.id).map((r) => (
                   <div key={r.id} style={{ marginTop: 8, marginLeft: 18, paddingLeft: 10, borderLeft: `2px solid ${colors.border}` }}>
-                    <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>{r.auteur}</span>
-                      <span style={{ fontSize: 10.5, color: colors.textFaint }}>{r.date}</span>
+                    <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
+                      <div className="flex items-center gap-2">
+                        <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>{r.auteur}</span>
+                        <span style={{ fontSize: 10.5, color: colors.textFaint }}>{r.date}</span>
+                      </div>
+                      {onDelete && meUsername && r.authorUsername === meUsername && (
+                        <button onClick={() => onDelete(r.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+                          <Trash2 size={12.5} color={colors.textFaint} />
+                        </button>
+                      )}
                     </div>
                     <div style={{ fontSize: 12.5, color: colors.text, lineHeight: 1.4 }}>{r.texte}</div>
                   </div>
@@ -1224,11 +1577,18 @@ function CommentsSheet({ comments, onClose, onAdd }) {
           <button onClick={() => setReplyTo(null)} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={13} color={colors.textFaint} /></button>
         </div>
       )}
-      <div className="flex items-center gap-2" style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={replyTo ? `Répondre à ${replyTo.auteur}...` : "Ajouter un commentaire..."} style={{ flex: 1, border: `1.5px solid ${colors.border}`, borderRadius: RADIUS.pill, padding: "10px 14px", fontSize: 13, color: colors.text, outline: "none", background: colors.surface }} />
-        <button onClick={submit} disabled={!text.trim()} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: text.trim() ? colors.accent : colors.border, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: text.trim() ? "pointer" : "default", flexShrink: 0 }}>
-          <ChevronRight size={17} color="white" />
+      <div className="flex items-center gap-2" style={{ padding: "10px 16px 14px" }}>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={replyTo ? `Répondre à ${replyTo.auteur}...` : "Ajouter un commentaire..."}
+          style={{ flex: 1, border: "none", borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13, color: colors.text, outline: "none", background: colors.surfaceAlt }}
+        />
+        <button onClick={submit} disabled={!text.trim()} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: text.trim() ? colors.accent : colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: text.trim() ? "pointer" : "default", flexShrink: 0, boxShadow: text.trim() ? `0 2px 8px ${colors.accent}40` : "none", transition: "background 150ms ease, box-shadow 150ms ease" }}>
+          <ChevronRight size={17} color={text.trim() ? "white" : colors.textFaint} />
         </button>
+      </div>
+      </div>
       </div>
     </div>
   );
@@ -1257,15 +1617,15 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
     else alert("Le partage natif n'est pas disponible sur cet appareil. Le partage par lien sera activé une fois le backend connecté.");
   };
   return (
-    <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, margin: "0 16px 14px", overflow: "hidden" }}>
+    <div style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${colors.border}`, borderRadius: RADIUS.xl, margin: "0 12px 12px", overflow: "hidden", paddingTop: 14, paddingBottom: 14 }}>
       {post.repostedAt && (
-        <div className="flex items-center gap-1.5" style={{ padding: "10px 14px 0", fontSize: 11.5, color: colors.textFaint, fontWeight: 600 }}>
+        <div className="flex items-center gap-1.5" style={{ padding: "0 16px 6px", fontSize: 11.5, color: colors.textFaint, fontWeight: 600 }}>
           <Repeat2 size={13} /> Reposté
         </div>
       )}
-      <div className="flex items-center justify-between" style={{ padding: "12px 14px" }}>
+      <div className="flex items-center justify-between" style={{ padding: "0 16px 10px" }}>
         <button onClick={onOpenAuthor} className="flex items-center gap-2.5" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 11, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
             {post.avatar ? <img src={post.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
           </div>
           <div style={{ textAlign: "left" }}>
@@ -1275,15 +1635,15 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
         </button>
         <IconButton icon={MoreHorizontal} onClick={onOpenActions} size={30} />
       </div>
-      {post.texte && <div style={{ padding: "0 14px 12px", fontSize: 13.5, color: colors.text, lineHeight: 1.5 }}>{post.texte}</div>}
+      {post.texte && <div style={{ padding: "0 16px 12px", fontSize: 13.5, color: colors.text, lineHeight: 1.5 }}>{post.texte}</div>}
       {post.image && (
         <SensitiveGate rating={post.contentRating}>
-          <div style={{ width: "100%", aspectRatio: "4/3", background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ margin: "0 16px", aspectRatio: "4/3", borderRadius: RADIUS.lg, overflow: "hidden", background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
         </SensitiveGate>
       )}
-      <div className="flex items-center gap-4" style={{ padding: "10px 14px" }}>
+      <div className="flex items-center gap-4" style={{ padding: "10px 16px 0" }}>
         <button onClick={onLike} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
           <Heart size={17} color={liked ? colors.accent : colors.textSecondary} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
           <span style={{ fontSize: 12, color: liked ? colors.accent : colors.textSecondary, fontWeight: liked ? 700 : 400 }}>{post.likes || 0}</span>
@@ -1305,7 +1665,7 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
         </button>
       </div>
       {(post.animal || post.pratique || (post.hashtags && post.hashtags.length > 0)) && (
-        <div className="flex flex-wrap gap-1.5" style={{ padding: "0 14px 12px" }}>
+        <div className="flex flex-wrap gap-1.5" style={{ padding: "10px 16px 0" }}>
           {post.animal && post.animal !== "Aucun" && <span style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "3px 9px" }}>{post.animal}</span>}
           {post.pratique && <span style={{ fontSize: 10.5, fontWeight: 600, color: colors.textSecondary, background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "3px 9px" }}>{post.pratique}</span>}
           {(post.hashtags || []).map((h) => <span key={h} style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent }}>{h}</span>)}
@@ -1314,7 +1674,280 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
     </div>
   );
 }
-function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, following, myGroupIds, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onSave, onRepost, onAddComment, onDelete, onEdit, onReport, onHide, onBlock, onEditRequest, onLoadComments }) {
+/** Barre horizontale des Traces actives — ma Trace toujours en premier (avec
+ *  un "+" si je n'en ai pas), puis celles des comptes suivis. Anneau dégradé
+ *  = contient une Trace non vue ; anneau neutre = toutes déjà vues. */
+function TraceBar({ groups, onOpenGroup, onCreateOwn }) {
+  const { colors } = useTheme();
+  if (groups.length === 0) return null;
+  return (
+    <div className="flex gap-3" style={{ padding: "10px 16px 14px", overflowX: "auto" }}>
+      {groups.map((g, i) => {
+        const empty = g.traces.length === 0;
+        return (
+          <button
+            key={g.authorId}
+            onClick={() => (empty ? onCreateOwn() : onOpenGroup(i))}
+            className="flex flex-col items-center gap-1 active:scale-95 transition-transform"
+            style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, width: 64 }}
+          >
+            <div style={{ position: "relative", width: 60, height: 60 }}>
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: RADIUS.pill,
+                  padding: 2.5,
+                  boxSizing: "border-box",
+                  background: empty ? colors.border : g.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})`,
+                }}
+              >
+                <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.background, padding: 2, boxSizing: "border-box" }}>
+                  <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {g.avatar ? <img src={g.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={22} color={colors.textFaint} />}
+                  </div>
+                </div>
+              </div>
+              {g.isMe && empty && (
+                <div style={{ position: "absolute", bottom: -2, right: -2, width: 20, height: 20, borderRadius: RADIUS.pill, background: colors.accent, border: `2px solid ${colors.background}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Plus size={11} color={colors.onAccent} strokeWidth={3} />
+                </div>
+              )}
+            </div>
+            <span style={{ fontSize: 10.5, color: colors.textSecondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 60 }}>
+              {g.isMe ? "Ma Trace" : g.nom}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+function TraceViewersSheet({ traceId, onClose }) {
+  const { colors } = useTheme();
+  const [viewers, setViewers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    traceService.fetchTraceViewers(traceId).then((v) => { if (!cancelled) setViewers(v); }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [traceId]);
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 82 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)" }} />
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "60vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+          <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{viewers.length} vue{viewers.length !== 1 ? "s" : ""}</span>
+            <IconButton icon={X} onClick={onClose} size={30} />
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
+            {loading ? (
+              <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+            ) : viewers.length === 0 ? (
+              <EmptyState title="Aucune vue pour l'instant" subtitle="Les personnes qui regardent votre Trace apparaîtront ici." />
+            ) : (
+              viewers.map((v) => (
+                <div key={v.username} className="flex items-center gap-3" style={{ padding: "8px 4px" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                    {v.avatar ? <img src={v.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={15} color={colors.textFaint} />}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{v.nom}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+/** Visionneuse plein écran — navigation entre Traces d'une même personne et
+ *  entre personnes, progression réelle (minuteur pour une photo, lecture
+ *  réelle pour une vidéo), vue enregistrée une seule fois par Trace. */
+function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onDelete, onOpenProfile }) {
+  const { colors } = useTheme();
+  const [groupIndex, setGroupIndex] = useState(startGroupIndex);
+  const [traceIndex, setTraceIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [showViewers, setShowViewers] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const videoRef = useRef(null);
+  const elapsedRef = useRef(0);
+  const holdTimerRef = useRef(null);
+  const heldRef = useRef(false);
+  const viewedRef = useRef(new Set());
+
+  const group = groups[groupIndex];
+  const trace = group?.traces?.[traceIndex];
+  const isMine = !!trace && trace.username === meUsername;
+
+  const goNext = () => {
+    setConfirmDelete(false);
+    const g = groups[groupIndex];
+    if (!g) return;
+    if (traceIndex < g.traces.length - 1) {
+      setTraceIndex((i) => i + 1);
+    } else if (groupIndex < groups.length - 1) {
+      setGroupIndex((i) => i + 1);
+      setTraceIndex(0);
+    } else {
+      onClose();
+    }
+  };
+  const goPrev = () => {
+    setConfirmDelete(false);
+    if (traceIndex > 0) {
+      setTraceIndex((i) => i - 1);
+    } else if (groupIndex > 0) {
+      const prevGroup = groups[groupIndex - 1];
+      setGroupIndex((i) => i - 1);
+      setTraceIndex(Math.max(0, prevGroup.traces.length - 1));
+    }
+  };
+
+  // Enregistre la vue une seule fois par Trace pour cette session de
+  // visionnage (une nouvelle visite plus tard sera dédupliquée côté base par
+  // la clé primaire (trace_id, viewer_id) — voir traceService.recordTraceView).
+  useEffect(() => {
+    if (!trace || isMine || viewedRef.current.has(trace.id)) return;
+    viewedRef.current.add(trace.id);
+    onView(trace.id);
+  }, [trace?.id, isMine, onView]);
+
+  // Progression photo : minuteur sur duration_seconds. Progression vidéo :
+  // pilotée par la vraie lecture (onTimeUpdate/onEnded plus bas), pas simulée.
+  useEffect(() => {
+    elapsedRef.current = 0;
+    setProgress(0);
+  }, [trace?.id]);
+
+  useEffect(() => {
+    if (!trace || trace.mediaType === "video" || paused) return;
+    const durationMs = (trace.durationSeconds || 6) * 1000;
+    const tickMs = 50;
+    const id = setInterval(() => {
+      elapsedRef.current += tickMs;
+      const pct = Math.min(1, elapsedRef.current / durationMs);
+      setProgress(pct);
+      if (pct >= 1) goNext();
+    }, tickMs);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trace?.id, paused]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !trace || trace.mediaType !== "video") return;
+    if (paused) v.pause();
+    else v.play().catch(() => {});
+  }, [paused, trace?.id, trace?.mediaType]);
+
+  const onPressStart = () => {
+    heldRef.current = false;
+    holdTimerRef.current = setTimeout(() => { heldRef.current = true; setPaused(true); }, 180);
+  };
+  const onPressEnd = (isRightSide) => {
+    clearTimeout(holdTimerRef.current);
+    if (heldRef.current) { setPaused(false); return; }
+    if (isRightSide) goNext(); else goPrev();
+  };
+
+  if (!group || !trace) return null;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 80, background: "#000", display: "flex", justifyContent: "center" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflow: "hidden" }}>
+        {trace.mediaType === "video" ? (
+          <video
+            key={trace.id}
+            ref={videoRef}
+            src={trace.mediaUrl}
+            autoPlay
+            playsInline
+            onTimeUpdate={(e) => { const v = e.currentTarget; if (v.duration) setProgress(v.currentTime / v.duration); }}
+            onEnded={goNext}
+            style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+          />
+        ) : (
+          <img src={trace.mediaUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+        )}
+
+        {/* Zones de tap (précédent / suivant) + maintien pour mettre en pause */}
+        <div onPointerDown={onPressStart} onPointerUp={() => onPressEnd(false)} onPointerCancel={() => setPaused(false)} style={{ position: "absolute", left: 0, top: 60, bottom: 70, width: "35%", zIndex: 2 }} />
+        <div onPointerDown={onPressStart} onPointerUp={() => onPressEnd(true)} onPointerCancel={() => setPaused(false)} style={{ position: "absolute", right: 0, top: 60, bottom: 70, width: "65%", zIndex: 2 }} />
+
+        {/* Barres de progression */}
+        <div className="flex gap-1" style={{ position: "absolute", top: 10, left: 10, right: 10, zIndex: 3 }}>
+          {group.traces.map((t, i) => (
+            <div key={t.id} style={{ flex: 1, height: 2.5, borderRadius: 2, background: "rgba(255,255,255,0.35)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${i < traceIndex ? 100 : i === traceIndex ? progress * 100 : 0}%`, background: "#fff" }} />
+            </div>
+          ))}
+        </div>
+
+        {/* En-tête : auteur + fermeture */}
+        <div className="flex items-center justify-between" style={{ position: "absolute", top: 20, left: 12, right: 12, zIndex: 3 }}>
+          <button onClick={() => onOpenProfile(group.username)} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {group.avatar ? <img src={group.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color={colors.textFaint} />}
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{isMine ? "Vous" : group.nom}</span>
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{formatRelativeDate(trace.createdAt)}</span>
+          </button>
+          <div className="flex items-center gap-1" style={{ zIndex: 4, position: "relative" }}>
+            {isMine && (
+              <button onClick={() => setConfirmDelete(true)} style={{ width: 32, height: 32, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.4)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <Trash2 size={15} color="#fff" />
+              </button>
+            )}
+            <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.4)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <X size={16} color="#fff" />
+            </button>
+          </div>
+        </div>
+
+        {/* Légende */}
+        {trace.texte && (
+          <div style={{ position: "absolute", left: 16, right: 16, bottom: isMine ? 64 : 24, zIndex: 3, fontSize: 13.5, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.5)", textAlign: "center" }}>
+            {trace.texte}
+          </div>
+        )}
+
+        {/* Vues (propriétaire uniquement) */}
+        {isMine && (
+          <button onClick={() => setShowViewers(true)} className="flex items-center gap-1.5" style={{ position: "absolute", left: 16, bottom: 22, zIndex: 3, background: "rgba(0,0,0,0.4)", border: "none", borderRadius: RADIUS.pill, padding: "7px 12px", cursor: "pointer" }}>
+            <Eye size={14} color="#fff" />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{trace.viewCount ?? 0} vue{(trace.viewCount ?? 0) !== 1 ? "s" : ""}</span>
+          </button>
+        )}
+
+        {paused && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, pointerEvents: "none" }}>
+            <Pause size={40} color="rgba(255,255,255,0.85)" fill="rgba(255,255,255,0.85)" />
+          </div>
+        )}
+
+        {confirmDelete && (
+          <div style={{ position: "absolute", inset: 0, zIndex: 5, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div style={{ width: "100%", maxWidth: 320, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, padding: 20, textAlign: "center" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 6 }}>Supprimer cette Trace ?</div>
+              <div style={{ fontSize: 12.5, color: colors.textSecondary, marginBottom: 16 }}>Elle disparaîtra immédiatement pour tout le monde.</div>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={() => setConfirmDelete(false)}>Annuler</Button>
+                <Button variant="primary" onClick={() => { onDelete(trace); goNext(); }}>Supprimer</Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      {showViewers && <TraceViewersSheet traceId={trace.id} onClose={() => setShowViewers(false)} />}
+    </div>
+  );
+}
+function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, following, myGroupIds, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEdit, onReport, onHide, onBlock, onEditRequest, onLoadComments, chromeMode = "full", traceGroups = [], onOpenTraceGroup, onCreateOwnTrace }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("pourtoi");
   const [sheet, setSheet] = useState(null); // { type: 'actions'|'report'|'comments'|'author', post }
@@ -1327,12 +1960,27 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
   const meName = profile.nom || "Vous";
   // Pipeline centralisé (voir buildFeed) — même logique de sécurité/âge partout, seule la
   // pondération change selon l'onglet.
-  const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], myGroupIds: myGroupIds || [], now: Date.now() };
-  const seenIds = tab === "decouvrir" ? getDiscoverSeenIds(profile.id) : [];
-  const visible =
-    tab === "pourtoi" ? buildFeed(posts, ctx) :
-    tab === "abonnements" ? buildFeed(posts.filter((p) => following.includes(p.username)), ctx) :
-    buildDiscoverFeed(posts, { ...ctx, seenIds }); // Découvrir : pipeline dédié — voir buildDiscoverFeed()
+  //
+  // L'ORDRE du fil est mémoïsé séparément des données affichées : liker/commenter
+  // change post.likes/commentaires, ce qui changerait le score et rebattrait tout
+  // le classement à chaque interaction (le post qu'on vient de liker "disparaît"
+  // en sautant ailleurs dans la liste). On ne recalcule donc l'ordre que quand
+  // l'ensemble réel des posts, l'onglet ou les abonnements changent — jamais
+  // juste parce qu'un compteur a bougé — puis on relit les données à jour par id.
+  const postIdsKey = posts.map((p) => p.id).join(",");
+  const followingKey = following.join(",");
+  const myGroupIdsKey = (myGroupIds || []).join(",");
+  const orderedIds = useMemo(() => {
+    const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], myGroupIds: myGroupIds || [], now: Date.now() };
+    let ordered;
+    if (tab === "pourtoi") ordered = buildFeed(posts, ctx);
+    else if (tab === "abonnements") ordered = buildFeed(posts.filter((p) => following.includes(p.username)), ctx);
+    else ordered = buildDiscoverFeed(posts, { ...ctx, seenIds: getDiscoverSeenIds(profile.id) }); // Découvrir : pipeline dédié — voir buildDiscoverFeed()
+    return ordered.map((p) => p.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, postIdsKey, followingKey, myGroupIdsKey, profile.id, profile.estMineur]);
+  const postsById = new Map(posts.map((p) => [p.id, p]));
+  const visible = orderedIds.map((id) => postsById.get(id)).filter(Boolean);
 
   // Mémorise ce qui a été montré dans Découvrir pour ne pas le remontrer en
   // priorité la prochaine fois (persiste dans localStorage, survit au refresh).
@@ -1344,7 +1992,21 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
 
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ padding: "14px 16px 6px" }}><SegmentedControl options={options} value={tab} onChange={setTab} /></div>
+      <div
+        style={{
+          position: "sticky",
+          top: chromeMode !== "hidden" ? 74 : 0,
+          zIndex: 5,
+          padding: "14px 16px 6px",
+          opacity: chromeMode === "hidden" ? 0 : 1,
+          transform: chromeMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
+          transition: "opacity 220ms ease, transform 220ms ease, top 260ms ease",
+          pointerEvents: chromeMode === "hidden" ? "none" : "auto",
+        }}
+      >
+        <SegmentedControl options={options} value={tab} onChange={setTab} />
+      </div>
+      <div style={{ marginTop: 6 }}><TraceBar groups={traceGroups} onOpenGroup={onOpenTraceGroup} onCreateOwn={onCreateOwnTrace} /></div>
       {visible.length === 0 ? (
         <EmptyState title="Aucun contenu pour le moment" subtitle={copy[tab]} />
       ) : (
@@ -1382,7 +2044,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} />
       )}
     </div>
   );
@@ -1410,45 +2072,246 @@ function FullScreenVideoPlayer({ video, onClose }) {
     </div>
   );
 }
-function VideoCard({ video, liked, commentCount, onLike, onOpenComments, onOpenActions, onOpenAuthor, onOpenPlayer }) {
+function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onOpenComments, onOpenActions, onOpenAuthor, onOpenPlayer }) {
   const { colors } = useTheme();
   const canPlay = !!video.videoUrl;
+  const share = async () => {
+    if (navigator.share) { try { await navigator.share({ title: "PISTE", text: video.titre || "Une vidéo PISTE" }); } catch (e) {} }
+    else alert("Le partage natif n'est pas disponible sur cet appareil.");
+  };
   return (
-    <div className="flex gap-3" style={{ padding: "10px 16px" }}>
-      <button
-        onClick={canPlay ? onOpenPlayer : undefined}
-        disabled={!canPlay}
-        style={{ width: 128, aspectRatio: "16/10", borderRadius: RADIUS.sm, background: colors.surfaceAlt, flexShrink: 0, position: "relative", overflow: "hidden", border: "none", padding: 0, cursor: canPlay ? "pointer" : "default" }}
-      >
-        {video.videoUrl ? (
-          <video src={video.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
-        ) : video.image ? (
-          <img src={video.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        ) : null}
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={18} color="white" fill="white" /></div>
-        {video.duree && <span style={{ position: "absolute", right: 5, bottom: 5, fontSize: 10, color: "white", background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "1px 5px" }}>{video.duree}</span>}
-      </button>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <button onClick={canPlay ? onOpenPlayer : undefined} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: canPlay ? "pointer" : "default" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: colors.text, lineHeight: 1.3 }}>{video.titre}</div>
+    <div style={{ padding: "10px 16px 16px" }}>
+      <div className="flex gap-2" style={{ alignItems: "stretch" }}>
+        {/* Vidéo en grand — 3/4 de la largeur de la carte */}
+        <button
+          onClick={canPlay ? onOpenPlayer : undefined}
+          disabled={!canPlay}
+          style={{ flex: 3, minWidth: 0, aspectRatio: "16/9", borderRadius: RADIUS.md, background: colors.surfaceAlt, position: "relative", overflow: "hidden", border: "none", padding: 0, cursor: canPlay ? "pointer" : "default" }}
+        >
+          {/* Vraie miniature (image capturée à l'envoi) en priorité — un <video>
+              reste souvent noir tant qu'on n'a pas cliqué dessus, selon l'appareil. */}
+          {video.image ? (
+            <img src={video.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : video.videoUrl ? (
+            <video src={video.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
+          ) : null}
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Play size={19} color="white" fill="white" />
+            </div>
+          </div>
+          {video.duree && <span style={{ position: "absolute", right: 6, bottom: 6, fontSize: 10, color: "white", background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "1px 5px" }}>{video.duree}</span>}
         </button>
-        <button onClick={onOpenAuthor} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}><div style={{ fontSize: 11.5, color: colors.textSecondary, marginTop: 4 }}>{video.nom}</div></button>
-        <div className="flex items-center gap-3" style={{ marginTop: 6 }}>
-          <button onClick={onLike} className="flex items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <Heart size={14} color={liked ? colors.accent : colors.textFaint} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
-            <span style={{ fontSize: 11, color: liked ? colors.accent : colors.textFaint }}>{video.likes || 0}</span>
+        {/* Colonne latérale épurée — seulement l'essentiel (like, commentaire) */}
+        <div className="flex flex-col items-center justify-center gap-5" style={{ flex: 1, minWidth: 44 }}>
+          <button onClick={onLike} className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <Heart size={19} color={liked ? colors.accent : colors.textFaint} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
+            <span style={{ fontSize: 10.5, color: liked ? colors.accent : colors.textFaint }}>{video.likes || 0}</span>
           </button>
-          <button onClick={onOpenComments} className="flex items-center gap-1" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <MessageSquare size={14} color={colors.textFaint} strokeWidth={1.8} />
-            <span style={{ fontSize: 11, color: colors.textFaint }}>{commentCount}</span>
+          <button onClick={onOpenComments} className="flex flex-col items-center gap-0.5" style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <MessageSquare size={19} color={colors.textFaint} strokeWidth={1.8} />
+            <span style={{ fontSize: 10.5, color: colors.textFaint }}>{commentCount}</span>
           </button>
-          <button onClick={onOpenActions} style={{ background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}><MoreHorizontal size={15} color={colors.textFaint} /></button>
+        </div>
+      </div>
+      {/* Sous la vidéo — auteur à gauche, actions secondaires à droite */}
+      <div className="flex items-center justify-between" style={{ marginTop: 10 }}>
+        <button onClick={onOpenAuthor} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0 }}>
+          <div style={{ width: 26, height: 26, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+            {video.avatar ? <img src={video.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={12} color={colors.textFaint} />}
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{video.nom}</span>
+        </button>
+        <div className="flex items-center gap-3" style={{ flexShrink: 0 }}>
+          {onRepost && (
+            <button onClick={onRepost} className="flex items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
+              <Repeat2 size={16} color={reposted ? colors.accent : colors.textFaint} strokeWidth={1.8} />
+            </button>
+          )}
+          <button onClick={share} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+            <Share2 size={16} color={colors.textFaint} strokeWidth={1.8} />
+          </button>
+          <button onClick={onOpenActions} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+            <MoreHorizontal size={16} color={colors.textFaint} />
+          </button>
         </div>
       </div>
     </div>
   );
 }
-function ScreenVideo({ videos, profile, liked, commentsByPost, following, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer }) {
+/** Une "slide" plein écran vertical (façon TikTok/Reels) — lecture auto quand
+ *  visible à plus de 60% (IntersectionObserver), pause sinon. Tap = pause/play,
+ *  bouton dédié = muet/son. */
+function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, onOpenComments, onOpenActions, onOpenAuthor }) {
+  const { colors } = useTheme();
+  const videoRef = useRef(null);
+  const slideRef = useRef(null);
+  const [muted, setMuted] = useState(true);
+  const [playing, setPlaying] = useState(true);
+  const share = async () => {
+    if (navigator.share) { try { await navigator.share({ title: "PISTE", text: item.texte || "Un instant PISTE" }); } catch (e) {} }
+    else alert("Le partage natif n'est pas disponible sur cet appareil.");
+  };
+
+  useEffect(() => {
+    const el = slideRef.current;
+    const vid = videoRef.current;
+    if (!el || !vid) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
+          vid.play().catch(() => {});
+          setPlaying(true);
+        } else {
+          vid.pause();
+          setPlaying(false);
+        }
+      },
+      { threshold: [0, 0.6, 1] }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const togglePlay = () => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    if (vid.paused) { vid.play().catch(() => {}); setPlaying(true); }
+    else { vid.pause(); setPlaying(false); }
+  };
+
+  return (
+    <div ref={slideRef} style={{ position: "relative", width: "100%", height: "100%", scrollSnapAlign: "start", background: "#000", flexShrink: 0, overflow: "hidden" }}>
+      {item.videoUrl ? (
+        <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline onClick={togglePlay} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Film size={36} color="rgba(255,255,255,0.3)" /></div>
+      )}
+      {!playing && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+          <div style={{ width: 56, height: 56, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={26} color="#fff" fill="#fff" /></div>
+        </div>
+      )}
+      <button onClick={() => setMuted((m) => !m)} style={{ position: "absolute", top: 16, right: 16, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+        {muted ? <VolumeX size={16} color="#fff" /> : <Volume2 size={16} color="#fff" />}
+      </button>
+      <div style={{ position: "absolute", left: 0, right: 68, bottom: 0, padding: "0 16px 22px", color: "#fff", pointerEvents: "none" }}>
+        <button onClick={onOpenAuthor} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 8, pointerEvents: "auto" }}>
+          <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+            {item.avatar ? <img src={item.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color="#fff" />}
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.nom}</span>
+        </button>
+        {item.texte && <div style={{ fontSize: 12.5, lineHeight: 1.4, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.texte}</div>}
+      </div>
+      <div className="flex flex-col items-center gap-4" style={{ position: "absolute", right: 10, bottom: 22 }}>
+        <button onClick={onLike} className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Heart size={18} color={liked ? colors.accent : "#fff"} fill={liked ? colors.accent : "none"} strokeWidth={2} />
+          </div>
+          <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.likes || 0}</span>
+        </button>
+        <button onClick={onOpenComments} className="flex flex-col items-center gap-1" style={{ background: "none", border: "none", cursor: "pointer" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <MessageSquare size={18} color="#fff" strokeWidth={2} />
+          </div>
+          <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{commentCount}</span>
+        </button>
+        {onRepost && (
+          <button onClick={onRepost} className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Repeat2 size={18} color={reposted ? colors.accent : "#fff"} strokeWidth={2} />
+            </div>
+            <span style={{ fontSize: 10.5, color: reposted ? colors.accent : "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.reposts || 0}</span>
+          </button>
+        )}
+        <button onClick={share} style={{ background: "none", border: "none", cursor: "pointer" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Share2 size={17} color="#fff" strokeWidth={2} />
+          </div>
+        </button>
+        <button onClick={onOpenActions} style={{ background: "none", border: "none", cursor: "pointer" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <MoreHorizontal size={17} color="#fff" />
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+/** Fil plein écran vertical, défilement par slide (scroll-snap) — remplace la
+ *  liste classique pour l'onglet "Instants". */
+function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost, onOpenComments, onOpenActions, onOpenAuthor, tabSwitcher, onChromeMode }) {
+  // Instants a son propre conteneur de défilement (pas la fenêtre) — on
+  // reproduit ici la même logique que le reste de l'app (masquer/pilule
+  // flottante) pour un comportement cohérent partout, voir MainApp. Les
+  // onglets flottants (Instants/Vidéos/Recherche) suivent le même mouvement.
+  const [localMode, setLocalMode] = useState("full");
+  const lastScrollTopRef = useRef(0);
+  const handleScroll = (e) => {
+    const top = e.currentTarget.scrollTop;
+    const delta = top - lastScrollTopRef.current;
+    let mode = null;
+    if (top < 40) mode = "full";
+    else if (delta > 4) mode = "hidden";
+    else if (delta < -4) mode = "floating";
+    if (mode) {
+      setLocalMode(mode);
+      onChromeMode?.(mode);
+    }
+    lastScrollTopRef.current = top;
+  };
+  return (
+    <div style={{ position: "relative", height: "calc(100dvh - 132px)", overflow: "hidden", background: "#000", margin: "0 -16px" }}>
+      {tabSwitcher && (
+        <div
+          style={{
+            position: "absolute",
+            // Un peu plus d'espace que le strict minimum : la hauteur réelle
+            // de l'en-tête au-dessus varie selon l'appareil (encoche, barre
+            // d'adresse mobile...) — mieux vaut une marge généreuse qu'un
+            // chevauchement sur certains écrans.
+            top: 20,
+            left: 0,
+            right: 0,
+            zIndex: 5,
+            display: "flex",
+            justifyContent: "center",
+            pointerEvents: "none",
+            opacity: localMode === "hidden" ? 0 : 1,
+            transform: localMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
+            transition: "opacity 220ms ease, transform 220ms ease",
+          }}
+        >
+          <div style={{ pointerEvents: "auto" }}>{tabSwitcher}</div>
+        </div>
+      )}
+      {items.length === 0 ? (
+        <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
+          <EmptyState title="Aucun instant pour le moment" subtitle="Instants — le format court et vertical de PISTE — publiés par la communauté apparaîtront ici." />
+        </div>
+      ) : (
+        <div onScroll={handleScroll} style={{ height: "100%", overflowY: "auto", scrollSnapType: "y mandatory" }}>
+          {items.map((item) => (
+            <InstantSlide
+              key={item.id}
+              item={item}
+              liked={liked.includes(item.id)}
+              reposted={reposted.includes(item.id)}
+              commentCount={(commentsByPost[item.id] || []).length}
+              onLike={() => onLike(item.id)}
+              onRepost={() => onRepost(item.id)}
+              onOpenComments={() => onOpenComments(item)}
+              onOpenActions={() => onOpenActions(item)}
+              onOpenAuthor={() => onOpenAuthor(item)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, following, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onChromeMode, chromeMode = "full" }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("instants");
   const [sheet, setSheet] = useState(null);
@@ -1456,23 +2319,64 @@ function ScreenVideo({ videos, profile, liked, commentsByPost, following, bellUs
   const options = [{ key: "instants", label: "Instants" }, { key: "videos", label: "Vidéos" }, { key: "recherche", label: "Recherche" }];
   const meName = profile.nom || "Vous";
   // Même pipeline que le Fil (interaction pondérée davantage : vues/relecture à brancher
-  // plus tard quand un vrai lecteur vidéo remontera ces signaux).
-  const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], now: Date.now() };
-  const ranked = buildFeed(videos.filter((v) => v.type === "video"), ctx);
-  const rankedInstants = buildFeed(videos.filter((v) => v.type === "video_courte"), ctx);
-  const activeList = tab === "instants" ? rankedInstants : ranked;
+  // plus tard quand un vrai lecteur vidéo remontera ces signaux). Ordre mémoïsé
+  // séparément des données, même raison que ScreenFil : liker ne doit pas rebattre
+  // le classement (voir le commentaire détaillé dans ScreenFil).
+  const followingKey = following.join(",");
+  const videoIdsKey = videos.filter((v) => v.type === "video").map((v) => v.id).join(",");
+  const instantIdsKey = videos.filter((v) => v.type === "video_courte").map((v) => v.id).join(",");
+  const rankedIds = useMemo(() => {
+    const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], now: Date.now() };
+    return buildFeed(videos.filter((v) => v.type === "video"), ctx).map((v) => v.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoIdsKey, followingKey, profile.estMineur]);
+  const rankedInstantIds = useMemo(() => {
+    const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], now: Date.now() };
+    return buildFeed(videos.filter((v) => v.type === "video_courte"), ctx).map((v) => v.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instantIdsKey, followingKey, profile.estMineur]);
+  const videosById = new Map(videos.map((v) => [v.id, v]));
+  const ranked = rankedIds.map((id) => videosById.get(id)).filter(Boolean);
+  const rankedInstants = rankedInstantIds.map((id) => videosById.get(id)).filter(Boolean);
   // Recherche sur les vraies vidéos déjà chargées depuis Supabase (titre/texte,
   // pseudo ou nom d'affichage de l'auteur) — pas de résultats inventés.
   const q = query.trim().toLowerCase();
   const searchResults = q
     ? videos.filter((v) => (v.titre || "").toLowerCase().includes(q) || (v.nom || "").toLowerCase().includes(q) || (v.username || "").toLowerCase().includes(q))
     : [];
+  // Sur Instants, un bandeau d'en-tête classique (fond clair/sombre uni)
+  // au-dessus d'une vidéo plein écran fait "encadré" — on affiche plutôt les
+  // onglets flottants, translucides, directement par-dessus la vidéo.
+  const darkTabSwitcher = (
+    <div className="flex gap-1.5" style={{ background: "rgba(0,0,0,0.35)", borderRadius: RADIUS.pill, padding: 3, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
+      {options.map((o) => (
+        <button key={o.key} onClick={() => setTab(o.key)} style={{ border: "none", background: tab === o.key ? "rgba(255,255,255,0.95)" : "transparent", color: tab === o.key ? "#14170D" : "#fff", borderRadius: RADIUS.pill, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ padding: "14px 16px 6px" }}><SegmentedControl options={options} value={tab} onChange={setTab} /></div>
+      {tab !== "instants" && (
+        <div
+          style={{
+            position: "sticky",
+            top: chromeMode !== "hidden" ? 74 : 0,
+            zIndex: 5,
+            padding: "14px 16px 6px",
+            opacity: chromeMode === "hidden" ? 0 : 1,
+            transform: chromeMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
+            transition: "opacity 220ms ease, transform 220ms ease, top 260ms ease",
+            pointerEvents: chromeMode === "hidden" ? "none" : "auto",
+          }}
+        >
+          <SegmentedControl options={options} value={tab} onChange={setTab} />
+        </div>
+      )}
       {tab === "recherche" ? (
-        <div className="px-4 pt-3">
-          <div className="flex items-center gap-2" style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "10px 14px" }}>
+        <div>
+          <div className="flex items-center gap-2 mx-4" style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.pill, padding: "10px 14px", marginTop: 12 }}>
             <Search size={17} color={colors.textFaint} />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une vidéo, un instant, un créateur" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
           </div>
@@ -1481,14 +2385,16 @@ function ScreenVideo({ videos, profile, liked, commentsByPost, following, bellUs
           ) : searchResults.length === 0 ? (
             <EmptyState title="Aucun résultat" subtitle={`Aucune vidéo ne correspond à « ${query} ».`} />
           ) : (
-            <div style={{ paddingTop: 6 }}>
+            <div style={{ paddingTop: 12 }}>
               {searchResults.map((v) => (
                 <VideoCard
                   key={v.id}
                   video={v}
                   liked={liked.includes(v.id)}
+                  reposted={reposted.includes(v.id)}
                   commentCount={(commentsByPost[v.id] || []).length}
                   onLike={() => onLike(v.id)}
+                  onRepost={() => onRepost(v.id)}
                   onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
                   onOpenActions={() => setSheet({ type: "actions", post: v })}
                   onOpenAuthor={() => onOpenProfile(v.username)}
@@ -1498,15 +2404,31 @@ function ScreenVideo({ videos, profile, liked, commentsByPost, following, bellUs
             </div>
           )}
         </div>
-      ) : activeList.length > 0 ? (
+      ) : tab === "instants" ? (
+        <InstantsFeed
+          items={rankedInstants}
+          liked={liked}
+          reposted={reposted}
+          commentsByPost={commentsByPost}
+          onLike={onLike}
+          onRepost={onRepost}
+          onOpenComments={(v) => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
+          onOpenActions={(v) => setSheet({ type: "actions", post: v })}
+          onOpenAuthor={(v) => onOpenProfile(v.username)}
+          tabSwitcher={darkTabSwitcher}
+          onChromeMode={onChromeMode}
+        />
+      ) : ranked.length > 0 ? (
         <div style={{ paddingTop: 6 }}>
-          {activeList.map((v) => (
+          {ranked.map((v) => (
             <VideoCard
               key={v.id}
               video={v}
               liked={liked.includes(v.id)}
+              reposted={reposted.includes(v.id)}
               commentCount={(commentsByPost[v.id] || []).length}
               onLike={() => onLike(v.id)}
+              onRepost={() => onRepost(v.id)}
               onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
               onOpenActions={() => setSheet({ type: "actions", post: v })}
               onOpenAuthor={() => onOpenProfile(v.username)}
@@ -1515,7 +2437,7 @@ function ScreenVideo({ videos, profile, liked, commentsByPost, following, bellUs
           ))}
         </div>
       ) : (
-        <EmptyState title={tab === "instants" ? "Aucun instant pour le moment" : "Aucune vidéo pour le moment"} subtitle={tab === "instants" ? "Instants — le format court et vertical de PISTE — publiés par la communauté apparaîtront ici." : "Les vidéos publiées par la communauté apparaîtront ici."} />
+        <EmptyState title="Aucune vidéo pour le moment" subtitle="Les vidéos publiées par la communauté apparaîtront ici." />
       )}
       {sheet?.type === "actions" && (
         <ContentActionSheet
@@ -1532,7 +2454,7 @@ function ScreenVideo({ videos, profile, liked, commentsByPost, following, bellUs
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "video", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} />
       )}
     </div>
   );
@@ -1581,7 +2503,7 @@ function GroupCategoryTile({ group, onOpen }) {
     </button>
   );
 }
-function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated, onOpenProfile, profile, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
+function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated, onOpenProfile, profile, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("publications");
   const [posts, setPosts] = useState([]);
@@ -1589,11 +2511,29 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
   const [sheet, setSheet] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState("");
+  const [localMode, setLocalMode] = useState("full");
+  const lastScrollTopRef = useRef(0);
+  const handleScroll = (e) => {
+    const el = e.currentTarget;
+    const top = el.scrollTop;
+    // Pas assez de contenu pour justifier l'effet immersif (ex. une communauté
+    // sans publication) : le léger dépassement de scroll ne doit pas cacher
+    // l'en-tête pour rien, alors qu'il n'y a rien de plus à voir en dessous.
+    if (el.scrollHeight - el.clientHeight < 80) { setLocalMode("full"); lastScrollTopRef.current = top; return; }
+    const delta = top - lastScrollTopRef.current;
+    if (top < 40) setLocalMode("full");
+    else if (delta > 4) setLocalMode("hidden");
+    else if (delta < -4) setLocalMode("floating");
+    lastScrollTopRef.current = top;
+  };
   const tabs = [["publications", "Publications"], ["videos", "Vidéos"], ["discussions", "Discussions"], ["membres", "Membres"]];
   const meName = profile?.nom || "Vous";
   // La policy RLS "creator or admin updates group" (001_init.sql) applique déjà
   // cette même règle côté base — ce contrôle ici n'est qu'un raccourci d'UX.
-  const canEditImage = profile?.role === "admin" || (group.createdBy && group.createdBy === profile?.id);
+  // Les groupes prédéfinis PISTE n'ont pas de créateur (created_by = NULL) :
+  // sans l'ajout de `group.joined`, aucun membre ne pouvait jamais y ajouter de
+  // photo, seul un admin le pouvait — voir migration 022 pour l'équivalent RLS.
+  const canEditImage = profile?.role === "admin" || (group.createdBy && group.createdBy === profile?.id) || group.joined;
   const groupImageInputRef = useRef(null);
   const pickGroupImage = async (e) => {
     const file = e.target.files?.[0];
@@ -1636,9 +2576,9 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
 
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
-      <ScreenHeader title={group.nom} onBack={onClose} />
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        <div style={{ position: "relative" }}>
+      <div onScroll={handleScroll} style={{ flex: 1, overflowY: "auto" }}>
+        <ScreenHeader title={group.nom} onBack={onClose} chromeMode={localMode} />
+        <div style={{ position: "relative", marginTop: 10, borderRadius: RADIUS.xl, overflow: "hidden" }}>
           <GroupImageArea group={group} height={150} iconSize={26} />
           {group.imageUrl && (
             <div style={{ position: "absolute", left: 16, right: 16, bottom: 12 }}>
@@ -1651,7 +2591,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
               <button
                 onClick={() => groupImageInputRef.current?.click()}
                 disabled={uploadingImage}
-                aria-label="Changer l'image du groupe"
+                aria-label="Changer l'image de la communauté"
                 style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
               >
                 <Camera size={15} color="#fff" />
@@ -1667,14 +2607,26 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
             <Button full={false} variant={group.joined ? "secondary" : "primary"} onClick={() => onToggleJoin(group.id)}>{group.joined ? "Rejoint" : "Rejoindre"}</Button>
           </div>
         </div>
-        <div className="flex gap-4 px-4" style={{ overflowX: "auto", borderBottom: `1px solid ${colors.border}` }}>
-          {tabs.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ background: "none", border: "none", padding: "6px 0 10px", whiteSpace: "nowrap", borderBottom: `2px solid ${tab === k ? colors.accent : "transparent"}`, color: tab === k ? colors.text : colors.textFaint, fontSize: 12.5, fontWeight: tab === k ? 700 : 500, cursor: "pointer" }}>{l}</button>)}
+        <div
+          style={{
+            position: "sticky",
+            top: localMode !== "hidden" ? 74 : 0,
+            zIndex: 5,
+            padding: "10px 16px",
+            background: colors.background,
+            opacity: localMode === "hidden" ? 0 : 1,
+            transform: localMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
+            transition: "opacity 220ms ease, transform 220ms ease, top 260ms ease",
+            pointerEvents: localMode === "hidden" ? "none" : "auto",
+          }}
+        >
+          <SegmentedControl options={tabs.map(([k, l]) => ({ key: k, label: l }))} value={tab} onChange={setTab} />
         </div>
         {tab === "publications" ? (
           loading ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
           ) : groupPosts.length === 0 ? (
-            <EmptyState title="Aucune publication" subtitle="Les publications de ce groupe apparaîtront ici." />
+            <EmptyState title="Aucune publication" subtitle="Les publications de cette communauté apparaîtront ici." />
           ) : (
             <div style={{ paddingTop: 6 }}>
               {groupPosts.map((p) => (
@@ -1699,7 +2651,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           membersLoading ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
           ) : members.length === 0 ? (
-            <EmptyState title="Aucun membre" subtitle="Les membres de ce groupe apparaîtront ici." />
+            <EmptyState title="Aucun membre" subtitle="Les membres de cette communauté apparaîtront ici." />
           ) : (
             <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
               {members.map((m) => (
@@ -1712,17 +2664,17 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
                     <div style={{ fontSize: 11.5, color: colors.textFaint }}>@{m.username}</div>
                   </div>
                   {m.role === "admin" && (
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "3px 9px" }}>Admin du groupe</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "3px 9px" }}>Admin de la communauté</span>
                   )}
                 </button>
               ))}
             </div>
           )
         ) : (
-          <EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de ce groupe est vide pour le moment.`} />
+          <EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de cette communauté est vide pour le moment.`} />
         )}
       </div>
-      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button onClick={() => { onClose(); onCreatePost(group.id); }}>Publier dans ce groupe</Button></div>
+      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button onClick={() => { onClose(); onCreatePost(group.id); }}>Publier dans cette communauté</Button></div>
       {sheet?.type === "actions" && (
         <ContentActionSheet
           isOwn={sheet.post.nom === meName}
@@ -1730,7 +2682,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
           onDelete={() => { onDelete(sheet.post.id); setSheet(null); setPosts((p) => p.filter((x) => x.id !== sheet.post.id)); }}
           onReport={() => setSheet({ type: "report", post: sheet.post })}
-          onHide={() => setSheet(null)}
+          onHide={() => { onHide(sheet.post.id); setPosts((p) => p.filter((x) => x.id !== sheet.post.id)); setSheet(null); }}
           onBlock={() => { onBlock(sheet.post.username); setSheet(null); }}
         />
       )}
@@ -1738,7 +2690,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} />
       )}
     </div>
   );
@@ -1770,14 +2722,14 @@ function CreateGroupForm({ onClose, onCreated }) {
       }
       onCreated(g);
     } catch (e) {
-      setError(e.message || "Impossible de créer ce groupe pour le moment.");
+      setError(e.message || "Impossible de créer cette communauté pour le moment.");
     } finally {
       setSaving(false);
     }
   };
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 46, background: colors.background, display: "flex", flexDirection: "column" }}>
-      <ScreenHeader title="Créer un groupe" onCloseX={onClose} />
+      <ScreenHeader title="Créer une communauté" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickImage} style={{ display: "none" }} />
         <button
@@ -1793,17 +2745,17 @@ function CreateGroupForm({ onClose, onCreated }) {
             </>
           )}
         </button>
-        <TextField label="Nom du groupe" value={nom} onChange={setNom} placeholder="ex : Approche en Normandie" />
-        <TextField label="Description" value={description} onChange={setDescription} placeholder="Décrivez l'objet de ce groupe." textarea />
+        <TextField label="Nom de la communauté" value={nom} onChange={setNom} placeholder="ex : Approche en Normandie" />
+        <TextField label="Description" value={description} onChange={setDescription} placeholder="Décrivez l'objet de cette communauté." textarea />
         <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>CATÉGORIE</div>
         <div className="flex flex-wrap gap-2">{GROUP_CATEGORIES.map((c) => <Chip key={c} label={c} active={categorie === c} onClick={() => setCategorie(categorie === c ? null : c)} />)}</div>
         {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error, marginTop: 16 }}>{error}</div>}
       </div>
-      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button disabled={!nom || saving} onClick={submit}>{saving ? "Création..." : "Créer le groupe"}</Button></div>
+      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button disabled={!nom || saving} onClick={submit}>{saving ? "Création..." : "Créer la communauté"}</Button></div>
     </div>
   );
 }
-function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUpdated, onOpenProfile, profile, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
+function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUpdated, onOpenProfile, profile, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, chromeMode = "full" }) {
   const { colors } = useTheme();
   const [openGroup, setOpenGroup] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -1814,27 +2766,44 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
   const currentOpen = openGroup ? groups.find((g) => g.id === openGroup.id) : null;
   return (
     <div style={{ position: "relative" }}>
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Groupes</span>
-        <button onClick={() => setCreating(true)} style={{ border: `1px solid ${colors.accent}`, color: colors.accent, background: "transparent", borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>+ Créer</button>
+      <div
+        style={{
+          position: "sticky",
+          top: chromeMode !== "hidden" ? 74 : 0,
+          zIndex: 5,
+          background: colors.headerBg,
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          margin: chromeMode !== "hidden" ? "0 8px" : 0,
+          borderRadius: chromeMode !== "hidden" ? RADIUS.xl : 0,
+          boxShadow: chromeMode !== "hidden" ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
+          opacity: chromeMode === "hidden" ? 0 : 1,
+          transform: chromeMode === "hidden" ? "translateY(-130%)" : "translateY(0)",
+          transition: "transform 260ms ease, top 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease, opacity 220ms ease",
+          pointerEvents: chromeMode === "hidden" ? "none" : "auto",
+        }}
+      >
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Communautés</span>
+          <button onClick={() => setCreating(true)} style={{ border: `1px solid ${colors.accent}`, color: colors.accent, background: "transparent", borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>+ Créer</button>
+        </div>
+        <div className="px-4 pb-3"><div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
+          <Search size={17} color={colors.textFaint} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une communauté" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
+        </div></div>
       </div>
-      <div className="px-4 pb-3"><div className="flex items-center gap-2" style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "10px 14px" }}>
-        <Search size={17} color={colors.textFaint} />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un groupe" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
-      </div></div>
 
       {joined.length > 0 && (
-        <div className="px-4 pb-2">
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>GROUPES REJOINTS</div>
+        <div className="px-4" style={{ paddingTop: 16, paddingBottom: 8 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>COMMUNAUTÉS REJOINTES</div>
         </div>
       )}
       {joined.length > 0 && <div className="grid grid-cols-2 gap-3 px-4 pb-4">{joined.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>}
 
-      <div className="px-4 pb-2"><div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5 }}>À DÉCOUVRIR</div></div>
       {filtered.length === 0 ? (
-        <EmptyState title="Aucun groupe trouvé" subtitle="Essayez un autre mot-clé ou créez votre propre groupe." ctaLabel="Créer un groupe" onCta={() => setCreating(true)} />
+        <EmptyState title="Aucune communauté trouvée" subtitle="Essayez un autre mot-clé ou créez votre propre communauté." ctaLabel="Créer une communauté" onCta={() => setCreating(true)} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 px-4 pb-4">{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
+        <div className="grid grid-cols-2 gap-3 px-4 pb-4" style={{ paddingTop: joined.length > 0 ? 12 : 16 }}>{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
       )}
 
       {currentOpen && (
@@ -1855,6 +2824,7 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
           onSave={onSave}
           onAddComment={onAddComment}
           onDelete={onDelete}
+          onDeleteComment={onDeleteComment}
           onEditRequest={onEditRequest}
           onReport={onReport}
           onHide={onHide}
@@ -1871,6 +2841,7 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
    9. CRÉATION DE CONTENU
    ============================================================ */
 const CREATE_OPTIONS = [
+  { key: "trace", label: "Trace", icon: Footprints },
   { key: "publication", label: "Publication", icon: TypeIcon },
   { key: "photo", label: "Photo", icon: ImageIcon },
   { key: "video", label: "Vidéo", icon: Video },
@@ -1916,14 +2887,14 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
         } else {
           const saved = await postService.createPost({
             texte: text, type, animal, pratique,
-            dogId: null, // les chiens ne sont pas encore reliés à un vrai compte — à connecter avec le service chiens
+            dogId,
             departement, contentRating, mediaFiles, groupId,
           });
           setSaving(false);
           onPublished({
             id: saved.id, nom: authorName, avatar: null,
             texte: saved.texte,
-            image: saved.media?.[0]?.type === "video" ? null : saved.media?.[0]?.url || null,
+            image: saved.media?.[0]?.type === "video" ? saved.media?.[0]?.thumbnail_url || null : saved.media?.[0]?.url || null,
             videoUrl: saved.media?.[0]?.type === "video" ? saved.media[0].url : null,
             type: saved.type, animal: saved.animal, pratique: saved.pratique,
             contentRating: saved.content_rating, hashtags: saved.hashtags || [], mentions: saved.mentions || [],
@@ -2052,15 +3023,98 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     </div>
   );
 }
-function CreateFlow({ open, onClose, dogs, onPublished, authorName, editingPost, onEdited, groupId }) {
+/** Création d'une Trace — flux volontairement séparé de ComposeScreen : une
+ *  Trace n'a ni animal/pratique/sondage/sortie, juste un média + légende
+ *  optionnelle, et publie via traceService (table dédiée), pas postService. */
+function TraceComposeScreen({ onClose, onPublished }) {
   const { colors } = useTheme();
-  const [step, setStep] = useState(editingPost ? "compose" : "pick");
-  const [type, setType] = useState(editingPost ? editingPost.type : null);
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [mediaType, setMediaType] = useState(null); // 'photo' | 'video'
+  const [texte, setTexte] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+
+  const pick = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+    setMediaType(f.type.startsWith("video") ? "video" : "photo");
+    setError("");
+  };
+
+  const submit = async () => {
+    if (!file) return;
+    setSaving(true);
+    setError("");
+    try {
+      const trace = await traceService.createTrace({ file, texte: texte.trim() || null });
+      onPublished(trace);
+    } catch (e) {
+      setError(e.message || "Impossible de publier cette Trace pour le moment.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title="Nouvelle Trace" onCloseX={onClose} />
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+        <input ref={inputRef} type="file" accept="image/*,video/*" onChange={pick} style={{ display: "none" }} />
+        {!preview ? (
+          <button
+            onClick={() => inputRef.current?.click()}
+            className="flex flex-col items-center gap-2"
+            style={{ width: "100%", aspectRatio: "9/14", border: `1.5px dashed ${colors.border}`, borderRadius: RADIUS.xl, background: colors.surfaceAlt, cursor: "pointer" }}
+          >
+            <Footprints size={26} color={colors.textFaint} />
+            <span style={{ fontSize: 12.5, color: colors.textFaint, fontWeight: 600 }}>Choisir une photo ou une vidéo</span>
+            <span style={{ fontSize: 11, color: colors.textFaint }}>Visible 24 heures</span>
+          </button>
+        ) : (
+          <div style={{ position: "relative", width: "100%", aspectRatio: "9/14", borderRadius: RADIUS.xl, overflow: "hidden", background: "#000" }}>
+            {mediaType === "video" ? (
+              <video src={preview} muted autoPlay loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            )}
+            <button
+              onClick={() => inputRef.current?.click()}
+              style={{ position: "absolute", top: 10, right: 10, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            >
+              <Camera size={16} color="#fff" />
+            </button>
+          </div>
+        )}
+        <div style={{ marginTop: 16 }}>
+          <TextField label="Légende (optionnelle)" value={texte} onChange={setTexte} placeholder="Ajouter une légende..." />
+        </div>
+        {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error }}>{error}</div>}
+      </div>
+      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}>
+        <Button disabled={!file || saving} onClick={submit}>{saving ? "Publication..." : "Publier ma Trace"}</Button>
+      </div>
+    </div>
+  );
+}
+function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, authorName, editingPost, onEdited, groupId, initialType }) {
+  const { colors } = useTheme();
+  const [step, setStep] = useState(editingPost ? "compose" : initialType ? "compose" : "pick");
+  const [type, setType] = useState(editingPost ? editingPost.type : initialType || null);
   useEffect(() => {
     if (editingPost) { setType(editingPost.type); setStep("compose"); }
   }, [editingPost]);
+  useEffect(() => {
+    if (initialType && !editingPost) { setType(initialType); setStep("compose"); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialType]);
   if (!open) return null;
   const close = () => { setStep("pick"); setType(null); onClose(); };
+  if (step === "compose" && type === "trace") {
+    return <TraceComposeScreen onClose={close} onPublished={(trace) => { close(); onTraceCreated(trace); }} />;
+  }
   if (step === "compose") {
     return (
       <ComposeScreen
@@ -2075,21 +3129,24 @@ function CreateFlow({ open, onClose, dogs, onPublished, authorName, editingPost,
     );
   }
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 60 }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
       <div onClick={close} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
-      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, background: colors.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: "10px 20px 26px" }}>
-        <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "6px auto 16px" }} />
-        <div style={{ fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 12 }}>Créer</div>
-        <div className="grid grid-cols-2 gap-2">
-          {CREATE_OPTIONS.map((o) => {
-            const Icon = o.icon;
-            return (
-              <button key={o.key} onClick={() => { setType(o.key); setStep("compose"); }} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: "13px 12px", background: colors.background, cursor: "pointer" }}>
-                <div style={{ width: 32, height: 32, borderRadius: RADIUS.sm, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon size={16} color={colors.accent} strokeWidth={1.8} /></div>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: colors.text, textAlign: "left" }}>{o.label}</span>
-              </button>
-            );
-          })}
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", padding: "10px 20px 20px", position: "relative", pointerEvents: "auto" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "6px auto 16px" }} />
+          <div style={{ position: "absolute", top: 10, right: 12 }}><IconButton icon={X} onClick={close} size={30} /></div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 12 }}>Créer</div>
+          <div className="grid grid-cols-2 gap-2">
+            {CREATE_OPTIONS.map((o) => {
+              const Icon = o.icon;
+              return (
+                <button key={o.key} onClick={() => { setType(o.key); setStep("compose"); }} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ border: "none", borderRadius: RADIUS.lg, padding: "13px 12px", background: colors.surfaceAlt, cursor: "pointer" }}>
+                  <div style={{ width: 32, height: 32, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon size={16} color={colors.accent} strokeWidth={1.8} /></div>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: colors.text, textAlign: "left" }}>{o.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -2267,19 +3324,511 @@ function DogPage({ dog, onClose }) {
         <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}>{[dog.race, dog.sexe, dog.age && `${dog.age} ans`, dog.specialite].filter(Boolean).join(" · ")}</div>
         {dog.description && <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 8, lineHeight: 1.5 }}>{dog.description}</div>}
       </div>
-      <div className="flex gap-4 px-4 pt-4" style={{ borderBottom: `1px solid ${colors.border}` }}>
-        {tabs.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ background: "none", border: "none", padding: "6px 0 10px", borderBottom: `2px solid ${tab === k ? colors.accent : "transparent"}`, color: tab === k ? colors.text : colors.textFaint, fontSize: 12.5, fontWeight: tab === k ? 700 : 500, cursor: "pointer" }}>{l}</button>)}
+      <div className="px-4 pt-4">
+        <SegmentedControl options={tabs.map(([k, l]) => ({ key: k, label: l }))} value={tab} onChange={setTab} />
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}><EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » est vide pour le moment.`} /></div>
     </div>
   );
 }
-function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile }) {
+/* ============================================================
+   CARNET DE CHASSE — strictement privé (voir migration 025)
+   ============================================================ */
+const HUNTING_TYPES = [
+  { key: "chasse", label: "Chasse" },
+  { key: "reperage", label: "Repérage" },
+  { key: "entrainement_chien", label: "Entraînement chien" },
+  { key: "observation", label: "Observation" },
+  { key: "autre", label: "Autre" },
+];
+const HUNTING_TYPE_LABEL = Object.fromEntries(HUNTING_TYPES.map((t) => [t.key, t.label]));
+const METEO_OPTIONS = ["Soleil", "Nuageux", "Pluie", "Brouillard", "Vent", "Neige"];
+const TERRAIN_OPTIONS = ["Forêt", "Plaine", "Marais", "Montagne", "Bocage", "Autre"];
+
+function formatDuree(minutes) {
+  if (!minutes) return null;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} h`;
+  return `${h} h ${m}`;
+}
+
+function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
+  const { colors } = useTheme();
+  const isEdit = !!log;
+  const [date, setDate] = useState(log?.date || new Date().toISOString().slice(0, 10));
+  const [lieuNom, setLieuNom] = useState(log?.lieuNom || "");
+  const [lieuCommune, setLieuCommune] = useState(log?.lieuCommune || "");
+  const [typeSortie, setTypeSortie] = useState(log?.typeSortie || "chasse");
+  const [avecChien, setAvecChien] = useState(log?.avecChien || false);
+  const [dogId, setDogId] = useState(log?.dogId || null);
+  const [espece, setEspece] = useState(log?.espece || "");
+  const [observation, setObservation] = useState(log?.observation || "");
+  const [resultat, setResultat] = useState(log?.resultat || "");
+  const [dureeMinutes, setDureeMinutes] = useState(log?.dureeMinutes ? String(log.dureeMinutes) : "");
+  const [nombrePersonnes, setNombrePersonnes] = useState(log?.nombrePersonnes ? String(log.nombrePersonnes) : "");
+  const [meteo, setMeteo] = useState(log?.meteo || "");
+  const [temperature, setTemperature] = useState(log?.temperature != null ? String(log.temperature) : "");
+  const [terrain, setTerrain] = useState(log?.terrain || "");
+  const [distanceKm, setDistanceKm] = useState(log?.distanceKm != null ? String(log.distanceKm) : "");
+  const [nombrePrises, setNombrePrises] = useState(log?.nombrePrises != null ? String(log.nombrePrises) : "");
+  const [notes, setNotes] = useState(log?.notes || "");
+  const [photoFiles, setPhotoFiles] = useState([]);
+  const [photoPreviews, setPhotoPreviews] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const photoInputRef = useRef(null);
+
+  const pickPhotos = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setPhotoFiles((f) => [...f, ...files]);
+    setPhotoPreviews((p) => [...p, ...files.map((f) => URL.createObjectURL(f))]);
+  };
+  const removePhoto = (i) => {
+    setPhotoFiles((f) => f.filter((_, idx) => idx !== i));
+    setPhotoPreviews((p) => p.filter((_, idx) => idx !== i));
+  };
+
+  const submit = async () => {
+    setSaving(true);
+    setError("");
+    const fields = {
+      date, lieuNom, lieuCommune, typeSortie, avecChien, dogId,
+      espece, observation, resultat,
+      dureeMinutes: dureeMinutes ? parseInt(dureeMinutes, 10) : null,
+      nombrePersonnes: nombrePersonnes ? parseInt(nombrePersonnes, 10) : null,
+      meteo, temperature: temperature ? parseFloat(temperature) : null,
+      terrain,
+      distanceKm: distanceKm ? parseFloat(distanceKm) : null,
+      nombrePrises: nombrePrises ? parseInt(nombrePrises, 10) : null,
+      notes,
+    };
+    try {
+      const saved = isEdit ? await huntingLogService.updateLog(log.id, fields, photoFiles) : await huntingLogService.createLog(fields, photoFiles);
+      onSaved(saved);
+    } catch (e) {
+      setError(e.message || "Impossible d'enregistrer cette sortie pour le moment.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title={isEdit ? "Modifier la sortie" : "Nouvelle sortie"} onCloseX={onClose} />
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+        <TextField label="Date" value={date} onChange={setDate} type="date" />
+        <TextField label="Lieu" value={lieuNom} onChange={setLieuNom} placeholder="Nom du lieu (ex : Bois de la Chapelle)" />
+        <TextField label="Commune / secteur" value={lieuCommune} onChange={setLieuCommune} placeholder="ex : Saint-Martin (28)" />
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>TYPE DE SORTIE</div>
+        <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
+          {HUNTING_TYPES.map((t) => <Chip key={t.key} label={t.label} active={typeSortie === t.key} onClick={() => setTypeSortie(t.key)} />)}
+        </div>
+
+        <ToggleRow label="Sortie avec un chien" value={avecChien} onToggle={() => setAvecChien((v) => !v)} />
+        {avecChien && (
+          dogs.length === 0 ? (
+            <div style={{ fontSize: 12, color: colors.textFaint, marginBottom: 16 }}>Aucun chien enregistré sur votre profil pour le moment.</div>
+          ) : (
+            <select value={dogId || ""} onChange={(e) => setDogId(e.target.value || null)} style={{ width: "100%", border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "12px 16px", fontSize: 13.5, color: colors.text, outline: "none", marginBottom: 16 }}>
+              <option value="">Choisir un chien</option>
+              {dogs.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
+            </select>
+          )
+        )}
+
+        <TextField label="Espèce recherchée" value={espece} onChange={setEspece} placeholder="ex : Chevreuil, Bécasse..." />
+        <TextField label="Observation" value={observation} onChange={setObservation} placeholder="Ce qui a été observé sur le terrain..." textarea rows={3} />
+        <TextField label="Résultat" value={resultat} onChange={setResultat} placeholder="ex : Bredouille, Prise, Observation seulement..." />
+
+        <div className="flex gap-3">
+          <div style={{ flex: 1 }}><TextField label="Durée (minutes)" value={dureeMinutes} onChange={setDureeMinutes} type="number" placeholder="120" /></div>
+          <div style={{ flex: 1 }}><TextField label="Personnes présentes" value={nombrePersonnes} onChange={setNombrePersonnes} type="number" placeholder="2" /></div>
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>MÉTÉO</div>
+        <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
+          {METEO_OPTIONS.map((m) => <Chip key={m} label={m} active={meteo === m} onClick={() => setMeteo(meteo === m ? "" : m)} />)}
+        </div>
+
+        <div className="flex gap-3">
+          <div style={{ flex: 1 }}><TextField label="Température (°C)" value={temperature} onChange={setTemperature} type="number" placeholder="8" /></div>
+          <div style={{ flex: 1 }}><TextField label="Distance (km)" value={distanceKm} onChange={setDistanceKm} type="number" placeholder="4.5" /></div>
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>TERRAIN</div>
+        <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
+          {TERRAIN_OPTIONS.map((t) => <Chip key={t} label={t} active={terrain === t} onClick={() => setTerrain(terrain === t ? "" : t)} />)}
+        </div>
+
+        <TextField label="Nombre de prises" value={nombrePrises} onChange={setNombrePrises} type="number" placeholder="0" />
+        <TextField label="Notes personnelles" value={notes} onChange={setNotes} placeholder="Vos notes, pour vous seul..." textarea rows={3} />
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>PHOTOS PRIVÉES (facultatif)</div>
+        <input ref={photoInputRef} type="file" accept="image/*" multiple onChange={pickPhotos} style={{ display: "none" }} />
+        <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
+          {(log?.photos || []).map((p) => (
+            <div key={p.id} style={{ width: 66, height: 66, borderRadius: RADIUS.lg, overflow: "hidden" }}>
+              <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+          ))}
+          {photoPreviews.map((src, i) => (
+            <div key={i} style={{ position: "relative", width: 66, height: 66, borderRadius: RADIUS.lg, overflow: "hidden" }}>
+              <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.55)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <X size={10} color="#fff" />
+              </button>
+            </div>
+          ))}
+          <button onClick={() => photoInputRef.current?.click()} style={{ width: 66, height: 66, borderRadius: RADIUS.lg, border: `1.5px dashed ${colors.border}`, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <Camera size={18} color={colors.textFaint} />
+          </button>
+        </div>
+        <div className="flex items-center gap-1.5" style={{ fontSize: 11, color: colors.textFaint, marginBottom: 8 }}>
+          <Lock size={11} /><span>Visible par vous seul.</span>
+        </div>
+
+        {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error }}>{error}</div>}
+      </div>
+      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}>
+        <Button disabled={!date || !typeSortie || saving} onClick={submit}>{saving ? "Enregistrement..." : isEdit ? "Enregistrer les modifications" : "Ajouter la sortie"}</Button>
+      </div>
+    </div>
+  );
+}
+
+function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete }) {
+  const { colors } = useTheme();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const rows = [
+    ["Lieu", [log.lieuNom, log.lieuCommune].filter(Boolean).join(" — ") || null],
+    ["Chien", log.avecChien ? log.dogNom || "Oui" : null],
+    ["Espèce", log.espece],
+    ["Résultat", log.resultat],
+    ["Durée", formatDuree(log.dureeMinutes)],
+    ["Personnes présentes", log.nombrePersonnes],
+    ["Météo", [log.meteo, log.temperature != null ? `${log.temperature}°C` : null].filter(Boolean).join(" · ") || null],
+    ["Terrain", log.terrain],
+    ["Distance", log.distanceKm != null ? `${log.distanceKm} km` : null],
+    ["Prises", log.nombrePrises],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== "");
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "82vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+          <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{formatRelativeDate(log.date)}</span>
+            <IconButton icon={X} onClick={onClose} size={30} />
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
+            <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "4px 10px", marginBottom: 12 }}>{HUNTING_TYPE_LABEL[log.typeSortie] || log.typeSortie}</span>
+            {log.photos.length > 0 && (
+              <div className="flex gap-2" style={{ overflowX: "auto", marginBottom: 14 }}>
+                {log.photos.map((p) => (
+                  <img key={p.id} src={p.url} alt="" style={{ width: 96, height: 96, borderRadius: RADIUS.lg, objectFit: "cover", flexShrink: 0 }} />
+                ))}
+              </div>
+            )}
+            <div className="flex flex-col gap-2" style={{ marginBottom: 14 }}>
+              {rows.map(([label, val]) => (
+                <div key={label} className="flex items-center justify-between" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "10px 14px" }}>
+                  <span style={{ fontSize: 12, color: colors.textSecondary }}>{label}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text }}>{val}</span>
+                </div>
+              ))}
+            </div>
+            {log.observation && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: colors.textFaint, marginBottom: 4 }}>OBSERVATION</div>
+                <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.5 }}>{log.observation}</div>
+              </div>
+            )}
+            {log.notes && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: colors.textFaint, marginBottom: 4 }}>NOTES</div>
+                <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.5 }}>{log.notes}</div>
+              </div>
+            )}
+            {!confirmDelete ? (
+              <div className="flex gap-2" style={{ marginTop: 8 }}>
+                <Button full={false} variant="secondary" onClick={() => onEdit(log)}>Modifier</Button>
+                <Button full={false} variant="secondary" onClick={() => setConfirmDelete(true)}><span style={{ color: colors.error }}>Supprimer</span></Button>
+              </div>
+            ) : (
+              <div style={{ background: colors.errorSoft, borderRadius: RADIUS.lg, padding: 14, marginTop: 8 }}>
+                <div style={{ fontSize: 12.5, color: colors.error, marginBottom: 10 }}>Supprimer définitivement cette sortie et ses photos ?</div>
+                <div className="flex gap-3">
+                  <button onClick={async () => { setDeleting(true); await onDelete(log); }} disabled={deleting} style={{ background: "none", border: "none", color: colors.error, fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>{deleting ? "..." : "Confirmer"}</button>
+                  <button onClick={() => setConfirmDelete(false)} style={{ background: "none", border: "none", color: colors.error, textDecoration: "underline", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Annuler</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HuntingLogCalendar({ logs, selectedDay, onSelectDay }) {
+  const { colors } = useTheme();
+  const [monthOffset, setMonthOffset] = useState(0);
+  const base = new Date();
+  base.setDate(1);
+  base.setMonth(base.getMonth() + monthOffset);
+  const year = base.getFullYear();
+  const month = base.getMonth();
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // lundi = 0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysWithLogs = new Set(logs.filter((l) => { const d = new Date(l.date); return d.getFullYear() === year && d.getMonth() === month; }).map((l) => new Date(l.date).getDate()));
+  const cells = [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  const monthLabel = base.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+  return (
+    <div style={{ background: colors.surfaceAlt, borderRadius: RADIUS.xl, padding: 16, margin: "0 16px 14px" }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+        <button onClick={() => setMonthOffset((m) => m - 1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><ChevronRight size={16} color={colors.textFaint} style={{ transform: "rotate(180deg)" }} /></button>
+        <span style={{ fontSize: 13, fontWeight: 700, color: colors.text, textTransform: "capitalize" }}>{monthLabel}</span>
+        <button onClick={() => setMonthOffset((m) => m + 1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><ChevronRight size={16} color={colors.textFaint} /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-1" style={{ marginBottom: 4 }}>
+        {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => <div key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: colors.textFaint }}>{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />;
+          const hasLog = daysWithLogs.has(day);
+          const isSelected = selectedDay && selectedDay.getFullYear() === year && selectedDay.getMonth() === month && selectedDay.getDate() === day;
+          return (
+            <button
+              key={i}
+              onClick={() => hasLog && onSelectDay(new Date(year, month, day))}
+              disabled={!hasLog}
+              className="flex flex-col items-center"
+              style={{ background: "none", border: "none", padding: "4px 0", cursor: hasLog ? "pointer" : "default" }}
+            >
+              <div style={{ width: 26, height: 26, borderRadius: RADIUS.pill, display: "flex", alignItems: "center", justifyContent: "center", background: isSelected ? colors.accent : "transparent", fontSize: 11.5, fontWeight: hasLog ? 700 : 500, color: isSelected ? colors.onAccent : hasLog ? colors.text : colors.textFaint }}>
+                {day}
+              </div>
+              <div style={{ width: 4, height: 4, borderRadius: 2, background: hasLog && !isSelected ? colors.accent : "transparent", marginTop: 1 }} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function HuntingLogStatsView({ stats }) {
+  const { colors } = useTheme();
+  const cards = [
+    ["Sorties au total", stats.total],
+    ["Ce mois-ci", stats.ceMois],
+    ["Cette année", stats.cetteAnnee],
+    ["Temps sur le terrain", formatDuree(stats.totalMinutes) || "—"],
+    ["Sorties avec chien", stats.avecChienCount],
+    ["Espèces observées", stats.especesObservees],
+  ];
+  return (
+    <div style={{ padding: "0 16px 16px" }}>
+      <div className="grid grid-cols-2 gap-3" style={{ marginBottom: 16 }}>
+        {cards.map(([label, val]) => (
+          <div key={label} style={{ background: colors.surfaceAlt, borderRadius: RADIUS.xl, padding: "16px 14px" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>{val}</div>
+            <div style={{ fontSize: 11.5, color: colors.textSecondary, marginTop: 2 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+      {Object.keys(stats.parType).length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>SORTIES PAR TYPE</div>
+          <div className="flex flex-col gap-2">
+            {Object.entries(stats.parType).map(([type, count]) => (
+              <div key={type} className="flex items-center justify-between" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "10px 14px" }}>
+                <span style={{ fontSize: 12.5, color: colors.text, fontWeight: 600 }}>{HUNTING_TYPE_LABEL[type] || type}</span>
+                <span style={{ fontSize: 12.5, color: colors.textSecondary }}>{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {stats.parChien.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>HISTORIQUE PAR CHIEN</div>
+          <div className="flex flex-col gap-2">
+            {stats.parChien.map((d) => (
+              <div key={d.dogId} className="flex items-center justify-between" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "10px 14px" }}>
+                <span style={{ fontSize: 12.5, color: colors.text, fontWeight: 600 }}>{d.dogNom}</span>
+                <span style={{ fontSize: 12, color: colors.textSecondary }}>{d.count} sortie{d.count > 1 ? "s" : ""} · {formatDuree(d.minutes) || "0 min"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {stats.especesListe.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>ESPÈCES OBSERVÉES</div>
+          <div className="flex flex-wrap gap-2">
+            {stats.especesListe.map((e) => <span key={e} style={{ fontSize: 11.5, fontWeight: 600, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "5px 11px" }}>{e}</span>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HuntingLogScreen({ onClose, dogs }) {
+  const { colors } = useTheme();
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("liste");
+  const [showForm, setShowForm] = useState(false);
+  const [editingLog, setEditingLog] = useState(null);
+  const [detailLog, setDetailLog] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [query, setQuery] = useState("");
+  const [filterType, setFilterType] = useState(null);
+  const [filterDog, setFilterDog] = useState(null);
+
+  const refresh = () => huntingLogService.fetchMyLogs().then(setLogs).catch(() => {});
+  useEffect(() => {
+    setLoading(true);
+    refresh().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const filtered = logs.filter((l) => {
+    if (filterType && l.typeSortie !== filterType) return false;
+    if (filterDog && l.dogId !== filterDog) return false;
+    if (selectedDay) {
+      const d = new Date(l.date);
+      if (d.getFullYear() !== selectedDay.getFullYear() || d.getMonth() !== selectedDay.getMonth() || d.getDate() !== selectedDay.getDate()) return false;
+    }
+    if (q && !`${l.lieuNom} ${l.lieuCommune} ${l.espece} ${l.resultat}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const stats = useMemo(() => huntingLogService.computeStats(logs), [logs]);
+
+  const closeForm = () => { setShowForm(false); setEditingLog(null); };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title="Carnet de chasse" onBack={onClose} />
+      <div className="flex items-center gap-1.5" style={{ padding: "10px 16px 0", fontSize: 11, color: colors.textFaint }}>
+        <Lock size={11} /><span>Strictement privé — visible par vous seul.</span>
+      </div>
+      <div className="px-4" style={{ paddingTop: 12, paddingBottom: 4 }}>
+        <SegmentedControl options={[{ key: "liste", label: "Liste" }, { key: "calendrier", label: "Calendrier" }, { key: "stats", label: "Statistiques" }]} value={tab} onChange={setTab} />
+      </div>
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {loading ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 40 }}>Chargement...</div>
+        ) : tab === "stats" ? (
+          <div style={{ paddingTop: 12 }}><HuntingLogStatsView stats={stats} /></div>
+        ) : (
+          <>
+            {tab === "calendrier" && (
+              <div style={{ paddingTop: 12 }}>
+                <HuntingLogCalendar logs={logs} selectedDay={selectedDay} onSelectDay={(d) => setSelectedDay((cur) => (cur && cur.getTime() === d.getTime() ? null : d))} />
+              </div>
+            )}
+            {tab === "liste" && (
+              <div className="px-4" style={{ paddingTop: 12 }}>
+                <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "9px 14px", marginBottom: 10 }}>
+                  <Search size={15} color={colors.textFaint} />
+                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher (lieu, espèce, résultat...)" style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, color: colors.text, flex: 1 }} />
+                </div>
+                <div className="flex flex-wrap gap-2" style={{ marginBottom: 4 }}>
+                  {HUNTING_TYPES.map((t) => <Chip key={t.key} label={t.label} active={filterType === t.key} onClick={() => setFilterType(filterType === t.key ? null : t.key)} />)}
+                  {dogs.map((d) => <Chip key={d.id} label={d.nom} active={filterDog === d.id} onClick={() => setFilterDog(filterDog === d.id ? null : d.id)} />)}
+                </div>
+              </div>
+            )}
+            {selectedDay && tab === "calendrier" && (
+              <div className="flex items-center justify-between px-4" style={{ marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: colors.textSecondary }}>{selectedDay.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}</span>
+                <button onClick={() => setSelectedDay(null)} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Voir tout</button>
+              </div>
+            )}
+            {filtered.length === 0 ? (
+              <EmptyState title={logs.length === 0 ? "Aucune sortie enregistrée" : "Aucun résultat"} subtitle={logs.length === 0 ? "Ajoutez votre première sortie pour commencer votre carnet." : "Essayez d'autres filtres."} ctaLabel={logs.length === 0 ? "Ajouter une sortie" : undefined} onCta={logs.length === 0 ? () => setShowForm(true) : undefined} />
+            ) : (
+              <div className="flex flex-col gap-2" style={{ padding: "4px 16px 90px" }}>
+                {filtered.map((l) => (
+                  <button key={l.id} onClick={() => setDetailLog(l)} className="flex items-center gap-3" style={{ width: "100%", background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.xl, padding: "12px 14px", cursor: "pointer", textAlign: "left" }}>
+                    {l.photos.length > 0 ? (
+                      <img src={l.photos[0].url} alt="" style={{ width: 48, height: 48, borderRadius: RADIUS.lg, objectFit: "cover", flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 48, height: 48, borderRadius: RADIUS.lg, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Footprints size={20} color={colors.accent} />
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="flex items-center gap-2">
+                        <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{l.lieuNom || HUNTING_TYPE_LABEL[l.typeSortie]}</span>
+                        {l.avecChien && <Dog size={12} color={colors.textFaint} />}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {new Date(l.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })} · {HUNTING_TYPE_LABEL[l.typeSortie]}{l.espece ? ` · ${l.espece}` : ""}
+                      </div>
+                    </div>
+                    <ChevronRight size={16} color={colors.textFaint} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <button
+        onClick={() => setShowForm(true)}
+        aria-label="Ajouter une sortie"
+        style={{ position: "absolute", right: 20, bottom: `calc(20px + env(safe-area-inset-bottom, 0px))`, width: 54, height: 54, borderRadius: RADIUS.pill, background: colors.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: `0 6px 18px ${colors.accent}55` }}
+      >
+        <Plus size={24} color={colors.onAccent} strokeWidth={2.4} />
+      </button>
+      {(showForm || editingLog) && (
+        <HuntingLogFormScreen
+          log={editingLog}
+          dogs={dogs}
+          onClose={closeForm}
+          onSaved={() => { closeForm(); setDetailLog(null); refresh(); }}
+        />
+      )}
+      {detailLog && (
+        <HuntingLogDetailSheet
+          log={detailLog}
+          onClose={() => setDetailLog(null)}
+          onEdit={(l) => { setDetailLog(null); setEditingLog(l); }}
+          onDelete={async (l) => {
+            try {
+              await huntingLogService.deleteLog(l.id, l.photos.map((p) => p.path));
+              setDetailLog(null);
+              refresh();
+            } catch (e) { /* la bulle de confirmation reste affichée, l'utilisateur peut réessayer */ }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile, chromeMode = "full", incomingRequestsCount = 0, onApproveRequest, onRejectRequest, traceGroup, onOpenTrace }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("publications");
   const [editing, setEditing] = useState(false);
+  const [showRequests, setShowRequests] = useState(false);
+  const [showCarnet, setShowCarnet] = useState(false);
   const [dogForm, setDogForm] = useState(false);
   const [openDog, setOpenDog] = useState(null);
+  const [followSheet, setFollowSheet] = useState(null); // 'followers' | 'following' | null
   const [sheet, setSheet] = useState(null);
   const [repostedPosts, setRepostedPosts] = useState([]);
   const [repostsLoading, setRepostsLoading] = useState(true);
@@ -2298,37 +3847,107 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
 
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ width: "100%", height: 96, background: profile.imageCouverture ? `url(${profile.imageCouverture}) center/cover` : colors.surfaceAlt }} />
+      <div style={{ width: "100%", height: 124, marginTop: 10, background: profile.imageCouverture ? `url(${profile.imageCouverture}) center/cover` : `linear-gradient(135deg, ${colors.accentSoft}, ${colors.surfaceAlt})`, borderRadius: RADIUS.xl }} />
       <div className="px-4">
-        <div style={{ marginTop: -34 }}>
-          <div style={{ width: 72, height: 72, borderRadius: RADIUS.md, background: colors.surface, border: `3px solid ${colors.background}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={30} color={colors.textFaint} strokeWidth={1.6} />}
-          </div>
+        <div style={{ marginTop: -40 }}>
+          {traceGroup && traceGroup.traces.length > 0 ? (
+            <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
+              <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
+                <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: `3px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.16)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={32} color={colors.textFaint} strokeWidth={1.6} />}
+                </div>
+              </div>
+            </button>
+          ) : (
+            <div style={{ width: 80, height: 80, borderRadius: RADIUS.pill, background: colors.surface, border: `4px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.16)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={32} color={colors.textFaint} strokeWidth={1.6} />}
+            </div>
+          )}
         </div>
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{profile.nom || "Votre nom"}</div>
-          <div style={{ fontSize: 13, color: colors.textFaint }}>@{profile.username || "handle"}</div>
-          <BadgeRow badges={profile.badges} />
-          {profile.localisation && <div className="flex items-center gap-1" style={{ marginTop: 4 }}><MapPin size={13} color={colors.textFaint} /><span style={{ fontSize: 12.5, color: colors.textFaint }}>{profile.localisation}</span></div>}
-          <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 8, lineHeight: 1.5 }}>{profile.bio || "Aucune biographie renseignée pour le moment."}</div>
-        </div>
-        <div style={{ marginTop: 16, background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: "12px 4px" }} className="flex">
-          {[["Abonnés", stats.abonnes], ["Abonnements", stats.abonnements], ["Publications", posts.length]].map(([label, val]) => (
-            <div key={label} style={{ flex: 1, textAlign: "center" }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
-              <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
+          <div className="flex items-start justify-between" style={{ gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{profile.nom || "Votre nom"}</div>
+              <div style={{ fontSize: 13, color: colors.textFaint }}>@{profile.username || "handle"}</div>
             </div>
+            <button onClick={() => setEditing(true)} style={{ flexShrink: 0, border: "none", background: colors.surfaceAlt, color: colors.text, borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Modifier</button>
+          </div>
+          <BadgeRow badges={profile.badges} />
+          {profile.localisation && (
+            <div className="flex items-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px" }}>
+              <MapPin size={12} color={colors.textFaint} /><span style={{ fontSize: 12, color: colors.textSecondary }}>{profile.localisation}</span>
+            </div>
+          )}
+          <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 10, lineHeight: 1.5, background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "10px 12px" }}>{profile.bio || "Aucune biographie renseignée pour le moment."}</div>
+        </div>
+        <div style={{ marginTop: 14, background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.lg, padding: "12px 4px", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }} className="flex">
+          {[["Abonnés", stats.abonnes, "followers"], ["Abonnements", stats.abonnements, "following"], ["Publications", posts.length, null]].map(([label, val, mode]) => (
+            mode ? (
+              <button key={label} onClick={() => setFollowSheet(mode)} style={{ flex: 1, textAlign: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
+                <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
+              </button>
+            ) : (
+              <div key={label} style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
+                <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
+              </div>
+            )
           ))}
         </div>
-        <button onClick={() => setEditing(true)} style={{ marginTop: 14, width: "100%", border: `1px solid ${colors.border}`, background: colors.surface, color: colors.text, borderRadius: RADIUS.sm, padding: "10px 0", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>Modifier le profil</button>
-      </div>
-      <div className="flex px-2 mt-5" style={{ borderBottom: `1px solid ${colors.border}` }}>
-        {tabs.map(([key, label, Icon]) => (
-          <button key={key} onClick={() => setTab(key)} className="flex flex-col items-center gap-1" style={{ flex: 1, padding: "8px 0 10px", background: "none", border: "none", borderBottom: `2px solid ${tab === key ? colors.accent : "transparent"}`, cursor: "pointer" }}>
-            <Icon size={16} color={tab === key ? colors.accent : colors.textFaint} strokeWidth={1.8} />
-            <span style={{ fontSize: 10.5, fontWeight: tab === key ? 700 : 500, color: tab === key ? colors.text : colors.textFaint }}>{label}</span>
+        <button onClick={() => setShowCarnet(true)} className="flex items-center justify-between" style={{ width: "100%", marginTop: 10, background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", cursor: "pointer" }}>
+          <div className="flex items-center gap-2.5">
+            <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Footprints size={15} color={colors.accent} /></div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>Carnet de chasse</span>
+            <Lock size={11} color={colors.textFaint} />
+          </div>
+          <ChevronRight size={15} color={colors.textFaint} />
+        </button>
+        {profile.isPrivate && incomingRequestsCount > 0 && (
+          <button onClick={() => setShowRequests(true)} className="flex items-center justify-between" style={{ width: "100%", marginTop: 8, background: colors.accentSoft, border: "none", borderRadius: RADIUS.lg, padding: "11px 14px", cursor: "pointer" }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.accent }}>{incomingRequestsCount} demande{incomingRequestsCount > 1 ? "s" : ""} d'abonnement</span>
+            <ChevronRight size={15} color={colors.accent} />
           </button>
-        ))}
+        )}
+      </div>
+      {showRequests && <FollowRequestsSheet onClose={() => setShowRequests(false)} onApprove={onApproveRequest} onReject={onRejectRequest} />}
+      {showCarnet && <HuntingLogScreen onClose={() => setShowCarnet(false)} dogs={dogs} />}
+      <div
+        className="px-4"
+        style={{
+          position: "sticky",
+          top: chromeMode !== "hidden" ? 74 : 0,
+          zIndex: 5,
+          marginTop: 20,
+          paddingBottom: 4,
+          opacity: chromeMode === "hidden" ? 0 : 1,
+          transform: chromeMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
+          transition: "opacity 220ms ease, transform 220ms ease, top 260ms ease",
+          pointerEvents: chromeMode === "hidden" ? "none" : "auto",
+        }}
+      >
+        <div className="flex" style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, gap: 2, boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
+          {tabs.map(([key, label, Icon]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className="flex items-center justify-center gap-1.5"
+              style={{
+                flex: 1,
+                padding: "7px 6px",
+                background: tab === key ? colors.surface : "transparent",
+                border: "none",
+                borderRadius: RADIUS.pill,
+                cursor: "pointer",
+                boxShadow: tab === key ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
+                transition: "background 150ms ease, box-shadow 150ms ease",
+              }}
+            >
+              <Icon size={14} color={tab === key ? colors.text : colors.textFaint} strokeWidth={1.8} />
+              <span style={{ fontSize: 10.5, fontWeight: tab === key ? 700 : 600, color: tab === key ? colors.text : colors.textFaint, whiteSpace: "nowrap" }}>{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "publications" && (
@@ -2361,8 +3980,10 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
                 key={v.id}
                 video={v}
                 liked={liked.includes(v.id)}
+                reposted={reposted.includes(v.id)}
                 commentCount={(commentsByPost[v.id] || []).length}
                 onLike={() => onLike(v.id)}
+                onRepost={() => onRepost(v.id)}
                 onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
                 onOpenActions={() => setSheet({ type: "actions", post: v })}
                 onOpenAuthor={() => onOpenProfile(v.username)}
@@ -2431,11 +4052,12 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} />
       )}
       {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile(p); setEditing(false); }} />}
       {dogForm && <DogFormScreen onClose={() => setDogForm(false)} onSaved={(d) => { addDog(d); setDogForm(false); }} />}
       {openDog && <DogPage dog={openDog} onClose={() => setOpenDog(null)} />}
+      {followSheet && <FollowListSheet userId={profile.id} mode={followSheet} onClose={() => setFollowSheet(null)} onOpenProfile={onOpenProfile} />}
     </div>
   );
 }
@@ -2465,8 +4087,196 @@ function MessageBubble({ mine, media, colors }) {
   }
   return null;
 }
-function ConversationThread({ conversationId, meId, onClose, title, subtitle, onOpenProfile, onRead }) {
+function DirectConversationOptionsSheet({ conversationId, otherUser, onClose, onOpenProfile, onBlock, onReport, onDeleted }) {
   const { colors } = useTheme();
+  const [confirmAction, setConfirmAction] = useState(null); // 'delete' | 'block' | null
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [showReport, setShowReport] = useState(false);
+
+  const deleteConversation = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await messageService.leaveConversation(conversationId);
+      onDeleted();
+    } catch (e) {
+      setError(e.message || "Impossible de supprimer cette conversation pour le moment.");
+      setBusy(false);
+    }
+  };
+
+  const blockUser = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await onBlock(otherUser.username);
+      onDeleted();
+    } catch (e) {
+      setError(e.message || "Impossible de bloquer cet utilisateur pour le moment.");
+      setBusy(false);
+    }
+  };
+
+  if (showReport) {
+    return (
+      <ReportSheet
+        onClose={onClose}
+        onSubmit={(reason) => onReport({ targetId: otherUser.id, targetType: "user", reason })}
+      />
+    );
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", pointerEvents: "auto", position: "relative" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+          <div style={{ position: "absolute", top: 10, right: 12 }}><IconButton icon={X} onClick={onClose} size={30} /></div>
+          <div style={{ padding: "10px 20px 20px" }}>
+            {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "10px 14px", fontSize: 12, color: colors.error, marginBottom: 10 }}>{error}</div>}
+            {confirmAction ? (
+              <div style={{ background: colors.errorSoft, borderRadius: RADIUS.lg, padding: 14 }}>
+                <div style={{ fontSize: 12.5, color: colors.error, marginBottom: 10 }}>
+                  {confirmAction === "delete" ? "Supprimer cette conversation ? Vous ne recevrez plus ses messages." : `Bloquer @${otherUser?.username} ? Vous ne pourrez plus vous voir mutuellement.`}
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={confirmAction === "delete" ? deleteConversation : blockUser} disabled={busy} style={{ background: "none", border: "none", color: colors.error, fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>{busy ? "..." : "Confirmer"}</button>
+                  <button onClick={() => setConfirmAction(null)} style={{ background: "none", border: "none", color: colors.error, textDecoration: "underline", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Annuler</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {otherUser && (
+                  <button onClick={() => { onClose(); onOpenProfile(otherUser.username); }} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Voir le profil</span>
+                  </button>
+                )}
+                <button onClick={() => setConfirmAction("delete")} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Supprimer la conversation</span>
+                </button>
+                {otherUser && (
+                  <>
+                    <button onClick={() => setShowReport(true)} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Signaler</span>
+                    </button>
+                    <button onClick={() => setConfirmAction("block")} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Bloquer @{otherUser.username}</span>
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function GroupConversationSettingsSheet({ conversationId, title, image, onClose, onImageChanged, onLeave, onOpenProfile }) {
+  const { colors } = useTheme();
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const imageInputRef = useRef(null);
+
+  useEffect(() => {
+    messageService.fetchConversationMembers(conversationId).then(setMembers).catch(() => {}).finally(() => setLoading(false));
+  }, [conversationId]);
+
+  const pickImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const url = await messageService.uploadConversationImage(conversationId, file);
+      onImageChanged(url);
+    } catch (err) {
+      setError(err.message || "Impossible de mettre à jour la photo pour le moment.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const doLeave = async () => {
+    setLeaving(true);
+    try {
+      await messageService.leaveConversation(conversationId);
+      onLeave();
+    } catch (err) {
+      setError(err.message || "Impossible de quitter ce groupe pour le moment.");
+      setLeaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "80vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+          <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Infos du groupe</span>
+            <IconButton icon={X} onClick={onClose} size={30} />
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
+            <div className="flex flex-col items-center" style={{ marginBottom: 16 }}>
+              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickImage} style={{ display: "none" }} />
+              <button onClick={() => imageInputRef.current?.click()} disabled={uploading} style={{ width: 76, height: 76, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer", position: "relative", padding: 0 }}>
+                {image ? <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Users size={26} color={colors.textFaint} />}
+                {uploading && (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Camera size={18} color="#fff" />
+                  </div>
+                )}
+              </button>
+              <button onClick={() => imageInputRef.current?.click()} style={{ background: "none", border: "none", fontSize: 12, color: colors.accent, fontWeight: 700, marginTop: 8, cursor: "pointer" }}>{uploading ? "Envoi..." : "Changer la photo"}</button>
+              <div style={{ fontSize: 15, fontWeight: 700, color: colors.text, marginTop: 6 }}>{title}</div>
+            </div>
+            {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "10px 14px", fontSize: 12, color: colors.error, marginBottom: 12 }}>{error}</div>}
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>MEMBRES</div>
+            {loading ? (
+              <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 16 }}>Chargement...</div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {members.map((m) => (
+                  <button key={m.id} onClick={() => { onClose(); onOpenProfile(m.username); }} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "8px 4px", cursor: "pointer", textAlign: "left" }}>
+                    <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                      {m.avatar ? <img src={m.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color={colors.textFaint} />}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{m.nom}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: 20 }}>
+              {!confirmLeave ? (
+                <button onClick={() => setConfirmLeave(true)} style={{ width: "100%", background: colors.errorSoft, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", fontSize: 13, fontWeight: 700, color: colors.error, cursor: "pointer", textAlign: "left" }}>Quitter le groupe</button>
+              ) : (
+                <div style={{ background: colors.errorSoft, borderRadius: RADIUS.lg, padding: 14 }}>
+                  <div style={{ fontSize: 12.5, color: colors.error, marginBottom: 10 }}>Voulez-vous vraiment quitter ce groupe ? Vous ne recevrez plus ses messages.</div>
+                  <div className="flex gap-3">
+                    <button onClick={doLeave} disabled={leaving} style={{ background: "none", border: "none", color: colors.error, fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>{leaving ? "..." : "Quitter"}</button>
+                    <button onClick={() => setConfirmLeave(false)} style={{ background: "none", border: "none", color: colors.error, textDecoration: "underline", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Annuler</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function ConversationThread({ conversationId, meId, onClose, onLeave, title, subtitle, type, image, otherUser, onOpenProfile, onBlock, onReport, onRead }) {
+  const { colors } = useTheme();
+  const [groupImage, setGroupImage] = useState(image || null);
+  const [showSettings, setShowSettings] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -2583,7 +4393,7 @@ function ConversationThread({ conversationId, meId, onClose, title, subtitle, on
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
-      <ScreenHeader title={title} onBack={onClose} />
+      <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
       {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
       <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
@@ -2608,7 +4418,20 @@ function ConversationThread({ conversationId, meId, onClose, title, subtitle, on
                       <div style={{ fontSize: 10.5, color: colors.textFaint, marginBottom: 2, marginLeft: 4 }}>Utilisateur</div>
                     )
                   )}
-                  <div style={{ background: mine ? colors.accent : colors.surface, border: mine ? "none" : `1px solid ${colors.border}`, color: mine ? colors.onAccent : colors.text, borderRadius: RADIUS.md, padding: media && !m.texte ? 6 : "9px 13px", fontSize: 13.5, lineHeight: 1.4, wordBreak: "break-word" }}>
+                  <div
+                    style={{
+                      background: mine ? colors.accent : colors.surfaceAlt,
+                      color: mine ? colors.onAccent : colors.text,
+                      borderRadius: RADIUS.lg,
+                      borderBottomRightRadius: mine ? 5 : RADIUS.lg,
+                      borderBottomLeftRadius: mine ? RADIUS.lg : 5,
+                      padding: media && !m.texte ? 6 : "9px 13px",
+                      fontSize: 13.5,
+                      lineHeight: 1.4,
+                      wordBreak: "break-word",
+                      boxShadow: mine ? `0 2px 8px ${colors.accent}30` : "none",
+                    }}
+                  >
                     {media && <MessageBubble mine={mine} media={media} colors={colors} />}
                     {m.texte && <div style={{ marginTop: media ? 6 : 0 }}>{m.texte}</div>}
                   </div>
@@ -2620,7 +4443,7 @@ function ConversationThread({ conversationId, meId, onClose, title, subtitle, on
         )}
       </div>
       {mediaError && <div style={{ margin: "0 12px 8px", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "8px 12px", fontSize: 11.5, color: colors.error }}>{mediaError}</div>}
-      <div className="flex items-center gap-2" style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
+      <div className="flex items-center gap-2" style={{ padding: `10px 16px calc(14px + env(safe-area-inset-bottom, 0px))` }}>
         <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={pickMedia} style={{ display: "none" }} />
         {recording ? (
           <button onClick={stopRecording} className="flex items-center gap-2" style={{ flex: 1, border: `1.5px solid ${colors.error}`, background: colors.errorSoft, borderRadius: RADIUS.pill, padding: "10px 16px", cursor: "pointer" }}>
@@ -2635,10 +4458,10 @@ function ConversationThread({ conversationId, meId, onClose, title, subtitle, on
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !sending) submit(); }}
               placeholder="Écrire un message..."
-              style={{ flex: 1, border: `1.5px solid ${colors.border}`, background: colors.surface, borderRadius: RADIUS.pill, padding: "10px 16px", fontSize: 13.5, color: colors.text, outline: "none" }}
+              style={{ flex: 1, border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13.5, color: colors.text, outline: "none" }}
             />
             {text.trim() ? (
-              <button onClick={submit} disabled={sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+              <button onClick={submit} disabled={sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: `0 2px 8px ${colors.accent}40` }}>
                 <ArrowLeft size={16} color={colors.onAccent} style={{ transform: "rotate(135deg)" }} />
               </button>
             ) : (
@@ -2647,6 +4470,86 @@ function ConversationThread({ conversationId, meId, onClose, title, subtitle, on
               </button>
             )}
           </>
+        )}
+      </div>
+      {showSettings && type === "group" && (
+        <GroupConversationSettingsSheet
+          conversationId={conversationId}
+          title={title}
+          image={groupImage}
+          onClose={() => setShowSettings(false)}
+          onImageChanged={(url) => setGroupImage(url)}
+          onLeave={() => { setShowSettings(false); onLeave ? onLeave() : onClose(); }}
+          onOpenProfile={onOpenProfile}
+        />
+      )}
+      {showSettings && type !== "group" && (
+        <DirectConversationOptionsSheet
+          conversationId={conversationId}
+          otherUser={otherUser}
+          onClose={() => setShowSettings(false)}
+          onOpenProfile={onOpenProfile}
+          onBlock={onBlock}
+          onReport={onReport}
+          onDeleted={() => { setShowSettings(false); onLeave ? onLeave() : onClose(); }}
+        />
+      )}
+    </div>
+  );
+}
+/** Recherche d'un utilisateur (bouton loupe du header) — tap sur un résultat
+ *  ouvre son vrai profil public. */
+function UserSearchSheet({ onClose, onOpenProfile }) {
+  const { colors } = useTheme();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) { setResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(() => {
+      socialService.searchUsers(q)
+        .then((rows) => { if (!cancelled) setResults(rows); })
+        .catch(() => {})
+        .finally(() => { if (!cancelled) setSearching(false); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query]);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title="Rechercher" onCloseX={onClose} />
+      <div style={{ padding: "14px 16px 10px" }}>
+        <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
+          <Search size={17} color={colors.textFaint} />
+          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un pseudo ou un nom" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px" }}>
+        {searching ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 20 }}>Recherche...</div>
+        ) : results.length === 0 ? (
+          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher quelqu'un"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour trouver un compte."} />
+        ) : (
+          results.map((u) => (
+            <button
+              key={u.id}
+              onClick={() => { onOpenProfile(u.username); onClose(); }}
+              className="flex items-center gap-3"
+              style={{ width: "100%", background: "none", border: "none", padding: "10px 2px", cursor: "pointer", textAlign: "left" }}
+            >
+              <div style={{ width: 38, height: 38, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
+                <div style={{ fontSize: 11.5, color: colors.textFaint }}>@{u.username}</div>
+              </div>
+            </button>
+          ))
         )}
       </div>
     </div>
@@ -2662,6 +4565,15 @@ function NewConversationSheet({ onClose, onStarted }) {
   const [groupName, setGroupName] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const imageInputRef = useRef(null);
+  const pickImage = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
 
   useEffect(() => {
     const q = query.trim();
@@ -2683,7 +4595,7 @@ function NewConversationSheet({ onClose, onStarted }) {
     setError("");
     try {
       const conversationId = await messageService.startDirectConversation(u.id);
-      onStarted(conversationId, u.nom || u.username);
+      onStarted(conversationId, u.nom || u.username, "direct", u.avatar_url, { id: u.id, username: u.username, nom: u.nom, avatar: u.avatar_url });
     } catch (e) {
       setError(e.message || "Impossible de démarrer la conversation.");
     }
@@ -2695,7 +4607,10 @@ function NewConversationSheet({ onClose, onStarted }) {
     setError("");
     try {
       const conversationId = await messageService.createGroupConversation(groupName.trim(), selected.map((u) => u.id));
-      onStarted(conversationId, groupName.trim());
+      if (imageFile) {
+        try { await messageService.uploadConversationImage(conversationId, imageFile); } catch (e) { /* le groupe existe déjà, la photo pourra être ajoutée plus tard */ }
+      }
+      onStarted(conversationId, groupName.trim(), "group", imagePreview);
     } catch (e) {
       setError(e.message || "Impossible de créer ce groupe pour le moment.");
     } finally {
@@ -2706,7 +4621,7 @@ function NewConversationSheet({ onClose, onStarted }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={groupMode ? "Nouveau groupe" : "Nouveau message"} onCloseX={onClose} />
-      <div style={{ padding: "0 16px 10px" }}>
+      <div style={{ padding: "14px 16px 10px" }}>
         <SegmentedControl
           options={[{ key: "direct", label: "Message direct" }, { key: "group", label: "Groupe" }]}
           value={groupMode ? "group" : "direct"}
@@ -2715,11 +4630,22 @@ function NewConversationSheet({ onClose, onStarted }) {
       </div>
       {groupMode && (
         <div style={{ padding: "0 16px 10px" }}>
+          <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickImage} style={{ display: "none" }} />
+          <button
+            onClick={() => imageInputRef.current?.click()}
+            className="flex items-center gap-3"
+            style={{ width: "100%", border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: 10, cursor: "pointer", marginBottom: 12, textAlign: "left" }}
+          >
+            <div style={{ width: 44, height: 44, borderRadius: RADIUS.pill, background: colors.surface, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+              {imagePreview ? <img src={imagePreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Camera size={17} color={colors.textFaint} />}
+            </div>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary }}>{imagePreview ? "Changer la photo" : "Ajouter une photo de groupe"}</span>
+          </button>
           <TextField label="Nom du groupe" value={groupName} onChange={setGroupName} placeholder="ex : Sortie du week-end" />
         </div>
       )}
       <div style={{ padding: "0 16px 10px" }}>
-        <div className="flex items-center gap-2" style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "10px 14px" }}>
+        <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
           <Search size={17} color={colors.textFaint} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un pseudo ou un nom" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
         </div>
@@ -2742,7 +4668,7 @@ function NewConversationSheet({ onClose, onStarted }) {
               className="flex items-center gap-3"
               style={{ width: "100%", background: "none", border: "none", padding: "10px 2px", cursor: "pointer", textAlign: "left" }}
             >
-              <div style={{ width: 38, height: 38, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+              <div style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                 {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -2767,7 +4693,7 @@ function NewConversationSheet({ onClose, onStarted }) {
     </div>
   );
 }
-function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversation, onOpenProfile, onRead }) {
+function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversation, onOpenProfile, onBlock, onReport, onRead, chromeMode = "full" }) {
   const { colors } = useTheme();
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2791,31 +4717,49 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
   useEffect(() => {
     if (!initialConversationId || conversations.length === 0) return;
     const conv = conversations.find((c) => c.id === initialConversationId);
-    if (conv) setOpenConv({ id: conv.id, title: conv.nom });
+    if (conv) setOpenConv({ id: conv.id, title: conv.nom, type: conv.type, image: conv.avatar, otherUser: conv.type === "direct" ? conv.members?.[0] || null : null });
     onConsumeInitialConversation?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialConversationId, conversations]);
 
   return (
     <div style={{ position: "relative" }}>
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Messages</span>
-        <button onClick={() => setShowNew(true)} style={{ border: `1px solid ${colors.accent}`, color: colors.accent, background: "transparent", borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>+ Nouveau</button>
+      <div
+        style={{
+          position: "sticky",
+          top: chromeMode !== "hidden" ? 74 : 0,
+          zIndex: 5,
+          background: colors.headerBg,
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          margin: chromeMode !== "hidden" ? "0 8px" : 0,
+          borderRadius: chromeMode !== "hidden" ? RADIUS.xl : 0,
+          boxShadow: chromeMode !== "hidden" ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
+          opacity: chromeMode === "hidden" ? 0 : 1,
+          transform: chromeMode === "hidden" ? "translateY(-130%)" : "translateY(0)",
+          transition: "transform 260ms ease, top 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease, opacity 220ms ease",
+          pointerEvents: chromeMode === "hidden" ? "none" : "auto",
+        }}
+      >
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Messages</span>
+          <button onClick={() => setShowNew(true)} style={{ border: `1px solid ${colors.accent}`, color: colors.accent, background: "transparent", borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>+ Nouveau</button>
+        </div>
       </div>
       {loading ? (
         <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
       ) : conversations.length === 0 ? (
         <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." ctaLabel="Démarrer une conversation" onCta={() => setShowNew(true)} />
       ) : (
-        <div className="flex flex-col" style={{ padding: "4px 8px" }}>
+        <div className="flex flex-col" style={{ padding: "16px 8px 4px" }}>
           {conversations.map((c) => (
-            <button key={c.id} onClick={() => setOpenConv({ id: c.id, title: c.nom })} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "10px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.sm }}>
-              <div style={{ width: 46, height: 46, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                {c.type === "group" ? <Users size={18} color={colors.textFaint} /> : c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={18} color={colors.textFaint} />}
+            <button key={c.id} onClick={() => setOpenConv({ id: c.id, title: c.nom, type: c.type, image: c.avatar, otherUser: c.type === "direct" ? c.members?.[0] || null : null })} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "10px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.sm }}>
+              <div style={{ width: 46, height: 46, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : c.type === "group" ? <Users size={18} color={colors.textFaint} /> : <User size={18} color={colors.textFaint} />}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text }}>{c.nom}</div>
-                <div style={{ fontSize: 12, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: 12, color: c.unread ? colors.text : colors.textFaint, fontWeight: c.unread ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {c.lastMessage
                     ? `${c.lastSenderIsMe ? "Vous : " : ""}${c.lastMessage}`
                     : c.hasLastMessage
@@ -2823,23 +4767,41 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
                     : "Aucun message"}
                 </div>
               </div>
-              <div style={{ fontSize: 10.5, color: colors.textFaint, flexShrink: 0 }}>{formatRelativeDate(c.lastMessageAt)}</div>
+              <div className="flex flex-col items-end gap-1" style={{ flexShrink: 0 }}>
+                <div style={{ fontSize: 10.5, color: colors.textFaint }}>{formatRelativeDate(c.lastMessageAt)}</div>
+                {c.unread && <div style={{ width: 8, height: 8, borderRadius: 4, background: colors.accent }} />}
+              </div>
             </button>
           ))}
         </div>
       )}
-      {openConv && <ConversationThread conversationId={openConv.id} meId={meId} onClose={() => { setOpenConv(null); refresh(); }} title={openConv.title} onOpenProfile={onOpenProfile} onRead={onRead} />}
+      {openConv && (
+        <ConversationThread
+          conversationId={openConv.id}
+          meId={meId}
+          onClose={() => { setOpenConv(null); refresh(); }}
+          onLeave={() => { setOpenConv(null); refresh(); }}
+          title={openConv.title}
+          type={openConv.type}
+          image={openConv.image}
+          otherUser={openConv.otherUser}
+          onOpenProfile={onOpenProfile}
+          onBlock={onBlock}
+          onReport={onReport}
+          onRead={onRead}
+        />
+      )}
       {showNew && (
         <NewConversationSheet
           onClose={() => setShowNew(false)}
-          onStarted={(conversationId, title) => { setShowNew(false); setOpenConv({ id: conversationId, title }); refresh(); }}
+          onStarted={(conversationId, title, type, image, otherUser) => { setShowNew(false); setOpenConv({ id: conversationId, title, type, image, otherUser: otherUser || null }); refresh(); }}
         />
       )}
     </div>
   );
 }
 
-const NOTIF_ICON = { like: Heart, comment: MessageSquare, follow: User, repost: Repeat2, message: MessageCircle, group_invite: Users, new_post: Bell, mention: MessageSquare, moderation: AlertTriangle, system: Bell };
+const NOTIF_ICON = { like: Heart, comment: MessageSquare, follow: User, repost: Repeat2, message: MessageCircle, group_invite: Users, new_post: Bell, new_trace: Footprints, mention: MessageSquare, moderation: AlertTriangle, system: Bell };
 const NOTIF_TEXT = {
   like: (nom) => `${nom} a aimé votre publication.`,
   comment: (nom) => `${nom} a commenté votre publication.`,
@@ -2848,10 +4810,114 @@ const NOTIF_TEXT = {
   message: (nom) => `${nom} vous a envoyé un message.`,
   group_invite: (nom) => `${nom} vous a ajouté à un groupe de messagerie.`,
   new_post: (nom) => `${nom} a publié quelque chose de nouveau.`,
+  new_trace: (nom) => `${nom} a publié une nouvelle Trace.`,
   mention: (nom) => `${nom} vous a mentionné.`,
   moderation: () => `Une action de modération concerne votre compte.`,
   system: () => `Notification système.`,
 };
+function FollowListSheet({ userId, mode, onClose, onOpenProfile }) {
+  const { colors } = useTheme();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const title = mode === "followers" ? "Abonnés" : "Abonnements";
+  const emptyText = mode === "followers" ? "Aucun abonné pour le moment." : "Ne suit encore personne.";
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const fetcher = mode === "followers" ? socialService.fetchFollowers : socialService.fetchFollowingList;
+    fetcher(userId).then((rows) => { if (!cancelled) setItems(rows); }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [userId, mode]);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 65 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 460, height: "72vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+          <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{title}</span>
+            <IconButton icon={X} onClick={onClose} size={30} />
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
+            {loading ? (
+              <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+            ) : items.length === 0 ? (
+              <EmptyState title={title} subtitle={emptyText} />
+            ) : (
+              items.map((u) => (
+                <button key={u.username} onClick={() => { onClose(); onOpenProfile(u.username); }} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                    {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{u.nom || u.username}</div>
+                    <div style={{ fontSize: 11.5, color: colors.textFaint }}>@{u.username}</div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function FollowRequestsSheet({ onClose, onApprove, onReject }) {
+  const { colors } = useTheme();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    socialService.fetchIncomingFollowRequests().then(setItems).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const handle = (id, action) => {
+    setItems((its) => its.filter((x) => x.id !== id));
+    if (action === "approve") onApprove(id); else onReject(id);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 61 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "78vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+          <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Demandes d'abonnement</span>
+            <IconButton icon={X} onClick={onClose} size={30} />
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
+            {loading ? (
+              <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+            ) : items.length === 0 ? (
+              <EmptyState title="Aucune demande" subtitle="Les demandes d'abonnement à votre compte privé apparaîtront ici." />
+            ) : (
+              items.map((r) => (
+                <div key={r.id} className="flex items-center gap-3" style={{ padding: "10px 8px" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                    {r.avatar ? <img src={r.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{r.nom || r.username}</div>
+                    <div style={{ fontSize: 11.5, color: colors.textFaint }}>@{r.username}</div>
+                  </div>
+                  <button onClick={() => handle(r.id, "reject")} style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                    <X size={15} color={colors.textFaint} />
+                  </button>
+                  <button onClick={() => handle(r.id, "approve")} style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                    <Check size={15} color={colors.onAccent} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onGoToFeed, onUnreadChange }) {
   const { colors } = useTheme();
   const [items, setItems] = useState([]);
@@ -2892,7 +4958,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onGoToF
           <button onClick={markAll} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Tout marquer comme lu</button>
         </div>
       )}
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "4px 12px 12px" }}>
         {loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
         ) : items.length === 0 ? (
@@ -2903,7 +4969,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onGoToF
             const nom = n.actor?.nom || n.actor?.username || "Quelqu'un";
             const text = NOTIF_TEXT[n.type] ? NOTIF_TEXT[n.type](nom) : "Nouvelle notification.";
             return (
-              <button key={n.id} onClick={() => open(n)} className="flex items-center gap-3" style={{ width: "100%", background: n.lu ? "none" : colors.accentSoft, border: "none", borderBottom: `1px solid ${colors.border}`, padding: "12px 16px", cursor: "pointer", textAlign: "left" }}>
+              <button key={n.id} onClick={() => open(n)} className="flex items-center gap-3" style={{ width: "100%", background: n.lu ? colors.surface : colors.accentSoft, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left", boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}>
                 <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                   {n.actor?.avatar ? <img src={n.actor.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon size={16} color={colors.textFaint} />}
                 </div>
@@ -2984,6 +5050,25 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
   const [section, setSection] = useState(null);
   const [editing, setEditing] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [pw1, setPw1] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState(null); // { type: 'error'|'success', text }
+  const submitPassword = async () => {
+    if (pw1.length < 8) { setPwMsg({ type: "error", text: "8 caractères minimum." }); return; }
+    if (pw1 !== pw2) { setPwMsg({ type: "error", text: "Les mots de passe ne correspondent pas." }); return; }
+    setPwSaving(true);
+    setPwMsg(null);
+    try {
+      await authService.updatePassword(pw1);
+      setPwMsg({ type: "success", text: "Mot de passe mis à jour." });
+      setPw1(""); setPw2("");
+    } catch (e) {
+      setPwMsg({ type: "error", text: e.message || "Impossible de mettre à jour le mot de passe." });
+    } finally {
+      setPwSaving(false);
+    }
+  };
   const rows = [
     { key: "compte", label: "Compte" },
     { key: "confidentialite", label: "Confidentialité" },
@@ -3018,8 +5103,13 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
                   <div style={{ fontSize: 13, color: colors.textSecondary }}>Modification disponible une fois l'authentification connectée.</div>
                 </div>
                 <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "13px 14px" }}>
-                  <div style={{ fontSize: 11.5, color: colors.textFaint, marginBottom: 3 }}>Mot de passe</div>
-                  <div style={{ fontSize: 13, color: colors.textSecondary }}>Bientôt disponible</div>
+                  <div style={{ fontSize: 11.5, color: colors.textFaint, marginBottom: 8 }}>Mot de passe</div>
+                  <div className="flex flex-col gap-2">
+                    <TextField label="Nouveau mot de passe" value={pw1} onChange={setPw1} placeholder="8 caractères minimum" type="password" />
+                    <TextField label="Confirmer le mot de passe" value={pw2} onChange={setPw2} placeholder="Confirmer" type="password" />
+                    {pwMsg && <div style={{ fontSize: 12, color: pwMsg.type === "error" ? colors.error : colors.accent }}>{pwMsg.text}</div>}
+                    <Button full={false} onClick={submitPassword} disabled={pwSaving || !pw1 || !pw2}>{pwSaving ? "Enregistrement..." : "Mettre à jour"}</Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -3027,7 +5117,27 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
               <div className="flex flex-col gap-5">
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>COMPTE</div>
-                  <div className="flex gap-2">{[["public", "Public"], ["prive", "Privé"]].map(([k, l]) => <Chip key={k} label={l} active={privacy.compte === k} onClick={() => setPrivacy({ ...privacy, compte: k })} />)}</div>
+                  <div className="flex gap-2">
+                    {[["public", "Public"], ["prive", "Privé"]].map(([k, l]) => (
+                      <Chip
+                        key={k}
+                        label={l}
+                        active={(k === "prive") === !!profile.isPrivate}
+                        onClick={async () => {
+                          const isPrivate = k === "prive";
+                          setProfile((p) => ({ ...p, isPrivate }));
+                          try {
+                            await profileService.updateProfile({ nom: profile.nom, username: profile.username, bio: profile.bio, localisation: profile.localisation, isPrivate });
+                          } catch (e) {
+                            setProfile((p) => ({ ...p, isPrivate: !isPrivate }));
+                          }
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: colors.textFaint, marginTop: 6, lineHeight: 1.4 }}>
+                    {profile.isPrivate ? "Seuls vos abonnés approuvés voient vos publications." : "Tout le monde peut voir vos publications."}
+                  </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>QUI PEUT COMMENTER</div>
@@ -3048,7 +5158,10 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
             )}
             {section === "securite" && (
               <div className="flex flex-col gap-2">
-                <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "13px 14px", fontSize: 12.5, color: colors.textSecondary }}>Changement de mot de passe — bientôt disponible</div>
+                <button onClick={() => setSection("compte")} className="flex items-center justify-between" style={{ width: "100%", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "13px 14px", cursor: "pointer" }}>
+                  <span style={{ fontSize: 12.5, color: colors.textSecondary }}>Changer le mot de passe — dans Compte</span>
+                  <ChevronRight size={14} color={colors.textFaint} />
+                </button>
                 <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "13px 14px", fontSize: 12.5, color: colors.textSecondary }}>Déconnexion de tous les appareils — bientôt disponible</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, margin: "14px 0 8px" }}>VOS SIGNALEMENTS</div>
                 {reports.length === 0 ? (
@@ -3112,13 +5225,23 @@ function AideScreen() {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
   const categories = ["Problème technique", "Compte", "Sécurité", "Modération", "Contenu", "Confidentialité", "Autre"];
   const submit = async () => {
-    await api.submitHelpRequest({ category, subject, description }); // TODO: connect to backend
-    setSent(true);
+    setSending(true);
+    setSendError("");
+    try {
+      await socialService.submitHelpRequest({ category, subject, description });
+      setSent(true);
+    } catch (e) {
+      setSendError(e.message || "Impossible d'envoyer votre demande pour le moment.");
+    } finally {
+      setSending(false);
+    }
   };
   if (showForm) {
-    if (sent) return <EmptyState title="Demande envoyée" subtitle="Merci — l'équipe PISTE reviendra vers vous dès que le support sera connecté à un vrai système de tickets." />;
+    if (sent) return <EmptyState title="Demande envoyée" subtitle="Merci — l'équipe PISTE reviendra vers vous par e-mail dès que possible." />;
     return (
       <div style={{ padding: "16px 20px" }}>
         <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>← Retour à l'aide</button>
@@ -3127,7 +5250,8 @@ function AideScreen() {
         <TextField label="Sujet" value={subject} onChange={setSubject} placeholder="Résumez votre demande" />
         <TextField label="Description" value={description} onChange={setDescription} placeholder="Décrivez votre problème en détail." textarea rows={5} />
         <div style={{ fontSize: 11.5, color: colors.textFaint, marginTop: -10, marginBottom: 16 }}>Pièce jointe — bientôt disponible</div>
-        <Button disabled={!category || !subject || !description} onClick={submit}>Envoyer</Button>
+        {sendError && <div style={{ fontSize: 12.5, color: colors.error, marginBottom: 12 }}>{sendError}</div>}
+        <Button disabled={!category || !subject || !description || sending} onClick={submit}>{sending ? "Envoi..." : "Envoyer"}</Button>
       </div>
     );
   }
@@ -3186,7 +5310,21 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 55 }}>
       <div onClick={close} style={{ position: "absolute", inset: 0, background: colors.overlay, backdropFilter: "blur(2px)" }} />
-      <div style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "80%", background: colors.background, boxShadow: "-8px 0 30px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column" }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          right: 0,
+          width: "80%",
+          background: colors.headerBg,
+          backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)",
+          boxShadow: "-8px 0 30px rgba(0,0,0,0.18)",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${colors.border}` }}>
           <span style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>Menu</span>
           <IconButton icon={X} onClick={close} />
@@ -3236,7 +5374,7 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
           ) : sub.key === "reglement" ? (
             <ReglementScreen />
           ) : (
-            <ComingSoon title="Bientôt disponible" subtitle={sub.desc} />
+            <EmptyState title="Bientôt disponible" subtitle={sub.desc} />
           )}
         </div>
       )}
@@ -3250,7 +5388,53 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
 function MainApp({ session, onboardingData, ageInfo }) {
   const { colors } = useTheme();
   const [active, setActive] = useState("fil");
+  const [refreshKey, setRefreshKey] = useState(0);
+  // Retaper sur l'onglet déjà actif remonte en haut ET force un vrai
+  // rechargement (via refreshKey, qui remonte le composant de l'écran) —
+  // changer d'onglet suit le chemin normal.
+  const handleTabPress = (key) => {
+    if (key === active) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      setRefreshKey((k) => k + 1); // force le remontage de l'écran (utile pour "messages", qui se recharge à son propre montage)
+      // Remonter l'écran ne recharge PAS à lui seul les données qui vivent ici,
+      // dans MainApp (posts/vidéos/groupes) — on relance donc explicitement le
+      // bon fetch selon l'onglet, sinon "rafraîchir" ne ferait que redéfiler.
+      if (key === "fil" || key === "video" || key === "profil") {
+        refreshPosts().catch(() => showToast("Impossible de rafraîchir pour le moment."));
+      }
+      if (key === "groupes") {
+        groupService.fetchGroups().then(setGroups).catch(() => showToast("Impossible de rafraîchir pour le moment."));
+      }
+      if (key === "profil") {
+        dogService.fetchMyDogs().then(setDogs).catch(() => {});
+      }
+    } else {
+      setActive(key);
+    }
+  };
+  // Comportement immersif dans tous les onglets : les barres se masquent en
+  // défilant vers le bas, réapparaissent en pilule flottante en remontant —
+  // même langage visuel que les onglets d'Instants. Réinitialisé à "full" à
+  // chaque changement d'onglet pour ne jamais laisser les barres cachées par
+  // surprise en arrivant sur un nouvel écran.
+  const [chromeMode, setChromeMode] = useState("full");
+  const lastScrollYRef = useRef(0);
+  useEffect(() => {
+    setChromeMode("full");
+    lastScrollYRef.current = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const delta = y - lastScrollYRef.current;
+      if (y < 40) setChromeMode("full");
+      else if (delta > 4) setChromeMode("hidden");
+      else if (delta < -4) setChromeMode("floating");
+      lastScrollYRef.current = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [active]);
   const [notif, setNotif] = useState(false);
+  const [showUserSearch, setShowUserSearch] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadConversations, setUnreadConversations] = useState(0);
   const [pendingConversationId, setPendingConversationId] = useState(null);
@@ -3307,7 +5491,17 @@ function MainApp({ session, onboardingData, ageInfo }) {
           estMineur: age !== null && age <= MODERATION_AGE_RULES.minor.maxAge,
           verificationStatus: data.verification_status || p.verificationStatus,
           role: data.role || "user",
+          isPrivate: !!data.is_private,
         }));
+        // `statistiques` restait figé à { abonnes: 0, abonnements: 0 } (valeur
+        // initiale du useState, jamais mise à jour) — le profil affichait donc
+        // toujours 0 abonné/abonnement, quel que soit le vrai nombre en base.
+        const [{ count: abonnes }, { count: abonnements }] = await Promise.all([
+          supabase.from("follows").select("follower_id", { count: "exact", head: true }).eq("followed_id", data.id),
+          supabase.from("follows").select("followed_id", { count: "exact", head: true }).eq("follower_id", data.id),
+        ]);
+        if (cancelled) return;
+        setProfile((p) => ({ ...p, statistiques: { abonnes: abonnes || 0, abonnements: abonnements || 0 } }));
       }
       setProfileLoaded(true);
     })();
@@ -3324,6 +5518,9 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const [groups, setGroups] = useState([]);
   const [posts, setPosts] = useState([]);
   const [videos, setVideos] = useState([]);
+  const [traces, setTraces] = useState([]);
+  const [viewingTraces, setViewingTraces] = useState(null); // { groups, startGroupIndex } | null
+  const [createInitialType, setCreateInitialType] = useState(null);
   const [editingPost, setEditingPost] = useState(null);
 
   // --- Interactions sociales & modération ---
@@ -3335,6 +5532,8 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const [repostedIds, setRepostedIds] = useState([]);
   const [commentsByPost, setCommentsByPost] = useState({});
   const [following, setFollowing] = useState([]);
+  const [pendingFollowUsernames, setPendingFollowUsernames] = useState([]);
+  const [incomingRequestsCount, setIncomingRequestsCount] = useState(0);
   const [bellUsernames, setBellUsernames] = useState([]);
   const [blockedAuthors, setBlockedAuthors] = useState([]);
   const [hiddenPostIds, setHiddenPostIds] = useState([]);
@@ -3364,7 +5563,61 @@ function MainApp({ session, onboardingData, ageInfo }) {
     socialService.fetchMyFollowing().then(setFollowing).catch(() => {});
     socialService.fetchMyBellUsernames().then(setBellUsernames).catch(() => {});
     socialService.fetchMyBlocks().then(setBlockedAuthors).catch(() => {});
+    socialService.fetchMyPendingRequestUsernames().then(setPendingFollowUsernames).catch(() => {});
+    socialService.fetchIncomingFollowRequests().then((rows) => setIncomingRequestsCount(rows.length)).catch(() => {});
+    traceService.fetchActiveTraces().then(setTraces).catch(() => {});
   }, [session, profileLoaded]);
+
+  // Regroupe les Traces actives par auteur — la mienne toujours en premier
+  // (même vide, pour le raccourci de création), puis les autres avec les
+  // non-vues en tête (même logique "non vu avant vu" que les stories
+  // classiques). RLS (voir migration 024) a déjà filtré les comptes privés
+  // non approuvés et les Traces expirées — pas de filtre supplémentaire ici.
+  const traceGroups = useMemo(() => {
+    const byAuthor = new Map();
+    for (const t of traces) {
+      if (!byAuthor.has(t.authorId)) byAuthor.set(t.authorId, []);
+      byAuthor.get(t.authorId).push(t);
+    }
+    const mine = byAuthor.get(profile.id) || [];
+    byAuthor.delete(profile.id);
+    const others = [...byAuthor.entries()].map(([authorId, list]) => ({
+      authorId,
+      username: list[0].username,
+      nom: list[0].nom,
+      avatar: list[0].avatar,
+      traces: list,
+      allViewed: list.every((t) => t.viewed),
+      isMe: false,
+    }));
+    others.sort((a, b) => {
+      if (a.allViewed !== b.allViewed) return a.allViewed ? 1 : -1;
+      return new Date(b.traces[0].createdAt) - new Date(a.traces[0].createdAt);
+    });
+    const mineGroup = { authorId: profile.id, username: profile.username, nom: profile.nom || profile.username, avatar: profile.avatar, traces: mine, allViewed: mine.every((t) => t.viewed), isMe: true };
+    return [mineGroup, ...others];
+  }, [traces, profile.id, profile.username, profile.nom, profile.avatar]);
+
+  const handleTraceCreated = (trace) => {
+    setTraces((t) => [...t, trace]);
+    setCreateInitialType(null);
+    showToast("Trace publiée — visible pendant 24h.");
+  };
+  const viewTrace = (traceId) => {
+    traceService.recordTraceView(traceId).catch(() => {});
+    setTraces((t) => t.map((tr) => (tr.id === traceId ? { ...tr, viewed: true } : tr)));
+  };
+  const deleteTraceHandler = async (trace) => {
+    try {
+      await traceService.deleteTrace(trace.id, trace.mediaPath);
+      setTraces((t) => t.filter((tr) => tr.id !== trace.id));
+      showToast("Trace supprimée.");
+    } catch (e) {
+      showToast("Impossible de supprimer cette Trace pour le moment.");
+    }
+  };
+  const openTraceGroup = (groupIndex) => setViewingTraces({ groups: traceGroups, startGroupIndex: groupIndex });
+  const createOwnTrace = () => { setCreateInitialType("trace"); setCreateOpen(true); };
 
   useEffect(() => {
     if (!session || !profileLoaded) return;
@@ -3414,7 +5667,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
       return;
     }
     setGroups((gs) => gs.map((g) => (g.id !== groupId ? g : { ...g, joined: !g.joined, nombreMembres: (g.nombreMembres ?? 0) + (g.joined ? -1 : 1) })));
-    showToast(current.joined ? "Vous avez quitté le groupe." : "Groupe rejoint.");
+    showToast(current.joined ? "Vous avez quitté la communauté." : "Communauté rejointe.");
   };
 
   const bumpLikes = (id, delta) => {
@@ -3437,6 +5690,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
       const mapped = rows.map((r) => ({
         id: r.id,
         auteur: r.profiles?.nom || r.profiles?.username || "Utilisateur",
+        authorUsername: r.profiles?.username || null,
         texte: r.texte,
         date: formatRelativeDate(r.created_at),
         parentId: r.parent_id,
@@ -3477,13 +5731,26 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const addComment = async (id, texte, parentId) => {
     let comment;
     if (isLocalId(id)) {
-      comment = { id: `local-${Date.now()}`, auteur: profile.nom || profile.username || "Vous", texte, date: "à l'instant", parentId: parentId || null };
+      comment = { id: `local-${Date.now()}`, auteur: profile.nom || profile.username || "Vous", authorUsername: profile.username, texte, date: "à l'instant", parentId: parentId || null };
     } else {
       const c = await postService.addComment(id, texte, parentId);
-      comment = { id: c.id, auteur: profile.nom || profile.username || "Vous", texte, date: "à l'instant", parentId: parentId || null };
+      comment = { id: c.id, auteur: profile.nom || profile.username || "Vous", authorUsername: profile.username, texte, date: "à l'instant", parentId: parentId || null };
     }
     setCommentsByPost((m) => ({ ...m, [id]: [...(m[id] || []), comment] }));
     bumpComments(id, 1);
+  };
+  const deleteComment = async (postId, commentId) => {
+    const existing = commentsByPost[postId] || [];
+    const removedIds = new Set([commentId, ...existing.filter((c) => c.parentId === commentId).map((c) => c.id)]);
+    try {
+      if (!String(commentId).startsWith("local-")) await postService.deleteComment(commentId);
+    } catch (e) {
+      showToast("Impossible de supprimer ce commentaire pour le moment.");
+      return;
+    }
+    setCommentsByPost((m) => ({ ...m, [postId]: (m[postId] || []).filter((c) => !removedIds.has(c.id)) }));
+    bumpComments(postId, -removedIds.size);
+    showToast("Commentaire supprimé.");
   };
   const bumpComments = (id, delta) => {
     const apply = (arr) => arr.map((it) => (it.id === id ? { ...it, commentaires: Math.max(0, (it.commentaires || 0) + delta) } : it));
@@ -3539,6 +5806,35 @@ function MainApp({ session, onboardingData, ageInfo }) {
     setFollowing((f) => (isFollowing ? f.filter((x) => x !== username) : [...f, username]));
     showToast(isFollowing ? `Vous ne suivez plus ${username}.` : `Vous suivez ${username}.`);
   };
+  const requestFollow = async (username) => {
+    if (!username) return;
+    const isPending = pendingFollowUsernames.includes(username);
+    try {
+      await (isPending ? socialService.cancelFollowRequest(username) : socialService.requestFollow(username));
+    } catch (e) {
+      showToast("Action impossible pour le moment.");
+      return;
+    }
+    setPendingFollowUsernames((p) => (isPending ? p.filter((x) => x !== username) : [...p, username]));
+    showToast(isPending ? "Demande annulée." : "Demande d'abonnement envoyée.");
+  };
+  const approveRequest = async (requestId) => {
+    try {
+      await socialService.approveFollowRequest(requestId);
+      setIncomingRequestsCount((c) => Math.max(0, c - 1));
+      showToast("Demande approuvée.");
+    } catch (e) {
+      showToast("Impossible d'approuver cette demande.");
+    }
+  };
+  const rejectRequest = async (requestId) => {
+    try {
+      await socialService.rejectFollowRequest(requestId);
+      setIncomingRequestsCount((c) => Math.max(0, c - 1));
+    } catch (e) {
+      showToast("Impossible de refuser cette demande.");
+    }
+  };
   const toggleBell = async (username) => {
     if (!username) return;
     const isOn = bellUsernames.includes(username);
@@ -3576,11 +5872,16 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onRepost={toggleRepost}
         onAddComment={addComment}
         onDelete={deleteContent}
+        onDeleteComment={deleteComment}
         onEditRequest={setEditingPost}
         onReport={reportContent}
         onHide={hidePost}
         onBlock={blockAuthor}
         onLoadComments={loadComments}
+        chromeMode={chromeMode}
+        traceGroups={traceGroups}
+        onOpenTraceGroup={openTraceGroup}
+        onCreateOwnTrace={createOwnTrace}
       />
     ),
     video: (
@@ -3588,6 +5889,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         videos={visibleVideos}
         profile={profile}
         liked={likedIds}
+        reposted={repostedIds}
         commentsByPost={commentsByPost}
         following={following}
         bellUsernames={bellUsernames}
@@ -3595,14 +5897,18 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onToggleBell={toggleBell}
         onOpenProfile={setOpenProfileUsername}
         onLike={toggleLike}
+        onRepost={toggleRepost}
         onAddComment={addComment}
         onDelete={deleteContent}
+        onDeleteComment={deleteComment}
         onEditRequest={setEditingPost}
         onReport={reportContent}
         onHide={hidePost}
         onBlock={blockAuthor}
         onLoadComments={loadComments}
         onOpenPlayer={setPlayingVideo}
+        onChromeMode={setChromeMode}
+        chromeMode={chromeMode}
       />
     ),
     groupes: (
@@ -3623,14 +5929,16 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onRepost={toggleRepost}
         onAddComment={addComment}
         onDelete={deleteContent}
+        onDeleteComment={deleteComment}
         onEditRequest={setEditingPost}
         onReport={reportContent}
         onHide={hidePost}
         onBlock={blockAuthor}
         onLoadComments={loadComments}
+        chromeMode={chromeMode}
       />
     ),
-    messages: <ScreenMessages meId={session?.user?.id} initialConversationId={pendingConversationId} onConsumeInitialConversation={() => setPendingConversationId(null)} onOpenProfile={setOpenProfileUsername} onRead={refreshUnreadConversations} />,
+    messages: <ScreenMessages meId={session?.user?.id} initialConversationId={pendingConversationId} onConsumeInitialConversation={() => setPendingConversationId(null)} onOpenProfile={setOpenProfileUsername} onBlock={blockAuthor} onReport={reportContent} onRead={refreshUnreadConversations} chromeMode={chromeMode} />,
     profil: (
       <ScreenProfil
         profile={profile}
@@ -3650,25 +5958,32 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onSave={toggleSave}
         onAddComment={addComment}
         onDelete={deleteContent}
+        onDeleteComment={deleteComment}
         onEditRequest={setEditingPost}
         onReport={reportContent}
         onHide={hidePost}
         onBlock={blockAuthor}
         onLoadComments={loadComments}
+        chromeMode={chromeMode}
+        incomingRequestsCount={incomingRequestsCount}
+        onApproveRequest={approveRequest}
+        onRejectRequest={rejectRequest}
+        traceGroup={traceGroups[0]}
+        onOpenTrace={() => openTraceGroup(0)}
       />
     ),
   };
 
   if (!profileLoaded) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.background }}>
+      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.background }}>
         <div style={{ fontSize: 13, color: colors.textSecondary }}>Chargement de votre profil...</div>
       </div>
     );
   }
 
   return (
-    <AppShell header={<Header onBell={() => setNotif(true)} onMenu={() => setPlusOpen(true)} unreadCount={unreadCount} />} active={active} setActive={setActive} onCreate={() => setCreateOpen(true)} unreadConversations={unreadConversations}>
+    <AppShell header={<Header onBell={() => setNotif(true)} onMenu={() => setPlusOpen(true)} onSearch={() => setShowUserSearch(true)} unreadCount={unreadCount} chromeMode={chromeMode} />} active={active} setActive={handleTabPress} onCreate={() => setCreateOpen(true)} unreadConversations={unreadConversations} chromeMode={chromeMode} refreshKey={refreshKey}>
       {screens[active]}
       {notif && (
         <NotificationsPanel
@@ -3679,15 +5994,20 @@ function MainApp({ session, onboardingData, ageInfo }) {
           onGoToFeed={() => setActive("fil")}
         />
       )}
+      {showUserSearch && <UserSearchSheet onClose={() => setShowUserSearch(false)} onOpenProfile={setOpenProfileUsername} />}
       {openProfileUsername && (
         <AuthorProfileSheet
           username={openProfileUsername}
           meUsername={profile.username}
           isFollowing={following.includes(openProfileUsername)}
+          isPending={pendingFollowUsernames.includes(openProfileUsername)}
           bellOn={bellUsernames.includes(openProfileUsername)}
           onClose={() => setOpenProfileUsername(null)}
           onToggleFollow={() => toggleFollow(openProfileUsername)}
+          onRequestFollow={() => requestFollow(openProfileUsername)}
           onToggleBell={() => toggleBell(openProfileUsername)}
+          onOpenProfile={setOpenProfileUsername}
+          onOpenPlayer={setPlayingVideo}
           onMessage={async (userId) => {
             try {
               const conversationId = await messageService.startDirectConversation(userId);
@@ -3707,23 +6027,39 @@ function MainApp({ session, onboardingData, ageInfo }) {
           onRepost={toggleRepost}
           onAddComment={addComment}
           onDelete={deleteContent}
+          onDeleteComment={deleteComment}
           onEditRequest={setEditingPost}
           onReport={reportContent}
           onHide={hidePost}
           onBlock={blockAuthor}
           onLoadComments={loadComments}
+          traceGroup={traceGroups.find((g) => g.username === openProfileUsername)}
+          onOpenTrace={() => { const idx = traceGroups.findIndex((g) => g.username === openProfileUsername); if (idx >= 0) { setOpenProfileUsername(null); openTraceGroup(idx); } }}
         />
       )}
       <CreateFlow
         open={createOpen || !!editingPost}
-        onClose={() => { setCreateOpen(false); setCreateGroupId(null); setEditingPost(null); }}
+        onClose={() => { setCreateOpen(false); setCreateGroupId(null); setEditingPost(null); setCreateInitialType(null); }}
         dogs={dogs}
         authorName={profile.nom || "Vous"}
         onPublished={handlePublished}
+        onTraceCreated={handleTraceCreated}
         editingPost={editingPost}
         onEdited={handleEdited}
         groupId={createGroupId}
+        initialType={createInitialType}
       />
+      {viewingTraces && (
+        <TraceViewer
+          groups={viewingTraces.groups}
+          startGroupIndex={viewingTraces.startGroupIndex}
+          onClose={() => setViewingTraces(null)}
+          meUsername={profile.username}
+          onView={viewTrace}
+          onDelete={deleteTraceHandler}
+          onOpenProfile={(username) => { setViewingTraces(null); setOpenProfileUsername(username); }}
+        />
+      )}
       <PlusPanel
         open={plusOpen}
         onClose={() => setPlusOpen(false)}
@@ -3779,7 +6115,7 @@ function Root() {
   // 1. Encore en train de vérifier s'il existe déjà une session (au tout premier rendu).
   if (session === undefined) {
     return (
-      <div style={{ minHeight: "100vh", background: colors.background, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT }}>
+      <div style={{ minHeight: "100dvh", background: colors.background, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT }}>
         <div style={{ fontSize: 13, color: colors.textSecondary }}>Chargement...</div>
       </div>
     );
@@ -3796,8 +6132,8 @@ function Root() {
   if (stage === "app") return <MainApp session={null} onboardingData={data} ageInfo={ageInfo} />;
 
   return (
-    <div style={{ minHeight: "100vh", background: colors.background, display: "flex", justifyContent: "center", fontFamily: FONT }}>
-      <div style={{ width: "100%", maxWidth: 480, minHeight: "100vh" }}>{flow[stage]}</div>
+    <div style={{ minHeight: "100dvh", background: colors.background, display: "flex", justifyContent: "center", fontFamily: FONT }}>
+      <div style={{ width: "100%", maxWidth: 480, minHeight: "100dvh" }}>{flow[stage]}</div>
     </div>
   );
 }

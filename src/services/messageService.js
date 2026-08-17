@@ -21,7 +21,7 @@ export async function fetchConversations() {
 
   const { data: myMemberships, error: memberError } = await supabase
     .from("conversation_members")
-    .select("conversation_id, conversations(id, type, nom, created_at)")
+    .select("conversation_id, last_read_at, conversations(id, type, nom, image_url, created_at)")
     .eq("user_id", me.id)
     .is("left_at", null);
   if (memberError) throw memberError;
@@ -58,16 +58,23 @@ export async function fetchConversations() {
       const conv = m.conversations;
       const members = (membersByConv[conv.id] || []).filter((x) => x.user_id !== me.id);
       const last = lastMessageByConv[conv.id];
+      const lastSenderIsMe = last?.sender_id === me.id;
+      // Non lue : un dernier message existe, n'est pas de moi, et est plus
+      // récent que ma dernière lecture de cette conversation (voir migration
+      // 016 — même logique que fetchUnreadConversationCount, au niveau d'une
+      // seule conversation cette fois pour l'affichage de la liste).
+      const unread = !!last && !lastSenderIsMe && (!m.last_read_at || new Date(last.created_at) > new Date(m.last_read_at));
       return {
         id: conv.id,
         type: conv.type,
         nom: conv.type === "group" ? conv.nom : members[0]?.profiles?.nom || members[0]?.profiles?.username || "Utilisateur",
-        avatar: conv.type === "group" ? null : members[0]?.profiles?.avatar_url || null,
+        avatar: conv.type === "group" ? conv.image_url || null : members[0]?.profiles?.avatar_url || null,
         members: members.map((x) => ({ id: x.user_id, username: x.profiles?.username, nom: x.profiles?.nom || x.profiles?.username, avatar: x.profiles?.avatar_url })),
         lastMessage: last?.texte || null,
         hasLastMessage: !!last, // distingue "aucun message" de "dernier message sans texte" (photo/vidéo/vocal)
         lastMessageAt: last?.created_at || conv.created_at,
-        lastSenderIsMe: last?.sender_id === me.id,
+        lastSenderIsMe,
+        unread,
       };
     })
     .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
@@ -138,6 +145,38 @@ export async function createGroupConversation(nom, memberIds) {
   }
 
   return conversationId;
+}
+
+/** Upload la photo d'un groupe de discussion (bucket "conversations" — voir
+ *  migration 023) et met à jour conversations.image_url. */
+export async function uploadConversationImage(conversationId, file) {
+  const path = `${conversationId}/${Date.now()}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("conversations").upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (uploadError) throw uploadError;
+
+  const { data: publicUrl } = supabase.storage.from("conversations").getPublicUrl(path);
+  const { error: updateError } = await supabase.from("conversations").update({ image_url: publicUrl.publicUrl }).eq("id", conversationId);
+  if (updateError) throw updateError;
+
+  return publicUrl.publicUrl;
+}
+
+/** Quitte un groupe de discussion — marque sa propre ligne d'appartenance
+ *  comme quittée (left_at) plutôt que de la supprimer, pour garder
+ *  l'historique des messages déjà échangés. RLS ("member manages own
+ *  membership", 001_init.sql) autorise déjà cette mise à jour. */
+export async function leaveConversation(conversationId) {
+  const me = await requireUser();
+  const { error } = await supabase
+    .from("conversation_members")
+    .update({ left_at: new Date().toISOString() })
+    .eq("conversation_id", conversationId)
+    .eq("user_id", me.id);
+  if (error) throw error;
+  return true;
 }
 
 export async function fetchConversationMembers(conversationId) {

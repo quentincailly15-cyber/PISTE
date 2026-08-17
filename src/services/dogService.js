@@ -55,3 +55,16 @@ export async function fetchMyDogs() {
   if (error) throw error;
   return data;
 }
+
+/** Chiens d'un utilisateur précis — pour l'onglet Chiens d'un profil public
+ *  (voir fetchMyDogs pour son propre profil). RLS masque déjà les chiens d'un
+ *  compte privé si on n'est pas abonné approuvé (voir migration 021). */
+export async function fetchUserDogs(userId) {
+  const { data, error } = await supabase
+    .from("dogs")
+    .select("*")
+    .eq("owner_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}

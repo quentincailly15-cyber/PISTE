@@ -6,3 +6,15 @@ html, body, #root {
   height: 100%;
   margin: 0;
 }
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* iOS Safari zoome automatiquement la page quand on touche un champ dont le
+   texte fait moins de 16px — l'app restait alors "zoomée" tant qu'on ne
+   dézoomait pas manuellement. On force 16px minimum sur tous les champs,
+   quel que soit le style inline défini par ailleurs (d'où le !important). */
+input, textarea, select {
+  font-size: 16px !important;
+}
