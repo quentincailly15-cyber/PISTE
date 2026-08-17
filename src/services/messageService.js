@@ -191,7 +191,16 @@ export async function fetchConversationMembers(conversationId) {
 
 // Pièce commune à toutes les lectures de messages : expéditeur, média,
 // message cité (réponse ciblée) et réactions (voir migration 038).
-const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!messages_reply_to_id_fkey(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username)), message_reactions(user_id, emoji)";
+//
+// L'indice de jointure "messages!reply_to_id" (nom de COLONNE, pas de
+// contrainte) est volontairement utilisé plutôt que "messages!messages_
+// reply_to_id_fkey" (nom de contrainte) — PostgREST accepte les deux formes,
+// mais celle par nom de contrainte échoue si le nom réellement généré en
+// base diffère ne serait-ce que légèrement de ce que le code suppose
+// ("Could not find a relationship..."). Le nom de colonne ne dépend d'aucune
+// convention de nommage côté Postgres et fonctionne dès que la clé étrangère
+// existe, quel que soit son nom.
+const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!reply_to_id(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username)), message_reactions(user_id, emoji)";
 
 export async function fetchMessages(conversationId) {
   const { data, error } = await supabase
