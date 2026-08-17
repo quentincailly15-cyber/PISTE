@@ -72,7 +72,7 @@ function generateVideoThumbnail(file, timeoutMs = 6000) {
   });
 }
 
-export async function createPost({ texte, titre, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null }) {
+export async function createPost({ texte, titre, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null, pollOptions = [] }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
@@ -102,6 +102,14 @@ export async function createPost({ texte, titre, type, animal, pratique, dogId, 
   if (dogId) {
     const { error: dogLinkError } = await supabase.from("post_dogs").insert({ post_id: post.id, dog_id: dogId });
     if (dogLinkError) throw dogLinkError;
+  }
+
+  const cleanPollOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
+  if (cleanPollOptions.length >= 2) {
+    const { error: pollError } = await supabase
+      .from("poll_options")
+      .insert(cleanPollOptions.map((texte, ordre) => ({ post_id: post.id, texte, ordre })));
+    if (pollError) throw pollError;
   }
 
   // Upload média réel vers Supabase Storage (bucket "posts" à créer côté Dashboard).
@@ -184,6 +192,41 @@ export async function deletePost(postId) {
   return true;
 }
 
+/**
+ * Options d'un sondage avec leur nombre de voix réel (voir migration 036) —
+ * chargé à la demande quand le sondage s'affiche, pas préchargé dans chaque
+ * requête de fil (même principe que les commentaires, voir loadComments).
+ */
+export async function fetchPollOptions(postId) {
+  const { data, error } = await supabase
+    .from("poll_options")
+    .select("id, texte, ordre, poll_votes(count)")
+    .eq("post_id", postId)
+    .order("ordre", { ascending: true });
+  if (error) throw error;
+  return data.map((o) => ({ id: o.id, texte: o.texte, ordre: o.ordre, votes: o.poll_votes?.[0]?.count || 0 }));
+}
+
+export async function fetchMyPollVote(postId) {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return null;
+  const { data, error } = await supabase.from("poll_votes").select("option_id").eq("post_id", postId).eq("user_id", userData.user.id).maybeSingle();
+  if (error) throw error;
+  return data?.option_id || null;
+}
+
+/** Un seul vote par personne et par sondage (contrainte primary key sur
+ *  poll_votes) — revoter change simplement l'option choisie. */
+export async function votePoll(postId, optionId) {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) throw new Error("Non authentifié");
+  const { error } = await supabase
+    .from("poll_votes")
+    .upsert({ post_id: postId, user_id: userData.user.id, option_id: optionId }, { onConflict: "post_id,user_id" });
+  if (error) throw error;
+  return true;
+}
+
 export async function toggleLike(postId, shouldLike) {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("Non authentifié");
@@ -259,6 +302,20 @@ export async function fetchUserPosts(userId, { limit = 50 } = {}) {
     .limit(limit);
   if (error) throw error;
   return data;
+}
+
+/** Publications où un chien précis a été identifié (table de jointure
+ *  post_dogs, déjà utilisée par createPost) — sert à l'onglet correspondant
+ *  de DogPage ("Photos"/"Vidéos"/"Publications"), jusqu'ici toujours vide. */
+export async function fetchPostsByDog(dogId, { limit = 50 } = {}) {
+  const { data, error } = await supabase
+    .from("post_dogs")
+    .select("posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds))")
+    .eq("dog_id", dogId)
+    .order("created_at", { ascending: false, foreignTable: "posts" })
+    .limit(limit);
+  if (error) throw error;
+  return data.map((r) => r.posts).filter(Boolean);
 }
 
 export async function deleteComment(commentId) {

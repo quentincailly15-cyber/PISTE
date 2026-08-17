@@ -277,6 +277,30 @@ function SegmentedControl({ options, value, onChange }) {
     </div>
   );
 }
+// Balayage depuis le bord gauche de l'écran pour revenir en arrière (comme le
+// geste natif iOS) — détection manuelle par tactile brut plutôt qu'une
+// librairie : on ne déclenche que si le doigt démarre tout près du bord
+// gauche (sinon ça interférerait avec le scroll normal ou un swipe-to-delete
+// ailleurs dans l'écran) et se déplace surtout à l'horizontale.
+function useSwipeBack(onBack) {
+  const startRef = useRef(null);
+  if (!onBack) return {};
+  return {
+    onTouchStart: (e) => {
+      const t = e.touches[0];
+      startRef.current = t.clientX < 24 ? { x: t.clientX, y: t.clientY } : null;
+    },
+    onTouchEnd: (e) => {
+      if (!startRef.current) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startRef.current.x;
+      const dy = t.clientY - startRef.current.y;
+      startRef.current = null;
+      if (dx > 70 && Math.abs(dy) < 60) onBack();
+    },
+    onTouchCancel: () => { startRef.current = null; },
+  };
+}
 function ScreenHeader({ title, onBack, onCloseX, rightAction, chromeMode = "full" }) {
   const { colors } = useTheme();
   const floating = chromeMode !== "hidden"; // toujours pilule flottante, sauf masqué au défilement
@@ -1441,8 +1465,9 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, isFollowing]);
 
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 64, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 64, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       {loading ? (
         <>
           <ScreenHeader title="Profil" onBack={onClose} />
@@ -1548,6 +1573,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                   <div style={{ paddingTop: 10 }}>
                     {posts.filter((p) => p.type !== "video" && p.type !== "video_courte").map((p) => (
                       <PostCard
+                        onOpenProfile={onOpenProfile}
                         key={p.id}
                         post={p}
                         liked={liked.includes(p.id)}
@@ -1614,6 +1640,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                         <RepostedInstantCard key={p.id} item={p} onOpen={setViewingInstant} />
                       ) : (
                         <PostCard
+                          onOpenProfile={onOpenProfile}
                           key={p.id}
                           post={p}
                           liked={liked.includes(p.id)}
@@ -1636,7 +1663,31 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
           )}
         </div>
       )}
-      {openDog && <DogPage dog={openDog} onClose={() => setOpenDog(null)} />}
+      {openDog && (
+        <DogPage
+          dog={openDog}
+          onClose={() => setOpenDog(null)}
+          onOpenProfile={onOpenProfile}
+          onOpenPlayer={onOpenPlayer}
+          meUsername={meUsername}
+          isAdmin={isAdmin}
+          liked={liked}
+          saved={saved}
+          reposted={reposted}
+          commentsByPost={commentsByPost}
+          onLike={onLike}
+          onSave={onSave}
+          onRepost={onRepost}
+          onAddComment={onAddComment}
+          onDelete={onDelete}
+          onDeleteComment={onDeleteComment}
+          onEditRequest={onEditRequest}
+          onReport={onReport}
+          onHide={onHide}
+          onBlock={onBlock}
+          onLoadComments={onLoadComments}
+        />
+      )}
       {followSheet && <FollowListSheet userId={profile.id} mode={followSheet} onClose={() => setFollowSheet(null)} onOpenProfile={onOpenProfile} />}
       {viewingInstant && (
         <SingleInstantViewer
@@ -1962,7 +2013,71 @@ function SensitiveGate({ rating, children }) {
     </div>
   );
 }
-function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, onRepost, onOpenComments, onOpenActions, onOpenAuthor }) {
+// Sondage réel (voir migration 036) — options et votes chargés à l'ouverture
+// du post, pas préchargés dans le fil (même principe que les commentaires).
+// Un vote change simplement l'option choisie (poll_votes a une seule ligne
+// par personne et par sondage), jamais un deuxième vote qui s'ajouterait.
+function PollCard({ postId }) {
+  const { colors } = useTheme();
+  const [options, setOptions] = useState(null);
+  const [myVote, setMyVote] = useState(null);
+  const [voting, setVoting] = useState(false);
+
+  const refresh = () => Promise.all([postService.fetchPollOptions(postId), postService.fetchMyPollVote(postId)]).then(([opts, vote]) => { setOptions(opts); setMyVote(vote); }).catch(() => setOptions([]));
+
+  useEffect(() => { refresh(); }, [postId]);
+
+  if (options === null) {
+    return <div style={{ margin: "0 16px 12px", fontSize: 12, color: colors.textFaint }}>Chargement du sondage...</div>;
+  }
+  const total = options.reduce((sum, o) => sum + o.votes, 0);
+  const vote = async (optionId) => {
+    if (voting || optionId === myVote) return;
+    setVoting(true);
+    const previous = { options, myVote };
+    // Optimiste : on ajuste les compteurs localement, corrigé si l'appel échoue.
+    setOptions((os) => os.map((o) => {
+      if (o.id === optionId) return { ...o, votes: o.votes + 1 };
+      if (o.id === myVote) return { ...o, votes: Math.max(0, o.votes - 1) };
+      return o;
+    }));
+    setMyVote(optionId);
+    try {
+      await postService.votePoll(postId, optionId);
+    } catch (e) {
+      setOptions(previous.options);
+      setMyVote(previous.myVote);
+    } finally {
+      setVoting(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2" style={{ margin: "0 16px 12px" }}>
+      {options.map((o) => {
+        const pct = total > 0 ? Math.round((o.votes / total) * 100) : 0;
+        const mine = o.id === myVote;
+        return (
+          <button
+            key={o.id}
+            onClick={() => vote(o.id)}
+            disabled={voting}
+            style={{ position: "relative", width: "100%", textAlign: "left", border: `1.5px solid ${mine ? colors.accent : colors.border}`, borderRadius: RADIUS.lg, padding: "10px 14px", background: colors.surface, cursor: "pointer", overflow: "hidden" }}
+          >
+            {myVote && (
+              <div style={{ position: "absolute", inset: 0, width: `${pct}%`, background: mine ? colors.accentSoft : colors.surfaceAlt, transition: "width 300ms ease" }} />
+            )}
+            <div className="flex items-center justify-between" style={{ position: "relative" }}>
+              <span style={{ fontSize: 13, fontWeight: mine ? 700 : 600, color: mine ? colors.accent : colors.text }}>{o.texte}</span>
+              {myVote && <span style={{ fontSize: 12, fontWeight: 700, color: mine ? colors.accent : colors.textFaint }}>{pct}%</span>}
+            </div>
+          </button>
+        );
+      })}
+      <span style={{ fontSize: 11, color: colors.textFaint }}>{total} vote{total !== 1 ? "s" : ""}{!myVote && total >= 0 ? " · Touchez une option pour voter" : ""}</span>
+    </div>
+  );
+}
+function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, onRepost, onOpenComments, onOpenActions, onOpenAuthor, onOpenProfile }) {
   const { colors } = useTheme();
   const share = async () => {
     if (navigator.share) { try { await navigator.share({ title: "PISTE", text: post.texte || "Une publication PISTE" }); } catch (e) {} }
@@ -1987,7 +2102,8 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
         </button>
         <IconButton icon={MoreHorizontal} onClick={onOpenActions} size={30} />
       </div>
-      {post.texte && <div style={{ padding: "0 16px 12px", fontSize: 13.5, color: colors.text, lineHeight: 1.5 }}>{post.texte}</div>}
+      {post.texte && <div style={{ padding: "0 16px 12px", fontSize: 13.5, color: colors.text, lineHeight: 1.5 }}>{renderTextWithMentions(post.texte, colors, onOpenProfile)}</div>}
+      {post.type === "sondage" && <PollCard postId={post.id} />}
       {post.image && (
         <SensitiveGate rating={post.contentRating}>
           <div style={{ margin: "0 16px", aspectRatio: "4/3", borderRadius: RADIUS.lg, overflow: "hidden", background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2368,6 +2484,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
         <div style={{ paddingTop: 14 }}>
           {visible.map((p) => (
             <PostCard
+              onOpenProfile={onOpenProfile}
               key={p.id}
               post={p}
               liked={liked.includes(p.id)}
@@ -3054,9 +3171,10 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
   }, [group.id, group.nombreMembres]);
 
   const groupPosts = posts.filter((p) => p.type !== "video" && p.type !== "video_courte");
+  const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
       <div onScroll={handleScroll} style={{ flex: 1, overflowY: "auto" }}>
         <ScreenHeader title={group.nom} onBack={onClose} chromeMode={localMode} />
         <div style={{ position: "relative", marginTop: 10, borderRadius: RADIUS.xl, overflow: "hidden" }}>
@@ -3112,6 +3230,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
             <div style={{ paddingTop: 6 }}>
               {groupPosts.map((p) => (
                 <PostCard
+                  onOpenProfile={onOpenProfile}
                   key={p.id}
                   post={p}
                   liked={liked.includes(p.id)}
@@ -3209,8 +3328,9 @@ function CreateGroupForm({ onClose, onCreated }) {
       setSaving(false);
     }
   };
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 46, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 46, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title="Créer une communauté" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickImage} style={{ display: "none" }} />
@@ -3322,15 +3442,15 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
 /* ============================================================
    9. CRÉATION DE CONTENU
    ============================================================ */
+// Simplifié à 4 choix (voir CreateFlow) — "Photo", "Discussion" et "Sortie"
+// n'apportaient rien que "Publication" ne couvre pas déjà (texte + photo),
+// et "Sondage" est maintenant une option DANS "Publication" plutôt qu'un
+// type séparé (voir addPoll, ComposeScreen).
 const CREATE_OPTIONS = [
   { key: "trace", label: "Trace", icon: Footprints },
-  { key: "publication", label: "Publication", icon: TypeIcon },
-  { key: "photo", label: "Photo", icon: ImageIcon },
-  { key: "video", label: "Vidéo", icon: Video },
   { key: "video_courte", label: "Instant", icon: Film },
-  { key: "discussion", label: "Discussion", icon: MessageCircle },
-  { key: "sondage", label: "Sondage", icon: BarChart3 },
-  { key: "sortie", label: "Sortie", icon: CalendarDays },
+  { key: "video", label: "Vidéo", icon: Video },
+  { key: "publication", label: "Publication", icon: TypeIcon },
 ];
 function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPost, groupId }) {
   const { colors } = useTheme();
@@ -3347,16 +3467,24 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const [titre, setTitre] = useState(editingPost?.titre || "");
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
+  const [addPoll, setAddPoll] = useState(false);
   const [pollOptions, setPollOptions] = useState(["", ""]);
+  const [identifiedUsers, setIdentifiedUsers] = useState([]);
   const [contentRating, setContentRating] = useState(editingPost?.contentRating || "normal"); // 'restricted' réservé à la modération
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
-  const isMedia = type === "photo" || type === "video" || type === "video_courte";
-  const isPost = type === "publication" || isMedia;
-  const isPoll = type === "sondage";
-  const isOuting = type === "sortie";
+  const isMedia = type === "photo" || type === "video" || type === "video_courte" || type === "publication";
+  // "sondage"/"discussion" ne sont plus proposés à la création (voir
+  // CREATE_OPTIONS) mais restent de vrais types en base pour l'édition d'un
+  // post déjà publié dans l'un de ces types.
+  const isPost = type === "publication" || type === "sondage" || type === "discussion" || isMedia;
+  // Sondage : uniquement à la création d'une "Publication", jamais un type à
+  // part (voir CREATE_OPTIONS) — éditer les options d'un sondage déjà publié
+  // n'est pas proposé (les votes existants perdraient leur sens).
+  const isPoll = !editingPost && type === "publication" && addPoll;
   const isVideoType = type === "video" || type === "video_courte";
-  const captionLabel = isPoll ? "Question du sondage" : isOuting ? "Titre de la sortie" : type === "discussion" ? "Votre message" : "Description";
+  const canIdentify = type === "publication";
+  const captionLabel = isPoll ? "Question du sondage" : "Description";
 
   // Sonde durée + dimensions réelles d'une vidéo côté navigateur, sans
   // dépendre du serveur — sert à faire respecter "Instant = vertical, max 1
@@ -3419,22 +3547,32 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const submit = async () => {
     setSaving(true);
     setError(false);
-    const hashtags = extractHashtags(text);
-    const mentions = extractMentions(text);
+    // Les personnes identifiées s'ajoutent au texte en @mentions réelles —
+    // même mécanisme que les commentaires/le carnet, jamais une simple
+    // étiquette décorative : extractMentions() les récupère ensuite pour de
+    // vrai (notification, lien cliquable).
+    const finalText = identifiedUsers.length > 0
+      ? `${text.trim()}${text.trim() ? "\n\n" : ""}${identifiedUsers.map((u) => `@${u.username}`).join(" ")}`
+      : text;
+    // Un sondage reste stocké comme un post de type "sondage" (inchangé côté
+    // base/Fil) — seule la façon de le créer change : plus un type séparé,
+    // une simple option dans "Publication" (voir isPoll).
+    const savedType = isPoll ? "sondage" : type;
     try {
       if (isPost) {
-        // Chemin réel (Supabase) — publication/photo/vidéo/instant.
+        // Chemin réel (Supabase) — publication/photo/vidéo/instant/sondage.
         if (editingPost) {
           const updated = await postService.updatePost(editingPost.id, {
-            texte: text, titre: type === "video" ? titre : undefined, animal, pratique, departement, contentRating,
+            texte: finalText, titre: type === "video" ? titre : undefined, animal, pratique, departement, contentRating,
           });
           setSaving(false);
           onPublished({ ...editingPost, texte: updated.texte, titre: updated.titre || updated.texte, animal: updated.animal, pratique: updated.pratique, contentRating: updated.content_rating, hashtags: updated.hashtags, mentions: updated.mentions });
         } else {
           const saved = await postService.createPost({
-            texte: text, titre: type === "video" ? titre : null, type, animal, pratique,
+            texte: finalText, titre: type === "video" ? titre : null, type: savedType, animal, pratique,
             dogId,
             departement, contentRating, mediaFiles, mediaDurations, thumbnailFile: type === "video" ? thumbnailFile : null, groupId,
+            pollOptions: isPoll ? pollOptions : [],
           });
           setSaving(false);
           onPublished({
@@ -3447,14 +3585,6 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             likes: 0, commentaires: 0, date: "à l'instant", createdAt: Date.now(), titre: saved.titre || saved.texte,
           });
         }
-      } else {
-        // Discussion / sondage : pas encore de table dédiée côté base — reste local pour l'instant.
-        if (editingPost) {
-          onPublished({ ...editingPost, texte: text, contentRating, hashtags, mentions });
-        } else {
-          onPublished({ id: `local-${Date.now()}`, nom: authorName, avatar: null, texte: text, image: null, type, contentRating, hashtags, mentions, likes: 0, commentaires: 0, date: "à l'instant", createdAt: Date.now() });
-        }
-        setSaving(false);
       }
     } catch (e) {
       setSaving(false);
@@ -3462,23 +3592,13 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     }
   };
 
-  if (isOuting) {
-    // "Sortie" n'est pas encore une vraie fonctionnalité (pas de modèle de données,
-    // pas de persistance) — on l'annonce honnêtement plutôt que d'afficher un mini
-    // formulaire qui donnait l'impression, à tort, que la création de sortie fonctionnait.
-    return (
-      <div style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" }}>
-        <ScreenHeader title="Sortie" onCloseX={onClose} />
-        <EmptyState title="Bientôt disponible" subtitle="La création de sorties fait partie de la vision de PISTE et arrivera avec le carnet de chasse." />
-      </div>
-    );
-  }
 
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title={label} onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-        <TextField label={captionLabel} value={text} onChange={setText} placeholder={type === "discussion" ? "Posez une question, lancez une discussion..." : "Ajouter une description... (#hashtag, @mention)"} textarea rows={isPoll ? 2 : 4} />
+        <TextField label={captionLabel} value={text} onChange={setText} placeholder="Ajouter une description... (#hashtag, @mention)" textarea rows={isPoll ? 2 : 4} />
 
         {type === "video" && !editingPost && (
           <TextField label="Titre de la vidéo" value={titre} onChange={setTitre} placeholder="ex : Approche matinale en forêt" />
@@ -3492,7 +3612,9 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             >
               <ImageIcon size={20} color={colors.textFaint} />
               <span style={{ fontSize: 12.5, color: colors.textFaint }}>
-                {mediaFiles.length > 0 ? `${mediaFiles.length} fichier${mediaFiles.length > 1 ? "s" : ""} sélectionné${mediaFiles.length > 1 ? "s" : ""}` : "Choisir une ou plusieurs images/vidéos"}
+                {mediaFiles.length > 0
+                  ? `${mediaFiles.length} fichier${mediaFiles.length > 1 ? "s" : ""} sélectionné${mediaFiles.length > 1 ? "s" : ""}`
+                  : type === "publication" ? "Ajouter une photo (facultatif)" : "Choisir une ou plusieurs images/vidéos"}
               </span>
               {type === "video_courte" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format vertical, 1 minute maximum</span>}
               {type === "video" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format horizontal, 30 minutes maximum</span>}
@@ -3500,7 +3622,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             <input
               id="piste-media-input"
               type="file"
-              accept={type === "photo" ? "image/*" : type === "publication" ? "image/*,video/*" : "video/*"}
+              accept={isVideoType ? "video/*" : "image/*"}
               multiple
               onChange={pickMedia}
               style={{ display: "none" }}
@@ -3529,6 +3651,12 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
           </div>
         )}
 
+        {type === "publication" && !editingPost && (
+          <div style={{ marginBottom: 16 }}>
+            <ToggleRow label="Ajouter un sondage" value={addPoll} onToggle={() => setAddPoll((v) => !v)} />
+          </div>
+        )}
+
         {isPoll && (
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, display: "block" }}>Options</label>
@@ -3542,7 +3670,14 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
           </div>
         )}
 
-
+        {canIdentify && !editingPost && (
+          <UserPickerField
+            label="Identifier des personnes (optionnel)"
+            selected={identifiedUsers}
+            onChange={setIdentifiedUsers}
+            placeholder="Rechercher un pseudo..."
+          />
+        )}
 
         {isMedia && (
           <div style={{ marginBottom: 16 }}>
@@ -3624,8 +3759,9 @@ function TraceComposeScreen({ onClose, onPublished }) {
     }
   };
 
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Nouvelle Trace" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={inputRef} type="file" accept="image/*,video/*" onChange={pick} style={{ display: "none" }} />
@@ -3694,25 +3830,23 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, authorNa
       />
     );
   }
+  // Pilule unique à 4 choix (au lieu d'une grille 2x4 avec Photo/Discussion/
+  // Sondage/Sortie séparés) — "simplifier" demandé explicitement : Photo et
+  // Sondage vivent maintenant dans "Publication" (voir ComposeScreen).
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
       <div onClick={close} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", padding: "10px 20px 20px", position: "relative", pointerEvents: "auto" }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "6px auto 16px" }} />
-          <div style={{ position: "absolute", top: 10, right: 12 }}><IconButton icon={X} onClick={close} size={30} /></div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 12 }}>Créer</div>
-          <div className="grid grid-cols-2 gap-2">
-            {CREATE_OPTIONS.map((o) => {
-              const Icon = o.icon;
-              return (
-                <button key={o.key} onClick={() => { setType(o.key); setStep("compose"); }} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ border: "none", borderRadius: RADIUS.lg, padding: "13px 12px", background: colors.surfaceAlt, cursor: "pointer" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon size={16} color={colors.accent} strokeWidth={1.8} /></div>
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: colors.text, textAlign: "left" }}>{o.label}</span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex" style={{ width: "100%", maxWidth: 400, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.pill, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", padding: 6, gap: 2, pointerEvents: "auto" }}>
+          {CREATE_OPTIONS.map((o) => {
+            const Icon = o.icon;
+            return (
+              <button key={o.key} onClick={() => { setType(o.key); setStep("compose"); }} className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform" style={{ flex: 1, border: "none", borderRadius: RADIUS.pill, padding: "10px 4px 8px", background: "transparent", cursor: "pointer" }}>
+                <div style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon size={17} color={colors.accent} strokeWidth={1.8} /></div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: colors.text }}>{o.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -3773,8 +3907,9 @@ function ProfileEditor({ profile, onClose, onSave }) {
     }
   };
   const toggleInterest = (i) => setForm({ ...form, interets: form.interets.includes(i) ? form.interets.filter((x) => x !== i) : [...form.interets, i] });
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title="Modifier le profil" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <input ref={bannerInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickBanner} style={{ display: "none" }} />
@@ -3839,8 +3974,9 @@ function DogFormScreen({ onClose, onSaved }) {
       setSaving(false);
     }
   };
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title="Ajouter un chien" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickPhoto} style={{ display: "none" }} />
@@ -3866,7 +4002,7 @@ function DogFormScreen({ onClose, onSaved }) {
         </div>
         <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>SPÉCIALITÉ</div>
         <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
-          {["Chien d'arrêt", "Chien courant", "Chien de rapport", "Chien de rouge", "Autre"].map((s) => <Chip key={s} label={s} active={specialite === s} onClick={() => setSpecialite(specialite === s ? null : s)} />)}
+          {["Chien d'arrêt", "Chien courant", "Chien leveur", "Chien de terrier", "Chien de rouge", "Autre"].map((s) => <Chip key={s} label={s} active={specialite === s} onClick={() => setSpecialite(specialite === s ? null : s)} />)}
         </div>
         <TextField label="Description" value={description} onChange={setDescription} placeholder="Quelques mots sur votre compagnon de chasse." textarea />
         {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error }}>{error}</div>}
@@ -3875,12 +4011,33 @@ function DogFormScreen({ onClose, onSaved }) {
     </div>
   );
 }
-function DogPage({ dog, onClose }) {
+function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmin, liked = [], saved = [], reposted = [], commentsByPost = {}, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("photos");
-  const tabs = [["photos", "Photos"], ["videos", "Vidéos"], ["sorties", "Sorties"], ["publications", "Publications"]];
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sheet, setSheet] = useState(null); // { type: 'actions'|'report'|'comments', post }
+  const tabs = [["photos", "Photos"], ["videos", "Vidéos"], ["publications", "Publications"]];
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    postService.fetchPostsByDog(dog.id)
+      .then((rows) => { if (!cancelled) setPosts(rows.map(mapPostRow)); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [dog.id]);
+
+  const filtered = posts.filter((p) => {
+    if (tab === "videos") return p.type === "video" || p.type === "video_courte";
+    if (tab === "photos") return p.type !== "video" && p.type !== "video_courte" && !!p.image;
+    return p.type !== "video" && p.type !== "video_courte"; // publications : tout le reste, avec ou sans image
+  });
+
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title={dog.nom} onBack={onClose} />
       <div className="px-5 pt-4">
         <div style={{ width: 64, height: 64, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden" }}>
@@ -3893,7 +4050,72 @@ function DogPage({ dog, onClose }) {
       <div className="px-4 pt-4">
         <SegmentedControl options={tabs.map(([k, l]) => ({ key: k, label: l }))} value={tab} onChange={setTab} />
       </div>
-      <div style={{ flex: 1, overflowY: "auto" }}><EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » est vide pour le moment.`} /></div>
+      <div style={{ flex: 1, overflowY: "auto", paddingTop: 12 }}>
+        {loading ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState title="Aucun contenu" subtitle={`Les ${tabs.find((t) => t[0] === tab)[1].toLowerCase()} où ${dog.nom} est identifié apparaîtront ici.`} />
+        ) : tab === "videos" ? (
+          filtered.map((v) => (
+            <VideoCard
+              key={v.id}
+              video={v}
+              liked={liked.includes(v.id)}
+              reposted={reposted.includes(v.id)}
+              commentCount={(commentsByPost[v.id] || []).length}
+              onLike={() => onLike?.(v.id)}
+              onRepost={() => onRepost?.(v.id)}
+              onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments?.(v.id); }}
+              onOpenActions={() => setSheet({ type: "actions", post: v })}
+              onOpenAuthor={() => onOpenProfile?.(v.username)}
+              onOpenPlayer={() => onOpenPlayer?.(v)}
+            />
+          ))
+        ) : (
+          filtered.map((p) => (
+            <PostCard
+              key={p.id}
+              post={p}
+              liked={liked.includes(p.id)}
+              saved={saved.includes(p.id)}
+              reposted={reposted.includes(p.id)}
+              commentCount={(commentsByPost[p.id] || []).length}
+              onLike={() => onLike?.(p.id)}
+              onSave={() => onSave?.(p.id)}
+              onRepost={() => onRepost?.(p.id)}
+              onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments?.(p.id); }}
+              onOpenActions={() => setSheet({ type: "actions", post: p })}
+              onOpenAuthor={() => onOpenProfile?.(p.username)}
+              onOpenProfile={onOpenProfile}
+            />
+          ))
+        )}
+      </div>
+      {sheet?.type === "actions" && (
+        <ContentActionSheet
+          isOwn={sheet.post.username === meUsername}
+          isAdmin={isAdmin}
+          onClose={() => setSheet(null)}
+          onEdit={() => { setSheet(null); onEditRequest?.(sheet.post); }}
+          onDelete={() => { onDelete?.(sheet.post.id); setPosts((ps) => ps.filter((x) => x.id !== sheet.post.id)); setSheet(null); }}
+          onReport={() => setSheet({ type: "report", post: sheet.post })}
+          onHide={() => { onHide?.(sheet.post.id); setPosts((ps) => ps.filter((x) => x.id !== sheet.post.id)); setSheet(null); }}
+          onBlock={() => { onBlock?.(sheet.post.username); setSheet(null); }}
+        />
+      )}
+      {sheet?.type === "report" && (
+        <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => { onReport?.({ targetId: sheet.post.id, targetType: "post", reason }); setSheet(null); }} />
+      )}
+      {sheet?.type === "comments" && (
+        <CommentsSheet
+          comments={commentsByPost[sheet.post.id] || []}
+          onClose={() => setSheet(null)}
+          onAdd={(texte, parentId) => onAddComment?.(sheet.post.id, texte, parentId)}
+          onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined}
+          meUsername={meUsername}
+          onOpenProfile={onOpenProfile}
+        />
+      )}
     </div>
   );
 }
@@ -3998,6 +4220,7 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
   const [lieuNom, setLieuNom] = useState(log?.lieuNom || "");
   const [lieuCommune, setLieuCommune] = useState(log?.lieuCommune || "");
   const [typeSortie, setTypeSortie] = useState(log?.typeSortie || "chasse");
+  const [typeSortieAutre, setTypeSortieAutre] = useState(log?.typeSortieAutre || "");
   const [avecChien, setAvecChien] = useState(log?.avecChien || false);
   const [dogId, setDogId] = useState(log?.dogId || null);
   const [espece, setEspece] = useState(log?.espece || "");
@@ -4007,9 +4230,14 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
   const [nombrePersonnes, setNombrePersonnes] = useState(log?.nombrePersonnes ? String(log.nombrePersonnes) : "");
   const [meteo, setMeteo] = useState(log?.meteo || "");
   const [temperature, setTemperature] = useState(log?.temperature != null ? String(log.temperature) : "");
-  const [terrain, setTerrain] = useState(log?.terrain || "");
+  const [terrain, setTerrain] = useState(log?.terrain || []);
+  const [terrainAutre, setTerrainAutre] = useState(log?.terrainAutre || "");
   const [distanceKm, setDistanceKm] = useState(log?.distanceKm != null ? String(log.distanceKm) : "");
   const [nombrePrises, setNombrePrises] = useState(log?.nombrePrises != null ? String(log.nombrePrises) : "");
+  const [nombreArrets, setNombreArrets] = useState(log?.nombreArrets != null ? String(log.nombreArrets) : "");
+  const [nombreLeves, setNombreLeves] = useState(log?.nombreLeves != null ? String(log.nombreLeves) : "");
+  const [nombreTires, setNombreTires] = useState(log?.nombreTires != null ? String(log.nombreTires) : "");
+  const [categorieGibier, setCategorieGibier] = useState(log?.categorieGibier || null);
   const [notes, setNotes] = useState(log?.notes || "");
   const [companions, setCompanions] = useState(log?.companions || []);
   const [photoFiles, setPhotoFiles] = useState([]);
@@ -4033,14 +4261,18 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
     setSaving(true);
     setError("");
     const fields = {
-      date, lieuNom, lieuCommune, typeSortie, avecChien, dogId,
+      date, lieuNom, lieuCommune, typeSortie, typeSortieAutre, avecChien, dogId,
       espece, observation, resultat,
       dureeMinutes: dureeMinutes ? parseInt(dureeMinutes, 10) : null,
       nombrePersonnes: nombrePersonnes ? parseInt(nombrePersonnes, 10) : null,
       meteo, temperature: temperature ? parseFloat(temperature) : null,
-      terrain,
+      terrain, terrainAutre,
       distanceKm: distanceKm ? parseFloat(distanceKm) : null,
       nombrePrises: nombrePrises ? parseInt(nombrePrises, 10) : null,
+      nombreArrets: nombreArrets ? parseInt(nombreArrets, 10) : null,
+      nombreLeves: nombreLeves ? parseInt(nombreLeves, 10) : null,
+      nombreTires: nombreTires ? parseInt(nombreTires, 10) : null,
+      categorieGibier,
       notes,
     };
     const companionIds = companions.map((c) => c.id);
@@ -4053,8 +4285,9 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
     }
   };
 
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={isEdit ? "Modifier la sortie" : "Nouvelle sortie"} onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <TextField label="Date" value={date} onChange={setDate} type="date" />
@@ -4062,9 +4295,12 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
         <TextField label="Commune / secteur" value={lieuCommune} onChange={setLieuCommune} placeholder="ex : Saint-Martin (28)" />
 
         <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>TYPE DE SORTIE</div>
-        <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
+        <div className="flex flex-wrap gap-2" style={{ marginBottom: typeSortie === "autre" ? 10 : 16 }}>
           {HUNTING_TYPES.map((t) => <Chip key={t.key} label={t.label} active={typeSortie === t.key} onClick={() => setTypeSortie(t.key)} />)}
         </div>
+        {typeSortie === "autre" && (
+          <TextField label="Précisez" value={typeSortieAutre} onChange={setTypeSortieAutre} placeholder="ex : Piégeage, régulation..." />
+        )}
 
         <ToggleRow label="Sortie avec un chien" value={avecChien} onToggle={() => setAvecChien((v) => !v)} />
         {avecChien && (
@@ -4109,11 +4345,28 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
           <div style={{ flex: 1 }}><TextField label="Distance (km)" value={distanceKm} onChange={setDistanceKm} type="number" placeholder="4.5" /></div>
         </div>
 
-        <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>TERRAIN</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>TERRAIN (plusieurs choix possibles)</div>
+        <div className="flex flex-wrap gap-2" style={{ marginBottom: terrain.includes("Autre") ? 10 : 16 }}>
+          {TERRAIN_OPTIONS.map((t) => (
+            <Chip key={t} label={t} active={terrain.includes(t)} onClick={() => setTerrain(terrain.includes(t) ? terrain.filter((x) => x !== t) : [...terrain, t])} />
+          ))}
+        </div>
+        {terrain.includes("Autre") && (
+          <TextField label="Précisez" value={terrainAutre} onChange={setTerrainAutre} placeholder="ex : Vignes, garrigue..." />
+        )}
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>CATÉGORIE DE GIBIER</div>
         <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
-          {TERRAIN_OPTIONS.map((t) => <Chip key={t} label={t} active={terrain === t} onClick={() => setTerrain(terrain === t ? "" : t)} />)}
+          {[["gros", "Gros gibier"], ["petit", "Petit gibier"]].map(([key, label]) => (
+            <Chip key={key} label={label} active={categorieGibier === key} onClick={() => setCategorieGibier(categorieGibier === key ? null : key)} />
+          ))}
         </div>
 
+        <div className="flex gap-3">
+          <div style={{ flex: 1 }}><TextField label="Arrêts" value={nombreArrets} onChange={setNombreArrets} type="number" placeholder="0" /></div>
+          <div style={{ flex: 1 }}><TextField label="Levés" value={nombreLeves} onChange={setNombreLeves} type="number" placeholder="0" /></div>
+          <div style={{ flex: 1 }}><TextField label="Tirés" value={nombreTires} onChange={setNombreTires} type="number" placeholder="0" /></div>
+        </div>
         <TextField label="Nombre de prises" value={nombrePrises} onChange={setNombrePrises} type="number" placeholder="0" />
         <TextField label="Notes personnelles" value={notes} onChange={setNotes} placeholder="Vos notes, pour vous seul..." textarea rows={3} />
 
@@ -4154,16 +4407,23 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
   const { colors } = useTheme();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const terrainLabel = (log.terrain || [])
+    .map((t) => (t === "Autre" && log.terrainAutre ? `Autre (${log.terrainAutre})` : t))
+    .join(", ");
   const rows = [
     ["Lieu", [log.lieuNom, log.lieuCommune].filter(Boolean).join(" — ") || null],
     ["Chien", log.avecChien ? log.dogNom || "Oui" : null],
+    ["Catégorie", log.categorieGibier === "gros" ? "Gros gibier" : log.categorieGibier === "petit" ? "Petit gibier" : null],
     ["Espèce", log.espece],
     ["Résultat", log.resultat],
     ["Durée", formatDuree(log.dureeMinutes)],
     ["Personnes présentes", log.nombrePersonnes],
     ["Météo", [log.meteo, log.temperature != null ? `${log.temperature}°C` : null].filter(Boolean).join(" · ") || null],
-    ["Terrain", log.terrain],
+    ["Terrain", terrainLabel || null],
     ["Distance", log.distanceKm != null ? `${log.distanceKm} km` : null],
+    ["Arrêts", log.nombreArrets],
+    ["Levés", log.nombreLeves],
+    ["Tirés", log.nombreTires],
     ["Prises", log.nombrePrises],
   ].filter(([, v]) => v !== null && v !== undefined && v !== "");
 
@@ -4179,9 +4439,11 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
             <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 12 }}>
-              <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "4px 10px" }}>{HUNTING_TYPE_LABEL[log.typeSortie] || log.typeSortie}</span>
+              <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "4px 10px" }}>
+                {log.typeSortie === "autre" && log.typeSortieAutre ? log.typeSortieAutre : HUNTING_TYPE_LABEL[log.typeSortie] || log.typeSortie}
+              </span>
               {!log.isOwner && (
-                <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: colors.textSecondary, background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px" }}>Vous étiez présent</span>
+                <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: colors.textSecondary, background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px" }}>Sortie partagée</span>
               )}
             </div>
             {!log.isOwner && log.owner && (
@@ -4316,7 +4578,14 @@ function HuntingLogStatsView({ stats }) {
     ["Temps sur le terrain", formatDuree(stats.totalMinutes) || "—"],
     ["Sorties avec chien", stats.avecChienCount],
     ["Espèces observées", stats.especesObservees],
+    ["Arrêts", stats.totalArrets],
+    ["Levés", stats.totalLeves],
+    ["Tirés", stats.totalTires],
   ];
+  const gibierRows = [
+    ["gros", "Gros gibier"],
+    ["petit", "Petit gibier"],
+  ].filter(([key]) => stats.parCategorieGibier[key].sorties > 0);
   return (
     <div style={{ padding: "0 16px 16px" }}>
       <div className="grid grid-cols-2 gap-3" style={{ marginBottom: 16 }}>
@@ -4335,6 +4604,19 @@ function HuntingLogStatsView({ stats }) {
               <div key={type} className="flex items-center justify-between" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "10px 14px" }}>
                 <span style={{ fontSize: 12.5, color: colors.text, fontWeight: 600 }}>{HUNTING_TYPE_LABEL[type] || type}</span>
                 <span style={{ fontSize: 12.5, color: colors.textSecondary }}>{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {gibierRows.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>GROS GIBIER / PETIT GIBIER</div>
+          <div className="flex flex-col gap-2">
+            {gibierRows.map(([key, label]) => (
+              <div key={key} className="flex items-center justify-between" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "10px 14px" }}>
+                <span style={{ fontSize: 12.5, color: colors.text, fontWeight: 600 }}>{label}</span>
+                <span style={{ fontSize: 12, color: colors.textSecondary }}>{stats.parCategorieGibier[key].sorties} sortie{stats.parCategorieGibier[key].sorties > 1 ? "s" : ""} · {stats.parCategorieGibier[key].prises} prise{stats.parCategorieGibier[key].prises > 1 ? "s" : ""}</span>
               </div>
             ))}
           </div>
@@ -4377,6 +4659,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
   const [query, setQuery] = useState("");
   const [filterType, setFilterType] = useState(null);
   const [filterDog, setFilterDog] = useState(null);
+  const [filterShared, setFilterShared] = useState(false); // sous-catégorie "sortie partagée" (voir badge, HuntingLogDetailSheet)
 
   const refresh = () => huntingLogService.fetchMyLogs().then(setLogs).catch(() => {});
   useEffect(() => {
@@ -4387,6 +4670,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
 
   const q = query.trim().toLowerCase();
   const filtered = logs.filter((l) => {
+    if (filterShared && l.isOwner) return false;
     if (filterType && l.typeSortie !== filterType) return false;
     if (filterDog && l.dogId !== filterDog) return false;
     if (selectedDay) {
@@ -4400,9 +4684,10 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
   const stats = useMemo(() => huntingLogService.computeStats(logs), [logs]);
 
   const closeForm = () => { setShowForm(false); setEditingLog(null); };
+  const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 65, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 65, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Carnet de chasse" onBack={onClose} />
       <div className="flex items-center gap-1.5" style={{ padding: "10px 16px 0", fontSize: 11, color: colors.textFaint }}>
         <Lock size={11} /><span>Strictement privé — visible par vous et les personnes que vous identifiez sur une sortie.</span>
@@ -4429,6 +4714,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
                   <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher (lieu, espèce, résultat...)" style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, color: colors.text, flex: 1 }} />
                 </div>
                 <div className="flex flex-wrap gap-2" style={{ marginBottom: 4 }}>
+                  <Chip label="Sorties partagées" active={filterShared} onClick={() => setFilterShared((v) => !v)} />
                   {HUNTING_TYPES.map((t) => <Chip key={t.key} label={t.label} active={filterType === t.key} onClick={() => setFilterType(filterType === t.key ? null : t.key)} />)}
                   {dogs.map((d) => <Chip key={d.id} label={d.nom} active={filterDog === d.id} onClick={() => setFilterDog(filterDog === d.id ? null : d.id)} />)}
                 </div>
@@ -4642,6 +4928,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
           <div style={{ paddingTop: 10 }}>
             {posts.map((p) => (
               <PostCard
+                onOpenProfile={onOpenProfile}
                 key={p.id}
                 post={p}
                 liked={liked.includes(p.id)}
@@ -4692,6 +4979,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
                 <RepostedInstantCard key={p.id} item={p} onOpen={setViewingInstant} />
               ) : (
                 <PostCard
+                  onOpenProfile={onOpenProfile}
                   key={p.id}
                   post={p}
                   liked={liked.includes(p.id)}
@@ -4748,7 +5036,31 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
       )}
       {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile(p); setEditing(false); }} />}
       {dogForm && <DogFormScreen onClose={() => setDogForm(false)} onSaved={(d) => { addDog(d); setDogForm(false); }} />}
-      {openDog && <DogPage dog={openDog} onClose={() => setOpenDog(null)} />}
+      {openDog && (
+        <DogPage
+          dog={openDog}
+          onClose={() => setOpenDog(null)}
+          onOpenProfile={onOpenProfile}
+          onOpenPlayer={onOpenPlayer}
+          meUsername={profile.username}
+          isAdmin={profile.role === "admin"}
+          liked={liked}
+          saved={saved}
+          reposted={reposted}
+          commentsByPost={commentsByPost}
+          onLike={onLike}
+          onSave={onSave}
+          onRepost={onRepost}
+          onAddComment={onAddComment}
+          onDelete={onDelete}
+          onDeleteComment={onDeleteComment}
+          onEditRequest={onEditRequest}
+          onReport={onReport}
+          onHide={onHide}
+          onBlock={onBlock}
+          onLoadComments={onLoadComments}
+        />
+      )}
       {followSheet && <FollowListSheet userId={profile.id} mode={followSheet} onClose={() => setFollowSheet(null)} onOpenProfile={onOpenProfile} />}
       {viewingInstant && (
         <SingleInstantViewer
@@ -4979,6 +5291,23 @@ function GroupConversationSettingsSheet({ conversationId, title, image, onClose,
     </div>
   );
 }
+// Les vocaux étaient toujours réenregistrés en tant que "audio/webm", quel que
+// soit ce que MediaRecorder produisait réellement — Safari (iOS/macOS) ne sait
+// PAS enregistrer en webm et choisit son propre conteneur (généralement
+// audio/mp4) : le fichier envoyé mentait donc sur son propre format, et la
+// lecture échouait selon l'appareil. On détecte ici le premier type que le
+// navigateur sait réellement produire, dans l'ordre de préférence.
+function pickAudioMimeType() {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac", "audio/ogg;codecs=opus", "audio/mpeg"];
+  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || "";
+}
+function audioExtensionFor(mimeType) {
+  if (mimeType.includes("mp4") || mimeType.includes("aac")) return "m4a";
+  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("mpeg")) return "mp3";
+  return "webm";
+}
 function ConversationThread({ conversationId, meId, onClose, onLeave, title, subtitle, type, image, otherUser, onOpenProfile, onBlock, onReport, onRead }) {
   const { colors } = useTheme();
   const [groupImage, setGroupImage] = useState(image || null);
@@ -4994,14 +5323,23 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   // last_read_at des AUTRES membres (jamais le mien) — sert à afficher "Lu"
   // sous mon dernier message envoyé, tenu à jour en direct par realtime.
   const [readState, setReadState] = useState([]);
+  const [replyTo, setReplyTo] = useState(null); // { id, texte, auteur } | null
+  const lastTapRef = useRef({ id: null, time: 0 });
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const textareaRef = useRef(null);
-
-  const refetch = () => messageService.fetchMessages(conversationId).then(setMessages).catch(() => {});
+  // Deux messages qui arrivent coup sur coup déclenchent deux refetch() qui
+  // peuvent se terminer dans le désordre — sans garde, la réponse la plus
+  // lente écrase la plus récente et la conversation reste figée jusqu'à ce
+  // qu'on la rouvre. On n'applique donc que la toute dernière requête lancée.
+  const fetchSeqRef = useRef(0);
+  const refetch = () => {
+    const seq = ++fetchSeqRef.current;
+    return messageService.fetchMessages(conversationId).then((rows) => { if (seq === fetchSeqRef.current) setMessages(rows); }).catch(() => {});
+  };
   const markRead = async () => {
     // Deux systèmes distincts à mettre à jour : last_read_at (badge de la
     // barre de navigation) et les notifications "message"/"group_invite" en
@@ -5025,8 +5363,9 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     let cancelled = false;
     setLoading(true);
     setLoadError("");
+    const seq = ++fetchSeqRef.current;
     messageService.fetchMessages(conversationId)
-      .then((rows) => { if (!cancelled) setMessages(rows); })
+      .then((rows) => { if (!cancelled && seq === fetchSeqRef.current) setMessages(rows); })
       .catch((e) => { if (!cancelled) setLoadError(e.message || "Impossible de charger les messages."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     messageService.fetchConversationReadState(conversationId, meId).then((rows) => { if (!cancelled) setReadState(rows); }).catch(() => {});
@@ -5055,13 +5394,47 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     if (!texte) return;
     setSending(true);
     setText("");
+    const replyToId = replyTo?.id || null;
+    setReplyTo(null);
     try {
-      const sent = await messageService.sendMessage(conversationId, texte);
+      const sent = await messageService.sendMessage(conversationId, texte, replyToId);
       setMessages((m) => (m.some((x) => x.id === sent.id) ? m : [...m, sent]));
     } catch (e) {
       setText(texte); // on redonne le texte pour ne pas le perdre
+      setReplyTo(replyToId ? replyTo : null);
     } finally {
       setSending(false);
+    }
+  };
+
+  const deleteMsg = async (msg) => {
+    const previous = messages;
+    setMessages((m) => m.filter((x) => x.id !== msg.id));
+    try {
+      await messageService.deleteMessage(msg.id, msg.message_media?.[0]?.url || null);
+    } catch (e) {
+      setMessages(previous); // échec réel : on remet le message, pas de suppression silencieuse fausse
+    }
+  };
+
+  // Double-tap (façon Instagram) = réagir avec un cœur. Détection manuelle
+  // (deux taps sur le même message en moins de 300ms) plutôt que le double-
+  // clic natif, peu fiable sur mobile pour un vrai double-tap tactile.
+  const handleBubbleTap = (msg) => {
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last.id === msg.id && now - last.time < 300) {
+      lastTapRef.current = { id: null, time: 0 };
+      const mine = msg.message_reactions?.some((r) => r.user_id === meId);
+      const previous = messages;
+      setMessages((ms) => ms.map((m) => {
+        if (m.id !== msg.id) return m;
+        const reactions = m.message_reactions || [];
+        return { ...m, message_reactions: mine ? reactions.filter((r) => r.user_id !== meId) : [...reactions, { user_id: meId, emoji: "❤️" }] };
+      }));
+      messageService.toggleMessageReaction(msg.id).catch(() => setMessages(previous));
+    } else {
+      lastTapRef.current = { id: msg.id, time: now };
     }
   };
 
@@ -5071,9 +5444,11 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     if (!file) return;
     setMediaError("");
     setSending(true);
+    const replyToId = replyTo?.id || null;
+    setReplyTo(null);
     try {
       const mediaType = file.type.startsWith("video") ? "video" : "image";
-      const sent = await messageService.sendMediaMessage(conversationId, file, mediaType);
+      const sent = await messageService.sendMediaMessage(conversationId, file, mediaType, null, replyToId);
       setMessages((m) => (m.some((x) => x.id === sent.id) ? m : [...m, sent]));
     } catch (e2) {
       setMediaError(e2.message || "Impossible d'envoyer ce fichier.");
@@ -5086,11 +5461,15 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     setMediaError("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const preferredType = pickAudioMimeType();
+      const recorder = preferredType ? new MediaRecorder(stream, { mimeType: preferredType }) : new MediaRecorder(stream);
       chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.start();
-      recorderRef.current = { recorder, stream };
+      // recorder.mimeType = ce que le navigateur utilise VRAIMENT (peut différer
+      // de preferredType) — c'est cette valeur, jamais une supposition, qui doit
+      // étiqueter le fichier envoyé.
+      recorderRef.current = { recorder, stream, mimeType: recorder.mimeType || preferredType || "audio/webm" };
       setRecordSeconds(0);
       setRecording(true);
       timerRef.current = window.setInterval(() => setRecordSeconds((s) => s + 1), 1000);
@@ -5112,11 +5491,17 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     ref.stream.getTracks().forEach((t) => t.stop());
     recorderRef.current = null;
     if (duration < 1) return; // enregistrement trop court, probablement annulé
-    const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-    const file = new File([blob], `vocal-${Date.now()}.webm`, { type: "audio/webm" });
+    // Content-Type déclaré au bucket sans paramètre de codec (ex : pas
+    // "audio/webm;codecs=opus") — la liste blanche du bucket "messages"
+    // (migration 015) attend le type de base exact.
+    const baseType = ref.mimeType.split(";")[0];
+    const blob = new Blob(chunksRef.current, { type: baseType });
+    const file = new File([blob], `vocal-${Date.now()}.${audioExtensionFor(baseType)}`, { type: baseType });
     setSending(true);
+    const replyToId = replyTo?.id || null;
+    setReplyTo(null);
     try {
-      const sent = await messageService.sendMediaMessage(conversationId, file, "audio", duration);
+      const sent = await messageService.sendMediaMessage(conversationId, file, "audio", duration, replyToId);
       setMessages((m) => (m.some((x) => x.id === sent.id) ? m : [...m, sent]));
     } catch (e) {
       setMediaError(e.message || "Impossible d'envoyer le message vocal.");
@@ -5128,9 +5513,10 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   // "Lu" affiché uniquement sous mon tout dernier message envoyé (comme
   // WhatsApp/iMessage) — pas sous chaque bulle, pour ne pas surcharger.
   const lastMineId = [...messages].reverse().find((x) => x.sender_id === meId)?.id || null;
+  const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
       {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
       <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -5147,8 +5533,22 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
             // En groupe, "Lu" signifie lu par TOUS les autres membres.
             const isLastMine = mine && m.id === lastMineId;
             const readByAll = isLastMine && readState.length > 0 && readState.every((r) => r.last_read_at && new Date(r.last_read_at) >= new Date(m.created_at));
+            const reactionCount = m.message_reactions?.length || 0;
+            const replyButton = (
+              <button onClick={() => setReplyTo({ id: m.id, texte: m.texte, auteur: mine ? "Vous" : (m.profiles?.nom || m.profiles?.username || "Utilisateur") })} aria-label="Répondre" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0, opacity: 0.5 }}>
+                <ArrowLeft size={13} color={colors.textFaint} style={{ transform: "scaleX(-1)" }} />
+              </button>
+            );
             return (
-              <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
+              <div key={m.id} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
+                {mine && (
+                  <>
+                    {replyButton}
+                    <button onClick={() => deleteMsg(m)} aria-label="Supprimer le message" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0, opacity: 0.5 }}>
+                      <Trash2 size={13} color={colors.textFaint} />
+                    </button>
+                  </>
+                )}
                 <div style={{ maxWidth: "78%" }}>
                   {!mine && (
                     m.profiles?.username ? (
@@ -5160,7 +5560,9 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                     )
                   )}
                   <div
+                    onClick={() => handleBubbleTap(m)}
                     style={{
+                      position: "relative",
                       background: mine ? `linear-gradient(135deg, ${colors.accent}, ${colors.accent}dd)` : colors.headerBg,
                       backdropFilter: mine ? "none" : "blur(20px)",
                       WebkitBackdropFilter: mine ? "none" : "blur(20px)",
@@ -5173,22 +5575,46 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                       lineHeight: 1.4,
                       wordBreak: "break-word",
                       boxShadow: mine ? `0 2px 8px ${colors.accent}30` : "0 1px 6px rgba(0,0,0,0.05)",
+                      cursor: "pointer",
+                      userSelect: "none",
                     }}
                   >
+                    {m.reply_to && (
+                      <div style={{ borderLeft: `2.5px solid ${mine ? "rgba(255,255,255,0.6)" : colors.accent}`, paddingLeft: 8, marginBottom: 6, opacity: 0.8 }}>
+                        <div style={{ fontSize: 10.5, fontWeight: 700 }}>{m.reply_to.profiles?.nom || m.reply_to.profiles?.username || "Utilisateur"}</div>
+                        <div style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{m.reply_to.texte || "Message"}</div>
+                      </div>
+                    )}
                     {media && <MessageBubble mine={mine} media={media} colors={colors} />}
                     {m.texte && <div style={{ marginTop: media ? 6 : 0 }}>{m.texte}</div>}
+                    {reactionCount > 0 && (
+                      <div style={{ position: "absolute", bottom: -8, [mine ? "left" : "right"]: -4, background: colors.surface, borderRadius: RADIUS.pill, padding: "1px 5px", fontSize: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 2 }}>
+                        <Heart size={9} color={colors.error} fill={colors.error} />
+                        {reactionCount > 1 && <span style={{ color: colors.textSecondary, fontWeight: 700 }}>{reactionCount}</span>}
+                      </div>
+                    )}
                   </div>
                   <div style={{ fontSize: 9.5, color: colors.textFaint, marginTop: 2, textAlign: mine ? "right" : "left" }}>
                     {formatRelativeDate(m.created_at)}
                     {isLastMine && (readByAll ? <span style={{ color: colors.accent, fontWeight: 600 }}> · Lu</span> : <span> · Envoyé</span>)}
                   </div>
                 </div>
+                {!mine && replyButton}
               </div>
             );
           })
         )}
       </div>
       {mediaError && <div style={{ margin: "0 12px 8px", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "8px 12px", fontSize: 11.5, color: colors.error }}>{mediaError}</div>}
+      {replyTo && (
+        <div className="flex items-center justify-between" style={{ margin: "0 12px 8px", background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "8px 12px" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: colors.accent }}>Réponse à {replyTo.auteur}</div>
+            <div style={{ fontSize: 11.5, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{replyTo.texte || "Message"}</div>
+          </div>
+          <button onClick={() => setReplyTo(null)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, marginLeft: 8, display: "flex" }}><X size={14} color={colors.textFaint} /></button>
+        </div>
+      )}
       <div className="flex items-end gap-2" style={{ padding: `10px 16px calc(14px + env(safe-area-inset-bottom, 0px))` }}>
         <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={pickMedia} style={{ display: "none" }} />
         {recording ? (
@@ -5272,8 +5698,9 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
     return () => { cancelled = true; clearTimeout(t); };
   }, [query]);
 
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Rechercher" onCloseX={onClose} />
       <div style={{ padding: "14px 16px 10px" }}>
         <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
@@ -5371,8 +5798,9 @@ function NewConversationSheet({ onClose, onStarted }) {
     }
   };
 
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={groupMode ? "Nouveau groupe" : "Nouveau message"} onCloseX={onClose} />
       <div style={{ padding: "14px 16px 10px" }}>
         <SegmentedControl
@@ -5703,8 +6131,9 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onGoToF
     onUnreadChange?.(0);
   };
 
+  const swipeBack = useSwipeBack(onClose);
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 50, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 50, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Notifications" onBack={onClose} />
       {items.some((n) => !n.lu) && (
         <div style={{ padding: "0 16px 8px", textAlign: "right" }}>
@@ -5801,6 +6230,7 @@ function SavedList({ posts, savedIds, onUnsave }) {
 function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hiddenCount, reports, notifPrefs, setNotifPrefs, privacy, setPrivacy }) {
   const { colors } = useTheme();
   const [section, setSection] = useState(null);
+  const swipeBackSection = useSwipeBack(section ? () => setSection(null) : null);
   const [editing, setEditing] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pw1, setPw1] = useState("");
@@ -5842,7 +6272,7 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
       </div>
 
       {section && (
-        <div style={{ position: "absolute", inset: 0, background: colors.background, display: "flex", flexDirection: "column" }}>
+        <div {...swipeBackSection} style={{ position: "absolute", inset: 0, background: colors.background, display: "flex", flexDirection: "column" }}>
           <ScreenHeader title={rows.find((r) => r.key === section).label} onBack={() => setSection(null)} />
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
             {section === "compte" && (
@@ -6055,6 +6485,7 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
   const [sub, setSub] = useState(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const swipeBackSub = useSwipeBack(sub ? () => setSub(null) : null);
   if (!open) return null;
   const close = () => { setSub(null); setConfirmLogout(false); onClose(); };
   const doLogout = async () => {
@@ -6106,7 +6537,7 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
         </div>
       </div>
       {sub && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 56, background: colors.background, display: "flex", flexDirection: "column" }}>
+        <div {...swipeBackSub} style={{ position: "absolute", inset: 0, zIndex: 56, background: colors.background, display: "flex", flexDirection: "column" }}>
           <ScreenHeader title={sub.label} onBack={() => setSub(null)} />
           {sub.appearance ? (
             <div style={{ padding: 20 }}>

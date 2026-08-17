@@ -62,9 +62,15 @@ function mapLogRow(row, photos, meId) {
     nombrePersonnes: row.nombre_personnes,
     meteo: row.meteo,
     temperature: row.temperature,
-    terrain: row.terrain,
+    terrain: row.terrain || [],
+    terrainAutre: row.terrain_autre,
+    typeSortieAutre: row.type_sortie_autre,
     distanceKm: row.distance_km,
     nombrePrises: row.nombre_prises,
+    nombreArrets: row.nombre_arrets,
+    nombreLeves: row.nombre_leves,
+    nombreTires: row.nombre_tires,
+    categorieGibier: row.categorie_gibier,
     notes: isOwner ? row.notes : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -127,7 +133,7 @@ async function uploadLogPhotos(logId, files) {
   return uploaded;
 }
 
-function toRow({ date, lieuNom, lieuCommune, lieuLat, lieuLng, typeSortie, avecChien, dogId, espece, observation, resultat, dureeMinutes, nombrePersonnes, meteo, temperature, terrain, distanceKm, nombrePrises, notes }) {
+function toRow({ date, lieuNom, lieuCommune, lieuLat, lieuLng, typeSortie, typeSortieAutre, avecChien, dogId, espece, observation, resultat, dureeMinutes, nombrePersonnes, meteo, temperature, terrain, terrainAutre, distanceKm, nombrePrises, nombreArrets, nombreLeves, nombreTires, categorieGibier, notes }) {
   return {
     date,
     lieu_nom: lieuNom || null,
@@ -135,6 +141,7 @@ function toRow({ date, lieuNom, lieuCommune, lieuLat, lieuLng, typeSortie, avecC
     lieu_lat: lieuLat ?? null,
     lieu_lng: lieuLng ?? null,
     type_sortie: typeSortie,
+    type_sortie_autre: typeSortie === "autre" ? typeSortieAutre || null : null,
     avec_chien: !!avecChien,
     dog_id: avecChien ? dogId || null : null,
     espece: espece || null,
@@ -144,9 +151,14 @@ function toRow({ date, lieuNom, lieuCommune, lieuLat, lieuLng, typeSortie, avecC
     nombre_personnes: nombrePersonnes || null,
     meteo: meteo || null,
     temperature: temperature === "" || temperature === undefined ? null : temperature,
-    terrain: terrain || null,
+    terrain: terrain && terrain.length > 0 ? terrain : null,
+    terrain_autre: terrain && terrain.includes("Autre") ? terrainAutre || null : null,
     distance_km: distanceKm === "" || distanceKm === undefined ? null : distanceKm,
     nombre_prises: nombrePrises === "" || nombrePrises === undefined ? null : nombrePrises,
+    nombre_arrets: nombreArrets === "" || nombreArrets === undefined ? null : nombreArrets,
+    nombre_leves: nombreLeves === "" || nombreLeves === undefined ? null : nombreLeves,
+    nombre_tires: nombreTires === "" || nombreTires === undefined ? null : nombreTires,
+    categorie_gibier: categorieGibier || null,
     notes: notes || null,
   };
 }
@@ -203,27 +215,51 @@ export async function deleteLog(logId, photoPaths = []) {
   return true;
 }
 
-/** Statistiques personnelles calculées côté client à partir des sorties déjà
- *  chargées — le volume par utilisateur reste modeste, une vraie agrégation
- *  SQL n'apporterait rien de plus ici. */
+/**
+ * Statistiques personnelles calculées côté client à partir des sorties déjà
+ * chargées — le volume par utilisateur reste modeste, une vraie agrégation
+ * SQL n'apporterait rien de plus ici.
+ *
+ * IMPORTANT : ne compte QUE les sorties dont on est propriétaire. Depuis que
+ * fetchMyLogs() renvoie aussi les sorties où on a été identifié comme
+ * compagnon (voir migration 034), les inclure ici gonflerait les stats
+ * personnelles avec des sorties qui ne sont pas les siennes — une "sortie
+ * partagée" reste visible dans la liste, mais ne doit jamais compter comme
+ * une sortie à soi.
+ */
 export function computeStats(logs) {
+  const own = logs.filter((l) => l.isOwner !== false);
   const now = new Date();
   const isThisMonth = (d) => d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   const isThisYear = (d) => d.getFullYear() === now.getFullYear();
 
-  const parsed = logs.map((l) => ({ ...l, _date: new Date(l.date) }));
+  const parsed = own.map((l) => ({ ...l, _date: new Date(l.date) }));
   const byType = {};
   const byResultat = {};
   const bySpecies = new Set();
   const byDog = {};
   let totalMinutes = 0;
   let avecChienCount = 0;
+  let totalArrets = 0;
+  let totalLeves = 0;
+  let totalTires = 0;
+  const parCategorieGibier = {
+    gros: { sorties: 0, prises: 0 },
+    petit: { sorties: 0, prises: 0 },
+  };
 
   for (const l of parsed) {
     byType[l.typeSortie] = (byType[l.typeSortie] || 0) + 1;
     if (l.resultat) byResultat[l.resultat] = (byResultat[l.resultat] || 0) + 1;
     if (l.espece) bySpecies.add(l.espece);
     if (l.dureeMinutes) totalMinutes += l.dureeMinutes;
+    totalArrets += l.nombreArrets || 0;
+    totalLeves += l.nombreLeves || 0;
+    totalTires += l.nombreTires || 0;
+    if (l.categorieGibier === "gros" || l.categorieGibier === "petit") {
+      parCategorieGibier[l.categorieGibier].sorties++;
+      parCategorieGibier[l.categorieGibier].prises += l.nombrePrises || 0;
+    }
     if (l.avecChien) {
       avecChienCount++;
       if (l.dogId) {
@@ -236,7 +272,7 @@ export function computeStats(logs) {
   }
 
   return {
-    total: logs.length,
+    total: own.length,
     ceMois: parsed.filter((l) => isThisMonth(l._date)).length,
     cetteAnnee: parsed.filter((l) => isThisYear(l._date)).length,
     totalMinutes,
@@ -246,5 +282,9 @@ export function computeStats(logs) {
     parType: byType,
     parResultat: byResultat,
     parChien: Object.values(byDog).sort((a, b) => b.count - a.count),
+    totalArrets,
+    totalLeves,
+    totalTires,
+    parCategorieGibier,
   };
 }

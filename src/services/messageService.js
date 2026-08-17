@@ -189,22 +189,26 @@ export async function fetchConversationMembers(conversationId) {
   return data.filter((r) => r.profiles).map((r) => ({ id: r.profiles.id, username: r.profiles.username, nom: r.profiles.nom || r.profiles.username, avatar: r.profiles.avatar_url }));
 }
 
+// Pièce commune à toutes les lectures de messages : expéditeur, média,
+// message cité (réponse ciblée) et réactions (voir migration 038).
+const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!messages_reply_to_id_fkey(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username)), message_reactions(user_id, emoji)";
+
 export async function fetchMessages(conversationId) {
   const { data, error } = await supabase
     .from("messages")
-    .select("*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds)")
+    .select(MESSAGE_SELECT)
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
   if (error) throw error;
   return data;
 }
 
-export async function sendMessage(conversationId, texte) {
+export async function sendMessage(conversationId, texte, replyToId = null) {
   const me = await requireUser();
   const { data, error } = await supabase
     .from("messages")
-    .insert({ conversation_id: conversationId, sender_id: me.id, texte })
-    .select("*, profiles!messages_sender_id_fkey(username, nom, avatar_url)")
+    .insert({ conversation_id: conversationId, sender_id: me.id, texte, reply_to_id: replyToId })
+    .select(MESSAGE_SELECT)
     .single();
   if (error) throw error;
   return data;
@@ -215,11 +219,11 @@ export async function sendMessage(conversationId, texte) {
  * "messages" (voir migration 015). `mediaType` doit être 'image' | 'video' |
  * 'audio'. `durationSeconds` n'est utile que pour les vocaux.
  */
-export async function sendMediaMessage(conversationId, file, mediaType, durationSeconds = null) {
+export async function sendMediaMessage(conversationId, file, mediaType, durationSeconds = null, replyToId = null) {
   const me = await requireUser();
   const { data: message, error: msgError } = await supabase
     .from("messages")
-    .insert({ conversation_id: conversationId, sender_id: me.id, texte: null })
+    .insert({ conversation_id: conversationId, sender_id: me.id, texte: null, reply_to_id: replyToId })
     .select("*, profiles!messages_sender_id_fkey(username, nom, avatar_url)")
     .single();
   if (msgError) throw msgError;
@@ -243,6 +247,44 @@ export async function sendMediaMessage(conversationId, file, mediaType, duration
 }
 
 /**
+ * Supprime un message envoyé par l'utilisateur connecté (RLS : "sender
+ * deletes own messages", migration 035). message_media est en cascade côté
+ * base, mais le fichier Storage lui-même ne l'est pas — on le retire ici en
+ * best-effort à partir de son URL publique (chemin après "/messages/").
+ */
+export async function deleteMessage(messageId, mediaUrl = null) {
+  if (mediaUrl) {
+    const marker = "/messages/";
+    const idx = mediaUrl.indexOf(marker);
+    if (idx !== -1) {
+      const path = decodeURIComponent(mediaUrl.slice(idx + marker.length));
+      await supabase.storage.from("messages").remove([path]).catch(() => {});
+    }
+  }
+  const { error } = await supabase.from("messages").delete().eq("id", messageId);
+  if (error) throw error;
+  return true;
+}
+
+/**
+ * Double-tap sur un message = cœur, façon Instagram (voir migration 038).
+ * Bascule : ajoute la réaction si absente, la retire si on avait déjà réagi
+ * (une seule réaction par personne et par message, contrainte primary key).
+ */
+export async function toggleMessageReaction(messageId, emoji = "❤️") {
+  const me = await requireUser();
+  const { data: existing } = await supabase.from("message_reactions").select("emoji").eq("message_id", messageId).eq("user_id", me.id).maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", me.id);
+    if (error) throw error;
+    return { reacted: false };
+  }
+  const { error } = await supabase.from("message_reactions").insert({ message_id: messageId, user_id: me.id, emoji });
+  if (error) throw error;
+  return { reacted: true };
+}
+
+/**
  * Abonnement realtime aux nouveaux messages d'une conversation (Supabase
  * Realtime — voir migration 012). Renvoie une fonction de désabonnement.
  *
@@ -252,7 +294,9 @@ export async function sendMediaMessage(conversationId, file, mediaType, duration
  * Si on ne réagissait qu'à l'insert de `messages`, un rechargement déclenché
  * trop tôt afficherait le message sans son média, sans jamais se corriger.
  * On réagit donc aussi à l'insert de message_media pour redéclencher un
- * rechargement une fois le média réellement disponible.
+ * rechargement une fois le média réellement disponible — et à la suppression
+ * d'un message pour que sa disparition soit vue par l'autre participant sans
+ * qu'il ait besoin de rouvrir la conversation.
  */
 export function subscribeToConversation(conversationId, onInsert) {
   const channel = supabase
@@ -262,6 +306,12 @@ export function subscribeToConversation(conversationId, onInsert) {
     })
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_media" }, () => {
       onInsert(null); // on ne sait pas filtrer par conversation ici : on recharge, c'est peu coûteux
+    })
+    .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, () => {
+      onInsert(null); // idem : le payload DELETE ne contient pas conversation_id, on recharge
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () => {
+      onInsert(null); // le double-tap de l'autre personne doit apparaître sans rouvrir la conversation
     })
     .subscribe();
   return () => supabase.removeChannel(channel);
