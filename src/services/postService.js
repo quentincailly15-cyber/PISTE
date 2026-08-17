@@ -72,7 +72,7 @@ function generateVideoThumbnail(file, timeoutMs = 6000) {
   });
 }
 
-export async function createPost({ texte, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], groupId = null }) {
+export async function createPost({ texte, titre, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
@@ -86,6 +86,7 @@ export async function createPost({ texte, type, animal, pratique, dogId, departe
       author_id: userData.user.id,
       type,
       texte,
+      titre: titre || null,
       animal,
       pratique,
       departement,
@@ -119,12 +120,15 @@ export async function createPost({ texte, type, animal, pratique, dogId, departe
     let thumbnailUrl = null;
     if (mediaType === "video") {
       try {
-        const thumbBlob = await generateVideoThumbnail(file);
-        const thumbPath = `${userData.user.id}/${post.id}/${i}-thumb.jpg`;
+        // Miniature choisie manuellement en priorité, sinon extraite
+        // automatiquement d'une image de la vidéo.
+        const thumbBlob = thumbnailFile && i === 0 ? thumbnailFile : await generateVideoThumbnail(file);
+        const thumbExt = thumbnailFile && i === 0 ? thumbnailFile.name : "thumb.jpg";
+        const thumbPath = `${userData.user.id}/${post.id}/${i}-thumb-${thumbExt}`;
         const { error: thumbUploadError } = await supabase.storage.from("posts").upload(thumbPath, thumbBlob, {
           cacheControl: "3600",
           upsert: false,
-          contentType: "image/jpeg",
+          contentType: thumbnailFile && i === 0 ? thumbnailFile.type : "image/jpeg",
         });
         if (!thumbUploadError) {
           thumbnailUrl = supabase.storage.from("posts").getPublicUrl(thumbPath).data.publicUrl;
@@ -141,6 +145,7 @@ export async function createPost({ texte, type, animal, pratique, dogId, departe
       ordre: i,
       type: mediaType,
       thumbnail_url: thumbnailUrl,
+      duration_seconds: mediaType === "video" ? mediaDurations[i] || null : null,
     });
     if (mediaError) throw mediaError;
     uploadedMedia.push({ url: publicUrl.publicUrl, type: mediaType, thumbnail_url: thumbnailUrl });
@@ -157,6 +162,7 @@ export async function updatePost(postId, fields) {
     .from("posts")
     .update({
       texte: fields.texte,
+      titre: fields.titre,
       animal: fields.animal,
       pratique: fields.pratique,
       departement: fields.departement,
@@ -222,7 +228,7 @@ export async function addComment(postId, texte, parentId = null) {
 export async function fetchCandidatePosts({ limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds)")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -234,7 +240,7 @@ export async function fetchCandidatePosts({ limit = 50 } = {}) {
 export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds)")
     .eq("group_id", groupId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -246,7 +252,7 @@ export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
 export async function fetchUserPosts(userId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds)")
     .eq("author_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -319,7 +325,7 @@ export async function fetchMyRepostedPosts() {
   if (!userData.user) return [];
   const { data, error } = await supabase
     .from("reposts")
-    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url))")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds))")
     .eq("user_id", userData.user.id)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -331,7 +337,7 @@ export async function fetchMyRepostedPosts() {
 export async function fetchUserRepostedPosts(userId) {
   const { data, error } = await supabase
     .from("reposts")
-    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url))")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds))")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;

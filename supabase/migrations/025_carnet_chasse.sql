@@ -12,7 +12,7 @@
 -- pour le propriétaire authentifié (voir huntingLogService.js).
 -- =============================================================================
 
-create table hunting_logs (
+create table if not exists hunting_logs (
   id                uuid primary key default gen_random_uuid(),
   user_id           uuid not null references profiles(id) on delete cascade,
   date              date not null,
@@ -43,10 +43,11 @@ create table hunting_logs (
 alter table hunting_logs enable row level security;
 
 -- Une seule règle, volontairement stricte : le propriétaire, rien d'autre.
+drop policy if exists "owner manages own hunting logs" on hunting_logs;
 create policy "owner manages own hunting logs" on hunting_logs
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-create table hunting_log_photos (
+create table if not exists hunting_log_photos (
   id          uuid primary key default gen_random_uuid(),
   log_id      uuid not null references hunting_logs(id) on delete cascade,
   path        text not null, -- chemin Storage brut (bucket privé "carnet") — pas d'URL publique stockée
@@ -55,6 +56,7 @@ create table hunting_log_photos (
 );
 alter table hunting_log_photos enable row level security;
 
+drop policy if exists "owner manages own hunting log photos" on hunting_log_photos;
 create policy "owner manages own hunting log photos" on hunting_log_photos
   for all using (
     exists (select 1 from hunting_logs hl where hl.id = hunting_log_photos.log_id and hl.user_id = auth.uid())
@@ -84,11 +86,21 @@ values ('carnet', 'carnet', false, 10485760, array['image/jpeg', 'image/png', 'i
 on conflict (id) do nothing;
 
 -- Chemin attendu : {user_id}/{log_id}/{index}-{nom_fichier}.
+drop policy if exists "owner reads own carnet photos" on storage.objects;
 create policy "owner reads own carnet photos" on storage.objects for select
   using (bucket_id = 'carnet' and auth.uid()::text = (storage.foldername(name))[1]);
+drop policy if exists "owner uploads own carnet photos" on storage.objects;
 create policy "owner uploads own carnet photos" on storage.objects for insert
   with check (bucket_id = 'carnet' and auth.uid()::text = (storage.foldername(name))[1]);
+drop policy if exists "owner updates own carnet photos" on storage.objects;
 create policy "owner updates own carnet photos" on storage.objects for update
   using (bucket_id = 'carnet' and auth.uid()::text = (storage.foldername(name))[1]);
+drop policy if exists "owner deletes own carnet photos" on storage.objects;
 create policy "owner deletes own carnet photos" on storage.objects for delete
   using (bucket_id = 'carnet' and auth.uid()::text = (storage.foldername(name))[1]);
+
+-- Force PostgREST à relire immédiatement le schéma (la relation
+-- hunting_logs ↔ hunting_log_photos doit être visible sans attendre le
+-- rafraîchissement automatique, sinon l'API renvoie une erreur "could not
+-- find a relationship" même quand tout est correctement créé en base).
+notify pgrst, 'reload schema';

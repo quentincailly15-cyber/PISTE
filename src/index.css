@@ -18,3 +18,13 @@ html {
 input, textarea, select {
   font-size: 16px !important;
 }
+
+@keyframes pisteFadeSlideUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pisteFloatBlob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-14px, 18px) scale(1.08); }
+}

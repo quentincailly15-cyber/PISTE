@@ -6,6 +6,7 @@ import {
   Bookmark, HelpCircle, AlertTriangle, LogOut, Moon, Sun, Monitor, BarChart3,
   Heart, MessageSquare, Share2, MoreHorizontal, Camera, Play, BookOpen, Mic,
   Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud, Target,
+  RotateCw, Smartphone,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as traceService from "./services/traceService.js";
@@ -231,7 +232,7 @@ function EmptyState({ title, subtitle, ctaLabel, onCta }) {
 }
 function TextField({ label, value, onChange, placeholder, type = "text", error, textarea, rows = 3 }) {
   const { colors } = useTheme();
-  const style = { width: "100%", border: `1.5px solid ${error ? colors.error : colors.border}`, background: colors.surface, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 14, color: colors.text, outline: "none", boxSizing: "border-box", fontFamily: FONT };
+  const style = { width: "100%", border: `1.5px solid ${error ? colors.error : "transparent"}`, background: colors.surfaceAlt, borderRadius: textarea ? RADIUS.lg : RADIUS.pill, padding: textarea ? "13px 16px" : "13px 18px", fontSize: 14, color: colors.text, outline: "none", boxSizing: "border-box", fontFamily: FONT, boxShadow: error ? "none" : "inset 0 1px 3px rgba(0,0,0,0.04)", transition: "border-color 150ms ease" };
   return (
     <div style={{ marginBottom: SPACE.lg }}>
       {label && <label style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, display: "block" }}>{label}</label>}
@@ -448,6 +449,17 @@ function buildFeed(posts, ctx) {
   const scored = calculateScores(ageOk, ctx);
   return diversifyFeed(sortFeed(scored));
 }
+// Fil purement chronologique (le plus récent en premier, sans pondération
+// affinité/interaction/qualité) — utilisé par l'onglet "Nouveautés" de
+// Vidéo - Vidéo : une nouvelle vidéo doit toujours prendre la première place
+// dès sa publication, jamais être devancée par une vidéo plus ancienne mais
+// mieux notée par l'algorithme (contrairement au Fil "Pour toi").
+function buildChronologicalFeed(posts, ctx) {
+  const candidates = getCandidatePosts(posts);
+  const safe = filterSafety(candidates, ctx.blockedAuthors || [], ctx.hiddenPostIds || []);
+  const ageOk = filterAge(safe, !!ctx.viewerIsMinor);
+  return [...ageOk].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
 
 // --- Découvrir : mémoire locale des contenus déjà montrés --------------------
 // Persistée dans localStorage (survit à un rafraîchissement), scindée par
@@ -510,6 +522,12 @@ function formatRelativeDate(iso) {
   const days = Math.floor(hours / 24);
   return `il y a ${days} j`;
 }
+function formatVideoDuration(seconds) {
+  if (!seconds) return null;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 function mapPostRow(row) {
   return {
     id: row.id,
@@ -519,6 +537,7 @@ function mapPostRow(row) {
     texte: row.texte,
     image: row.post_media?.[0]?.type === "video" ? row.post_media?.[0]?.thumbnail_url || null : row.post_media?.[0]?.url || null,
     videoUrl: row.post_media?.[0]?.type === "video" ? row.post_media[0].url : null,
+    duree: formatVideoDuration(row.post_media?.[0]?.duration_seconds),
     type: row.type,
     animal: row.animal,
     pratique: row.pratique,
@@ -532,7 +551,7 @@ function mapPostRow(row) {
     groupId: row.group_id || null,
     date: formatRelativeDate(row.created_at),
     createdAt: new Date(row.created_at).getTime(),
-    titre: row.texte, // pour VideoCard, qui affiche "titre"
+    titre: row.titre || row.texte || null,
   };
 }
 const ANIMALS = ["Chevreuil", "Sanglier", "Cerf", "Lièvre", "Faisan", "Canard", "Autre", "Aucun"];
@@ -654,23 +673,95 @@ function OnboardingHeader({ onBack, step, total }) {
     </div>
   );
 }
+// Petit badge "BETA" — collé au wordmark PISTE (header de l'app et écrans
+// de connexion/inscription) pour rappeler que le produit est en test.
+function BetaBadge({ size = 9 }) {
+  const { colors } = useTheme();
+  return (
+    <span style={{ fontSize: size, fontWeight: 800, letterSpacing: 0.4, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "2.5px 6.5px", lineHeight: 1 }}>
+      BETA
+    </span>
+  );
+}
+// Fond animé "verre liquide" + apparition en fondu/glissé — utilisé par les
+// écrans de connexion/inscription pour reprendre la DA glass/pilule du reste
+// de l'app (jusqu'ici ces écrans étaient restés plats, sans animation).
+function AuthBackdrop({ children }) {
+  const { colors } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 20);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div style={{ position: "relative", height: "100%", overflow: "hidden", background: colors.background }}>
+      <div style={{ position: "absolute", top: -90, left: -70, width: 220, height: 220, borderRadius: "50%", background: colors.accent, opacity: 0.2, filter: "blur(60px)", animation: "pisteFloatBlob 9s ease-in-out infinite", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", bottom: -110, right: -80, width: 260, height: 260, borderRadius: "50%", background: colors.accent, opacity: 0.14, filter: "blur(70px)", animation: "pisteFloatBlob 11s ease-in-out infinite reverse", pointerEvents: "none" }} />
+      <div style={{ position: "relative", height: "100%", opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(16px)", transition: "opacity 480ms ease, transform 480ms ease" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+// Mini-guide "ajouter PISTE sur l'écran d'accueil iPhone" — même carte réutilisée
+// en bas de la connexion/inscription (repliée, compacte) et tout en haut de la
+// liste dans Aide (voir AideScreen). Repliable pour ne jamais prendre trop de place.
+function AddToHomeScreenTip({ defaultOpen = false }) {
+  const { colors } = useTheme();
+  const [open, setOpen] = useState(defaultOpen);
+  const steps = [
+    <>Ouvrez le lien PISTE dans Safari</>,
+    <>Appuyez sur les <strong>trois petits points</strong> ou l'icône <strong>Partager</strong></>,
+    <>Appuyez sur <strong>Partager</strong></>,
+    <>Descendez jusqu'à <strong>Sur l'écran d'accueil</strong></>,
+  ];
+  return (
+    <div style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.xl, overflow: "hidden", boxShadow: "0 1px 8px rgba(0,0,0,0.05)" }}>
+      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2" style={{ width: "100%", background: "none", border: "none", padding: "11px 14px", cursor: "pointer" }}>
+        <div style={{ width: 24, height: 24, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Smartphone size={12} color={colors.accent} />
+        </div>
+        <span style={{ flex: 1, textAlign: "left", fontSize: 12, fontWeight: 600, color: colors.text }}>Installer PISTE sur votre iPhone</span>
+        <ChevronRight size={14} color={colors.textFaint} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 150ms", flexShrink: 0 }} />
+      </button>
+      {open && (
+        <div style={{ padding: "0 14px 13px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {steps.map((s, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div style={{ width: 18, height: 18, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: colors.textFaint }}>{i + 1}</span>
+              </div>
+              <span style={{ fontSize: 11.5, color: colors.textSecondary, lineHeight: 1.4 }}>{s}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 function StepSplash({ onStart, onLogin }) {
   const { colors } = useTheme();
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: "0 32px", textAlign: "center", gap: 22 }}>
-      <Logo size={64} />
-      <div>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: 4, color: colors.text }}>PISTE</div>
-        <div style={{ fontSize: 13.5, color: colors.textSecondary, marginTop: 8, lineHeight: 1.5 }}>Le réseau social des passionnés de chasse.</div>
-      </div>
-      <div style={{ width: "100%", marginTop: 12 }}>
-        <Button onClick={onStart}>Commencer</Button>
-        <div style={{ marginTop: 14 }}>
-          <span style={{ fontSize: 12.5, color: colors.textFaint }}>Déjà un compte ? </span>
-          <button onClick={onLogin} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Se connecter</button>
+    <AuthBackdrop>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: "0 32px", textAlign: "center", gap: 22, animation: "pisteFadeSlideUp 560ms cubic-bezier(0.22, 1, 0.36, 1) both" }}>
+        <Logo size={64} />
+        <div>
+          <div className="flex items-center justify-center gap-2">
+            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: 4, color: colors.text }}>PISTE</div>
+            <BetaBadge />
+          </div>
+          <div style={{ fontSize: 13.5, color: colors.textSecondary, marginTop: 8, lineHeight: 1.5 }}>Le réseau social des passionnés de chasse.</div>
+        </div>
+        <div style={{ width: "100%", marginTop: 12 }}>
+          <Button onClick={onStart}>Commencer</Button>
+          <div style={{ marginTop: 14 }}>
+            <span style={{ fontSize: 12.5, color: colors.textFaint }}>Déjà un compte ? </span>
+            <button onClick={onLogin} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Se connecter</button>
+          </div>
+          <div style={{ marginTop: 22 }}><AddToHomeScreenTip /></div>
         </div>
       </div>
-    </div>
+    </AuthBackdrop>
   );
 }
 function StepSignup({ data, setData, onNext, onBack, onLogin }) {
@@ -681,21 +772,26 @@ function StepSignup({ data, setData, onNext, onBack, onLogin }) {
   const pwErr = touched && data.password.length < 8 ? "8 caractères minimum" : null;
   const valid = data.pseudo.trim().length >= 3 && /^\S+@\S+\.\S+$/.test(data.email) && data.password.length >= 8;
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <OnboardingHeader onBack={onBack} step={0} total={6} />
-      <div style={{ padding: "16px 20px", flex: 1 }}>
-        <div style={{ fontSize: 19, fontWeight: 800, color: colors.text, marginBottom: 4 }}>Créer votre compte</div>
-        <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 22 }}>Rejoignez la communauté PISTE.</div>
-        <TextField label="Pseudo" value={data.pseudo} onChange={(v) => setData({ ...data, pseudo: v })} placeholder="ex : chasseur_vosges" error={pseudoErr} />
-        <TextField label="E-mail" value={data.email} onChange={(v) => setData({ ...data, email: v })} placeholder="vous@exemple.com" type="email" error={emailErr} />
-        <TextField label="Mot de passe" value={data.password} onChange={(v) => setData({ ...data, password: v })} placeholder="8 caractères minimum" type="password" error={pwErr} />
-        <Button disabled={touched ? !valid : false} onClick={() => { setTouched(true); if (valid) onNext(); }}>Continuer</Button>
-        <div style={{ textAlign: "center", marginTop: 14 }}>
-          <span style={{ fontSize: 12.5, color: colors.textFaint }}>Déjà un compte ? </span>
-          <button onClick={onLogin} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Se connecter</button>
+    <AuthBackdrop>
+      <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+        <OnboardingHeader onBack={onBack} step={0} total={6} />
+        <div style={{ padding: "16px 20px", flex: 1, animation: "pisteFadeSlideUp 480ms cubic-bezier(0.22, 1, 0.36, 1) both" }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+            <div style={{ fontSize: 19, fontWeight: 800, color: colors.text }}>Créer votre compte</div>
+            <BetaBadge />
+          </div>
+          <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 22 }}>Rejoignez la communauté PISTE.</div>
+          <TextField label="Pseudo" value={data.pseudo} onChange={(v) => setData({ ...data, pseudo: v })} placeholder="ex : chasseur_vosges" error={pseudoErr} />
+          <TextField label="E-mail" value={data.email} onChange={(v) => setData({ ...data, email: v })} placeholder="vous@exemple.com" type="email" error={emailErr} />
+          <TextField label="Mot de passe" value={data.password} onChange={(v) => setData({ ...data, password: v })} placeholder="8 caractères minimum" type="password" error={pwErr} />
+          <Button disabled={touched ? !valid : false} onClick={() => { setTouched(true); if (valid) onNext(); }}>Continuer</Button>
+          <div style={{ textAlign: "center", marginTop: 14 }}>
+            <span style={{ fontSize: 12.5, color: colors.textFaint }}>Déjà un compte ? </span>
+            <button onClick={onLogin} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Se connecter</button>
+          </div>
         </div>
       </div>
-    </div>
+    </AuthBackdrop>
   );
 }
 function StepBirthdate({ data, setData, onNext, onBack }) {
@@ -907,33 +1003,39 @@ function LoginScreen({ onBack, onSignup }) {
     }
   };
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <div className="flex items-center px-5 pt-5 pb-2"><IconButton icon={ArrowLeft} onClick={onBack} /></div>
-      <div style={{ padding: "16px 20px", flex: 1 }}>
-        <div style={{ fontSize: 19, fontWeight: 800, color: colors.text, marginBottom: 4 }}>Connexion</div>
-        <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 22 }}>Accédez à votre compte PISTE.</div>
-        <TextField label="E-mail" value={email} onChange={setEmail} placeholder="vous@exemple.com" type="email" />
-        <TextField label="Mot de passe" value={password} onChange={setPassword} placeholder="Mot de passe" type="password" />
-        <div style={{ marginBottom: 18, marginTop: -6 }}>
-          <button onClick={() => setForgot(true)} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Mot de passe oublié ?</button>
-        </div>
-        {forgot && !forgotSent && (
-          <div style={{ background: colors.accentSoft, borderRadius: RADIUS.sm, padding: "12px 14px", marginBottom: 18 }}>
-            <div style={{ fontSize: 12.5, color: colors.accent, marginBottom: 8 }}>Un e-mail de réinitialisation sera envoyé à {email || "l'adresse ci-dessus"}.</div>
-            <Button full={false} onClick={sendReset} disabled={!email}>Envoyer le lien</Button>
+    <AuthBackdrop>
+      <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+        <div className="flex items-center px-5 pt-5 pb-2"><IconButton icon={ArrowLeft} onClick={onBack} /></div>
+        <div style={{ padding: "16px 20px", flex: 1, animation: "pisteFadeSlideUp 480ms cubic-bezier(0.22, 1, 0.36, 1) both" }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+            <div style={{ fontSize: 19, fontWeight: 800, color: colors.text }}>Connexion</div>
+            <BetaBadge />
           </div>
-        )}
-        {forgotSent && <div style={{ background: colors.accentSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.accent, marginBottom: 18 }}>E-mail envoyé — vérifiez votre boîte de réception.</div>}
-        <Button disabled={!email || !password || status === "loading"} onClick={attemptLogin}>{status === "loading" ? "Connexion..." : "Se connecter"}</Button>
-        {status === "error" && (
-          <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error, marginTop: 12, lineHeight: 1.5 }}>{errorMsg}</div>
-        )}
-        <div style={{ textAlign: "center", marginTop: 14 }}>
-          <span style={{ fontSize: 12.5, color: colors.textFaint }}>Pas encore de compte ? </span>
-          <button onClick={onSignup} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Créer un compte</button>
+          <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 22 }}>Accédez à votre compte PISTE.</div>
+          <TextField label="E-mail" value={email} onChange={setEmail} placeholder="vous@exemple.com" type="email" />
+          <TextField label="Mot de passe" value={password} onChange={setPassword} placeholder="Mot de passe" type="password" />
+          <div style={{ marginBottom: 18, marginTop: -6 }}>
+            <button onClick={() => setForgot(true)} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Mot de passe oublié ?</button>
+          </div>
+          {forgot && !forgotSent && (
+            <div style={{ background: colors.accentSoft, borderRadius: RADIUS.xl, padding: "13px 16px", marginBottom: 18 }}>
+              <div style={{ fontSize: 12.5, color: colors.accent, marginBottom: 8 }}>Un e-mail de réinitialisation sera envoyé à {email || "l'adresse ci-dessus"}.</div>
+              <Button full={false} onClick={sendReset} disabled={!email}>Envoyer le lien</Button>
+            </div>
+          )}
+          {forgotSent && <div style={{ background: colors.accentSoft, borderRadius: RADIUS.xl, padding: "13px 16px", fontSize: 12.5, color: colors.accent, marginBottom: 18 }}>E-mail envoyé — vérifiez votre boîte de réception.</div>}
+          <Button disabled={!email || !password || status === "loading"} onClick={attemptLogin}>{status === "loading" ? "Connexion..." : "Se connecter"}</Button>
+          {status === "error" && (
+            <div style={{ background: colors.errorSoft, borderRadius: RADIUS.xl, padding: "13px 16px", fontSize: 12.5, color: colors.error, marginTop: 12, lineHeight: 1.5 }}>{errorMsg}</div>
+          )}
+          <div style={{ textAlign: "center", marginTop: 14 }}>
+            <span style={{ fontSize: 12.5, color: colors.textFaint }}>Pas encore de compte ? </span>
+            <button onClick={onSignup} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Créer un compte</button>
+          </div>
+          <div style={{ marginTop: 22 }}><AddToHomeScreenTip /></div>
         </div>
       </div>
-    </div>
+    </AuthBackdrop>
   );
 }
 
@@ -969,7 +1071,7 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
       }}
       className="flex items-center justify-between px-4 py-3"
     >
-      <div className="flex items-center gap-2"><Logo size={28} /><Wordmark /></div>
+      <div className="flex items-center gap-2"><Logo size={28} /><Wordmark /><BetaBadge /></div>
       <div className="flex items-center gap-1">
         <IconButton icon={Search} onClick={onSearch} />
         <div style={{ position: "relative" }}>
@@ -1094,7 +1196,7 @@ function Toast({ message }) {
 /* ============================================================
    6. FIL — PostCard
    ============================================================ */
-function ContentActionSheet({ isOwn, onClose, onDelete, onEdit, onReport, onHide, onBlock }) {
+function ContentActionSheet({ isOwn, isAdmin, onClose, onDelete, onEdit, onReport, onHide, onBlock }) {
   const { colors } = useTheme();
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 62 }}>
@@ -1128,6 +1230,9 @@ function ContentActionSheet({ isOwn, onClose, onDelete, onEdit, onReport, onHide
             <button onClick={onReport} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Signaler</span></button>
             <button onClick={onHide} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Masquer</span></button>
             <button onClick={onBlock} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Bloquer l'auteur</span></button>
+            {isAdmin && (
+              <button onClick={onDelete} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Supprimer (admin)</span></button>
+            )}
           </>
         )}
       </div>
@@ -1141,7 +1246,7 @@ function ContentActionSheet({ isOwn, onClose, onDelete, onEdit, onReport, onHide
  * via un simple username, rendu une seule fois au niveau de MainApp pour
  * pouvoir réutiliser directement ses handlers (like/save/repost/commentaire).
  */
-function AuthorProfileSheet({ username, meUsername, isFollowing, isPending, bellOn, onClose, onToggleFollow, onRequestFollow, onToggleBell, onMessage, onOpenProfile, onOpenPlayer, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, traceGroup, onOpenTrace }) {
+function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPending, bellOn, onClose, onToggleFollow, onRequestFollow, onToggleBell, onMessage, onOpenProfile, onOpenPlayer, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, traceGroup, onOpenTrace }) {
   const { colors } = useTheme();
   const isSelf = username === meUsername;
   const [profile, setProfile] = useState(null);
@@ -1151,6 +1256,7 @@ function AuthorProfileSheet({ username, meUsername, isFollowing, isPending, bell
   const [tab, setTab] = useState("publications");
   const [openDog, setOpenDog] = useState(null);
   const [followSheet, setFollowSheet] = useState(null); // 'followers' | 'following' | null
+  const [viewingInstant, setViewingInstant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sheet, setSheet] = useState(null);
@@ -1333,7 +1439,7 @@ function AuthorProfileSheet({ username, meUsername, isFollowing, isPending, bell
                         reposted={reposted.includes(v.id)}
                         commentCount={(commentsByPost[v.id] || []).length}
                         onLike={() => onLike(v.id)}
-                        onRepost={() => onRepost(v.id)}
+                        onRepost={v.type === "video" ? undefined : () => onRepost(v.id)}
                         onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
                         onOpenActions={() => setSheet({ type: "actions", post: v })}
                         onOpenAuthor={() => onOpenProfile(v.username)}
@@ -1365,20 +1471,24 @@ function AuthorProfileSheet({ username, meUsername, isFollowing, isPending, bell
                 ) : (
                   <div style={{ paddingTop: 10 }}>
                     {repostedPosts.map((p) => (
-                      <PostCard
-                        key={p.id}
-                        post={p}
-                        liked={liked.includes(p.id)}
-                        saved={saved.includes(p.id)}
-                        reposted={true}
-                        onRepost={() => onRepost(p.id)}
-                        commentCount={(commentsByPost[p.id] || []).length}
-                        onLike={() => onLike(p.id)}
-                        onSave={() => onSave(p.id)}
-                        onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
-                        onOpenActions={() => setSheet({ type: "actions", post: p })}
-                        onOpenAuthor={() => onOpenProfile(p.username)}
-                      />
+                      p.type === "video_courte" ? (
+                        <RepostedInstantCard key={p.id} item={p} onOpen={setViewingInstant} />
+                      ) : (
+                        <PostCard
+                          key={p.id}
+                          post={p}
+                          liked={liked.includes(p.id)}
+                          saved={saved.includes(p.id)}
+                          reposted={true}
+                          onRepost={() => onRepost(p.id)}
+                          commentCount={(commentsByPost[p.id] || []).length}
+                          onLike={() => onLike(p.id)}
+                          onSave={() => onSave(p.id)}
+                          onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
+                          onOpenActions={() => setSheet({ type: "actions", post: p })}
+                          onOpenAuthor={() => onOpenProfile(p.username)}
+                        />
+                      )
                     ))}
                   </div>
                 )
@@ -1389,9 +1499,24 @@ function AuthorProfileSheet({ username, meUsername, isFollowing, isPending, bell
       )}
       {openDog && <DogPage dog={openDog} onClose={() => setOpenDog(null)} />}
       {followSheet && <FollowListSheet userId={profile.id} mode={followSheet} onClose={() => setFollowSheet(null)} onOpenProfile={onOpenProfile} />}
+      {viewingInstant && (
+        <SingleInstantViewer
+          item={viewingInstant}
+          onClose={() => setViewingInstant(null)}
+          liked={liked.includes(viewingInstant.id)}
+          reposted={true}
+          commentCount={(commentsByPost[viewingInstant.id] || []).length}
+          onLike={() => onLike(viewingInstant.id)}
+          onRepost={() => onRepost(viewingInstant.id)}
+          onOpenComments={() => { setSheet({ type: "comments", post: viewingInstant }); onLoadComments(viewingInstant.id); }}
+          onOpenActions={() => setSheet({ type: "actions", post: viewingInstant })}
+          onOpenAuthor={() => onOpenProfile(viewingInstant.username)}
+        />
+      )}
       {sheet?.type === "actions" && (
         <ContentActionSheet
           isOwn={isSelf}
+          isAdmin={isAdmin}
           onClose={() => setSheet(null)}
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
           onDelete={() => { onDelete(sheet.post.id); setPosts((p) => p.filter((x) => x.id !== sheet.post.id)); setSheet(null); }}
@@ -2006,11 +2131,11 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
       >
         <SegmentedControl options={options} value={tab} onChange={setTab} />
       </div>
-      <div style={{ marginTop: 6 }}><TraceBar groups={traceGroups} onOpenGroup={onOpenTraceGroup} onCreateOwn={onCreateOwnTrace} /></div>
+      <div style={{ marginTop: 14 }}><TraceBar groups={traceGroups} onOpenGroup={onOpenTraceGroup} onCreateOwn={onCreateOwnTrace} /></div>
       {visible.length === 0 ? (
         <EmptyState title="Aucun contenu pour le moment" subtitle={copy[tab]} />
       ) : (
-        <div style={{ paddingTop: 8 }}>
+        <div style={{ paddingTop: 14 }}>
           {visible.map((p) => (
             <PostCard
               key={p.id}
@@ -2032,6 +2157,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
       {sheet?.type === "actions" && (
         <ContentActionSheet
           isOwn={sheet.post.nom === meName}
+          isAdmin={profile.role === "admin"}
           onClose={() => setSheet(null)}
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
           onDelete={() => { onDelete(sheet.post.id); setSheet(null); }}
@@ -2054,17 +2180,46 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
    7. VIDÉO — VideoCard
    ============================================================ */
 function FullScreenVideoPlayer({ video, onClose }) {
+  const videoRef = useRef(null);
   if (!video) return null;
+
+  // "Retourner" la vidéo façon YouTube : plein écran natif du <video> lui-même
+  // (webkitEnterFullscreen sur iOS Safari, requestFullscreen ailleurs), qui
+  // pivote automatiquement avec l'orientation de l'appareil. On tente en plus
+  // un verrouillage paysage explicite là où l'API l'autorise (Android/Chrome) —
+  // ignoré silencieusement si le navigateur ne le permet pas (ex. iOS Safari).
+  const rotate = async () => {
+    const el = videoRef.current;
+    if (!el) return;
+    try {
+      if (el.webkitEnterFullscreen) {
+        el.webkitEnterFullscreen();
+      } else if (el.requestFullscreen) {
+        await el.requestFullscreen();
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock("landscape").catch(() => {});
+        }
+      }
+    } catch (e) { /* pas grave : les contrôles natifs du lecteur permettent quand même le plein écran */ }
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#000", display: "flex", flexDirection: "column" }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "flex", justifyContent: "flex-end", padding: 16 }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "flex", justifyContent: "space-between", padding: 16 }}>
+        <button onClick={rotate} aria-label="Plein écran / pivoter" style={{ background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <RotateCw size={16} color="#fff" />
+        </button>
         <button onClick={onClose} aria-label="Fermer" style={{ background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <X size={18} color="#fff" />
         </button>
       </div>
       <video
+        ref={videoRef}
         src={video.videoUrl}
         controls
+        controlsList="noremoteplayback"
+        disableRemotePlayback
+        x-webkit-airplay="deny"
         autoPlay
         playsInline
         style={{ width: "100%", height: "100%", objectFit: "contain", margin: "auto" }}
@@ -2081,12 +2236,12 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
   };
   return (
     <div style={{ padding: "10px 16px 16px" }}>
-      <div className="flex gap-2" style={{ alignItems: "stretch" }}>
-        {/* Vidéo en grand — 3/4 de la largeur de la carte */}
+      <div className="flex gap-3" style={{ alignItems: "stretch" }}>
+        {/* Vidéo en grand */}
         <button
           onClick={canPlay ? onOpenPlayer : undefined}
           disabled={!canPlay}
-          style={{ flex: 3, minWidth: 0, aspectRatio: "16/9", borderRadius: RADIUS.md, background: colors.surfaceAlt, position: "relative", overflow: "hidden", border: "none", padding: 0, cursor: canPlay ? "pointer" : "default" }}
+          style={{ flex: 1, minWidth: 0, aspectRatio: "16/9", borderRadius: RADIUS.md, background: colors.surfaceAlt, position: "relative", overflow: "hidden", border: "none", padding: 0, cursor: canPlay ? "pointer" : "default" }}
         >
           {/* Vraie miniature (image capturée à l'envoi) en priorité — un <video>
               reste souvent noir tant qu'on n'a pas cliqué dessus, selon l'appareil. */}
@@ -2102,40 +2257,41 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
           </div>
           {video.duree && <span style={{ position: "absolute", right: 6, bottom: 6, fontSize: 10, color: "white", background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "1px 5px" }}>{video.duree}</span>}
         </button>
-        {/* Colonne latérale épurée — seulement l'essentiel (like, commentaire) */}
-        <div className="flex flex-col items-center justify-center gap-5" style={{ flex: 1, minWidth: 44 }}>
+        {/* Pilule verticale d'actions — like/commentaire/repost/partage/plus
+            regroupées, jamais collée au bord droit de la carte. */}
+        <div className="flex flex-col items-center justify-center gap-3" style={{ flexShrink: 0, width: 40, background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: "12px 0", boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}>
           <button onClick={onLike} className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <Heart size={19} color={liked ? colors.accent : colors.textFaint} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
-            <span style={{ fontSize: 10.5, color: liked ? colors.accent : colors.textFaint }}>{video.likes || 0}</span>
+            <Heart size={17} color={liked ? colors.accent : colors.textFaint} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
+            <span style={{ fontSize: 9.5, color: liked ? colors.accent : colors.textFaint, fontWeight: 600 }}>{video.likes || 0}</span>
           </button>
-          <button onClick={onOpenComments} className="flex flex-col items-center gap-0.5" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <MessageSquare size={19} color={colors.textFaint} strokeWidth={1.8} />
-            <span style={{ fontSize: 10.5, color: colors.textFaint }}>{commentCount}</span>
+          <button onClick={onOpenComments} className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <MessageSquare size={17} color={colors.textFaint} strokeWidth={1.8} />
+            <span style={{ fontSize: 9.5, color: colors.textFaint, fontWeight: 600 }}>{commentCount}</span>
           </button>
-        </div>
-      </div>
-      {/* Sous la vidéo — auteur à gauche, actions secondaires à droite */}
-      <div className="flex items-center justify-between" style={{ marginTop: 10 }}>
-        <button onClick={onOpenAuthor} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0 }}>
-          <div style={{ width: 26, height: 26, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-            {video.avatar ? <img src={video.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={12} color={colors.textFaint} />}
-          </div>
-          <span style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{video.nom}</span>
-        </button>
-        <div className="flex items-center gap-3" style={{ flexShrink: 0 }}>
           {onRepost && (
-            <button onClick={onRepost} className="flex items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-              <Repeat2 size={16} color={reposted ? colors.accent : colors.textFaint} strokeWidth={1.8} />
+            <button onClick={onRepost} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+              <Repeat2 size={17} color={reposted ? colors.accent : colors.textFaint} strokeWidth={1.8} />
             </button>
           )}
-          <button onClick={share} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+          <button onClick={share} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
             <Share2 size={16} color={colors.textFaint} strokeWidth={1.8} />
           </button>
-          <button onClick={onOpenActions} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+          <button onClick={onOpenActions} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
             <MoreHorizontal size={16} color={colors.textFaint} />
           </button>
         </div>
       </div>
+      {video.titre && (
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, marginTop: 10, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{video.titre}</div>
+      )}
+      {/* Sous la vidéo — auteur uniquement, les actions sont déjà dans la pilule */}
+      <button onClick={onOpenAuthor} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0, marginTop: 8 }}>
+        <div style={{ width: 26, height: 26, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+          {video.avatar ? <img src={video.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={12} color={colors.textFaint} />}
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{video.nom}</span>
+        {video.duree && <span style={{ fontSize: 11, color: colors.textFaint, flexShrink: 0 }}>· {video.duree}</span>}
+      </button>
     </div>
   );
 }
@@ -2192,7 +2348,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
           <div style={{ width: 56, height: 56, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={26} color="#fff" fill="#fff" /></div>
         </div>
       )}
-      <button onClick={() => setMuted((m) => !m)} style={{ position: "absolute", top: 16, right: 16, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+      <button onClick={() => setMuted((m) => !m)} style={{ position: "absolute", top: 18, right: 14, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
         {muted ? <VolumeX size={16} color="#fff" /> : <Volume2 size={16} color="#fff" />}
       </button>
       <div style={{ position: "absolute", left: 0, right: 68, bottom: 0, padding: "0 16px 22px", color: "#fff", pointerEvents: "none" }}>
@@ -2204,36 +2360,79 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
         </button>
         {item.texte && <div style={{ fontSize: 12.5, lineHeight: 1.4, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.texte}</div>}
       </div>
-      <div className="flex flex-col items-center gap-4" style={{ position: "absolute", right: 10, bottom: 22 }}>
+      <div className="flex flex-col items-center gap-4" style={{ position: "absolute", right: 14, bottom: 24 }}>
         <button onClick={onLike} className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Heart size={18} color={liked ? colors.accent : "#fff"} fill={liked ? colors.accent : "none"} strokeWidth={2} />
           </div>
           <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.likes || 0}</span>
         </button>
         <button onClick={onOpenComments} className="flex flex-col items-center gap-1" style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <MessageSquare size={18} color="#fff" strokeWidth={2} />
           </div>
           <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{commentCount}</span>
         </button>
         {onRepost && (
           <button onClick={onRepost} className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Repeat2 size={18} color={reposted ? colors.accent : "#fff"} strokeWidth={2} />
             </div>
             <span style={{ fontSize: 10.5, color: reposted ? colors.accent : "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.reposts || 0}</span>
           </button>
         )}
         <button onClick={share} style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Share2 size={17} color="#fff" strokeWidth={2} />
           </div>
         </button>
         <button onClick={onOpenActions} style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <MoreHorizontal size={17} color="#fff" />
           </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+/** Carte compacte pour un Instant reposté (onglet Reposts d'un profil) — se
+ *  distingue clairement d'une publication classique (badge "Instant") et
+ *  ouvre l'Instant d'origine en plein écran au lieu de l'écraser dans une
+ *  carte façon publication. */
+function RepostedInstantCard({ item, onOpen }) {
+  const { colors } = useTheme();
+  return (
+    <button onClick={() => onOpen(item)} className="flex items-center gap-3" style={{ width: "100%", background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "none", borderRadius: RADIUS.xl, padding: "10px 14px", margin: "0 12px 10px", cursor: "pointer", textAlign: "left", boxShadow: "0 1px 8px rgba(0,0,0,0.05)" }}>
+      <div style={{ position: "relative", width: 52, height: 70, borderRadius: RADIUS.lg, overflow: "hidden", background: "#000", flexShrink: 0 }}>
+        {item.image ? (
+          <img src={item.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : item.videoUrl ? (
+          <video src={item.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : null}
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Play size={14} color="#fff" fill="#fff" />
+        </div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span className="flex items-center gap-1" style={{ display: "inline-flex", fontSize: 10, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "2px 8px 2px 6px", marginBottom: 5 }}>
+          <Footprints size={10} /> Instant
+        </span>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: colors.text }}>{item.nom}</div>
+        {item.texte && <div style={{ fontSize: 11.5, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.texte}</div>}
+      </div>
+      <ChevronRight size={16} color={colors.textFaint} />
+    </button>
+  );
+}
+/** Visionneuse plein écran pour UN SEUL Instant, en dehors du fil — utilisée
+ *  pour ouvrir "l'original" d'un Instant reposté depuis l'onglet Reposts. */
+function SingleInstantViewer({ item, onClose, liked, reposted, commentCount, onLike, onRepost, onOpenComments, onOpenActions, onOpenAuthor }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 90, background: "#000", display: "flex", justifyContent: "center" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%" }}>
+        <InstantSlide item={item} liked={liked} reposted={reposted} commentCount={commentCount} onLike={onLike} onRepost={onRepost} onOpenComments={onOpenComments} onOpenActions={onOpenActions} onOpenAuthor={onOpenAuthor} />
+        <button onClick={onClose} style={{ position: "absolute", top: 20, left: 14, zIndex: 10, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <ArrowLeft size={18} color="#fff" />
         </button>
       </div>
     </div>
@@ -2262,16 +2461,16 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
     lastScrollTopRef.current = top;
   };
   return (
-    <div style={{ position: "relative", height: "calc(100dvh - 132px)", overflow: "hidden", background: "#000", margin: "0 -16px" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 15, background: "#000", display: "flex", justifyContent: "center" }}>
+    <div style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflow: "hidden", background: "#000" }}>
       {tabSwitcher && (
         <div
           style={{
             position: "absolute",
-            // Un peu plus d'espace que le strict minimum : la hauteur réelle
-            // de l'en-tête au-dessus varie selon l'appareil (encoche, barre
-            // d'adresse mobile...) — mieux vaut une marge généreuse qu'un
-            // chevauchement sur certains écrans.
-            top: 20,
+            // Header principal maintenant flottant PAR-DESSUS Instants (voir
+            // le zIndex du conteneur plein écran ci-dessus) — même décalage
+            // que les autres sélecteurs d'onglets sous l'en-tête (top: 74).
+            top: 74,
             left: 0,
             right: 0,
             zIndex: 5,
@@ -2309,27 +2508,32 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
         </div>
       )}
     </div>
+    </div>
   );
 }
-function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, following, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onChromeMode, chromeMode = "full" }) {
+function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, following, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onChromeMode, chromeMode = "full" }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("instants");
+  const [videoSubTab, setVideoSubTab] = useState("nouveautes");
+  const [showFollowing, setShowFollowing] = useState(false);
   const [sheet, setSheet] = useState(null);
   const [query, setQuery] = useState("");
   const options = [{ key: "instants", label: "Instants" }, { key: "videos", label: "Vidéos" }, { key: "recherche", label: "Recherche" }];
   const meName = profile.nom || "Vous";
-  // Même pipeline que le Fil (interaction pondérée davantage : vues/relecture à brancher
-  // plus tard quand un vrai lecteur vidéo remontera ces signaux). Ordre mémoïsé
-  // séparément des données, même raison que ScreenFil : liker ne doit pas rebattre
-  // le classement (voir le commentaire détaillé dans ScreenFil).
+  // "Nouveautés" = strictement chronologique (voir buildChronologicalFeed) :
+  // une vidéo qui vient d'être publiée doit toujours prendre la première
+  // place, jamais être devancée par une vidéo plus ancienne mieux notée.
+  // Contrairement au Fil "Pour toi", pas de pondération affinité/interaction
+  // ici. Ordre mémoïsé séparément des données, même raison que ScreenFil :
+  // liker ne doit pas rebattre le classement.
   const followingKey = following.join(",");
   const videoIdsKey = videos.filter((v) => v.type === "video").map((v) => v.id).join(",");
   const instantIdsKey = videos.filter((v) => v.type === "video_courte").map((v) => v.id).join(",");
   const rankedIds = useMemo(() => {
-    const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], now: Date.now() };
-    return buildFeed(videos.filter((v) => v.type === "video"), ctx).map((v) => v.id);
+    const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur };
+    return buildChronologicalFeed(videos.filter((v) => v.type === "video"), ctx).map((v) => v.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoIdsKey, followingKey, profile.estMineur]);
+  }, [videoIdsKey, profile.estMineur]);
   const rankedInstantIds = useMemo(() => {
     const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], now: Date.now() };
     return buildFeed(videos.filter((v) => v.type === "video_courte"), ctx).map((v) => v.id);
@@ -2338,6 +2542,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
   const videosById = new Map(videos.map((v) => [v.id, v]));
   const ranked = rankedIds.map((id) => videosById.get(id)).filter(Boolean);
   const rankedInstants = rankedInstantIds.map((id) => videosById.get(id)).filter(Boolean);
+  const visibleRanked = videoSubTab === "abonnements" ? ranked.filter((v) => following.includes(v.username)) : ranked;
   // Recherche sur les vraies vidéos déjà chargées depuis Supabase (titre/texte,
   // pseudo ou nom d'affichage de l'auteur) — pas de résultats inventés.
   const q = query.trim().toLowerCase();
@@ -2374,6 +2579,16 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
           <SegmentedControl options={options} value={tab} onChange={setTab} />
         </div>
       )}
+      {tab === "videos" && (
+        <div className="flex items-center gap-2 px-4" style={{ paddingTop: 10, paddingBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <SegmentedControl options={[{ key: "nouveautes", label: "Nouveautés" }, { key: "abonnements", label: "Abonnements" }]} value={videoSubTab} onChange={setVideoSubTab} />
+          </div>
+          <button onClick={() => setShowFollowing(true)} aria-label="Mes abonnements" style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+            <Users size={16} color={colors.textFaint} />
+          </button>
+        </div>
+      )}
       {tab === "recherche" ? (
         <div>
           <div className="flex items-center gap-2 mx-4" style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.pill, padding: "10px 14px", marginTop: 12 }}>
@@ -2394,7 +2609,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
                   reposted={reposted.includes(v.id)}
                   commentCount={(commentsByPost[v.id] || []).length}
                   onLike={() => onLike(v.id)}
-                  onRepost={() => onRepost(v.id)}
+                  onRepost={v.type === "video" ? undefined : () => onRepost(v.id)}
                   onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
                   onOpenActions={() => setSheet({ type: "actions", post: v })}
                   onOpenAuthor={() => onOpenProfile(v.username)}
@@ -2418,9 +2633,9 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
           tabSwitcher={darkTabSwitcher}
           onChromeMode={onChromeMode}
         />
-      ) : ranked.length > 0 ? (
+      ) : visibleRanked.length > 0 ? (
         <div style={{ paddingTop: 6 }}>
-          {ranked.map((v) => (
+          {visibleRanked.map((v) => (
             <VideoCard
               key={v.id}
               video={v}
@@ -2428,7 +2643,6 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
               reposted={reposted.includes(v.id)}
               commentCount={(commentsByPost[v.id] || []).length}
               onLike={() => onLike(v.id)}
-              onRepost={() => onRepost(v.id)}
               onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
               onOpenActions={() => setSheet({ type: "actions", post: v })}
               onOpenAuthor={() => onOpenProfile(v.username)}
@@ -2437,11 +2651,16 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
           ))}
         </div>
       ) : (
-        <EmptyState title="Aucune vidéo pour le moment" subtitle="Les vidéos publiées par la communauté apparaîtront ici." />
+        <EmptyState
+          title={videoSubTab === "abonnements" ? "Aucune vidéo de vos abonnements" : "Aucune vidéo pour le moment"}
+          subtitle={videoSubTab === "abonnements" ? "Les vidéos publiées par les comptes que vous suivez apparaîtront ici." : "Les vidéos publiées par la communauté apparaîtront ici."}
+        />
       )}
+      {showFollowing && <FollowListSheet userId={profile.id} mode="following" onClose={() => setShowFollowing(false)} onOpenProfile={onOpenProfile} />}
       {sheet?.type === "actions" && (
         <ContentActionSheet
           isOwn={sheet.post.nom === meName}
+          isAdmin={profile.role === "admin"}
           onClose={() => setSheet(null)}
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
           onDelete={() => { onDelete(sheet.post.id); setSheet(null); }}
@@ -2530,10 +2749,10 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
   const meName = profile?.nom || "Vous";
   // La policy RLS "creator or admin updates group" (001_init.sql) applique déjà
   // cette même règle côté base — ce contrôle ici n'est qu'un raccourci d'UX.
-  // Les groupes prédéfinis PISTE n'ont pas de créateur (created_by = NULL) :
-  // sans l'ajout de `group.joined`, aucun membre ne pouvait jamais y ajouter de
-  // photo, seul un admin le pouvait — voir migration 022 pour l'équivalent RLS.
-  const canEditImage = profile?.role === "admin" || (group.createdBy && group.createdBy === profile?.id) || group.joined;
+  // Les communautés prédéfinies PISTE (created_by = NULL) ne sont modifiables
+  // que par un admin — un simple membre rejoint ne peut pas changer la photo,
+  // même si c'est lui qui a créé la communauté (alors createdBy le couvre déjà).
+  const canEditImage = profile?.role === "admin" || (group.createdBy && group.createdBy === profile?.id);
   const groupImageInputRef = useRef(null);
   const pickGroupImage = async (e) => {
     const file = e.target.files?.[0];
@@ -2678,6 +2897,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
       {sheet?.type === "actions" && (
         <ContentActionSheet
           isOwn={sheet.post.nom === meName}
+          isAdmin={profile.role === "admin"}
           onClose={() => setSheet(null)}
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
           onDelete={() => { onDelete(sheet.post.id); setSheet(null); setPosts((p) => p.filter((x) => x.id !== sheet.post.id)); }}
@@ -2787,14 +3007,14 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
           <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Communautés</span>
           <button onClick={() => setCreating(true)} style={{ border: `1px solid ${colors.accent}`, color: colors.accent, background: "transparent", borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>+ Créer</button>
         </div>
-        <div className="px-4 pb-3"><div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
+        <div className="px-4 pb-4"><div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
           <Search size={17} color={colors.textFaint} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une communauté" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
         </div></div>
       </div>
 
       {joined.length > 0 && (
-        <div className="px-4" style={{ paddingTop: 16, paddingBottom: 8 }}>
+        <div className="px-4" style={{ paddingTop: 22, paddingBottom: 8 }}>
           <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>COMMUNAUTÉS REJOINTES</div>
         </div>
       )}
@@ -2803,7 +3023,7 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
       {filtered.length === 0 ? (
         <EmptyState title="Aucune communauté trouvée" subtitle="Essayez un autre mot-clé ou créez votre propre communauté." ctaLabel="Créer une communauté" onCta={() => setCreating(true)} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 px-4 pb-4" style={{ paddingTop: joined.length > 0 ? 12 : 16 }}>{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
+        <div className="grid grid-cols-2 gap-3 px-4 pb-4" style={{ paddingTop: joined.length > 0 ? 12 : 22 }}>{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
       )}
 
       {currentOpen && (
@@ -2860,6 +3080,11 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const [departement, setDepartement] = useState(editingPost?.localisation?.departement || "");
   const [dogId, setDogId] = useState(editingPost?.chienId || null);
   const [mediaFiles, setMediaFiles] = useState([]);
+  const [mediaDurations, setMediaDurations] = useState([]);
+  const [mediaError, setMediaError] = useState("");
+  const [titre, setTitre] = useState(editingPost?.titre || "");
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [contentRating, setContentRating] = useState(editingPost?.contentRating || "normal"); // 'restricted' réservé à la modération
   const [saving, setSaving] = useState(false);
@@ -2868,7 +3093,66 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const isPost = type === "publication" || isMedia;
   const isPoll = type === "sondage";
   const isOuting = type === "sortie";
+  const isVideoType = type === "video" || type === "video_courte";
   const captionLabel = isPoll ? "Question du sondage" : isOuting ? "Titre de la sortie" : type === "discussion" ? "Votre message" : "Description";
+
+  // Sonde durée + dimensions réelles d'une vidéo côté navigateur, sans
+  // dépendre du serveur — sert à faire respecter "Instant = vertical, max 1
+  // min" et "Vidéo = horizontale, max 30 min" dès la sélection du fichier.
+  const probeVideoMeta = (file) => new Promise((resolve) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.muted = true;
+    v.src = URL.createObjectURL(file);
+    const timer = setTimeout(() => { URL.revokeObjectURL(v.src); resolve(null); }, 6000);
+    v.onloadedmetadata = () => {
+      clearTimeout(timer);
+      const meta = { durationSeconds: v.duration || 0, width: v.videoWidth, height: v.videoHeight };
+      URL.revokeObjectURL(v.src);
+      resolve(meta);
+    };
+    v.onerror = () => { clearTimeout(timer); URL.revokeObjectURL(v.src); resolve(null); };
+  });
+
+  const pickMedia = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    setMediaError("");
+    if (!isVideoType) { setMediaFiles(files); return; }
+    const maxSeconds = type === "video_courte" ? 60 : 1800;
+    const valid = [];
+    const durations = [];
+    for (const f of files) {
+      if (!f.type.startsWith("video")) { valid.push(f); durations.push(null); continue; }
+      const meta = await probeVideoMeta(f);
+      // Sonde impossible (format que le navigateur ne sait pas lire) : on ne
+      // bloque pas la publication pour ça, juste la vérification elle-même.
+      if (!meta) { valid.push(f); durations.push(null); continue; }
+      if (meta.durationSeconds > maxSeconds) {
+        setMediaError(type === "video_courte" ? "Un Instant ne peut pas dépasser 1 minute." : "Une vidéo ne peut pas dépasser 30 minutes.");
+        continue;
+      }
+      if (type === "video_courte" && meta.width >= meta.height) {
+        setMediaError("Un Instant doit être filmé à la verticale.");
+        continue;
+      }
+      if (type === "video" && meta.height >= meta.width) {
+        setMediaError("Une vidéo doit être filmée à l'horizontale.");
+        continue;
+      }
+      valid.push(f);
+      durations.push(Math.round(meta.durationSeconds));
+    }
+    setMediaFiles(valid);
+    setMediaDurations(durations);
+  };
+
+  const pickThumbnail = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setThumbnailFile(f);
+    setThumbnailPreview(URL.createObjectURL(f));
+  };
 
   const submit = async () => {
     setSaving(true);
@@ -2880,15 +3164,15 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
         // Chemin réel (Supabase) — publication/photo/vidéo/instant.
         if (editingPost) {
           const updated = await postService.updatePost(editingPost.id, {
-            texte: text, animal, pratique, departement, contentRating,
+            texte: text, titre: type === "video" ? titre : undefined, animal, pratique, departement, contentRating,
           });
           setSaving(false);
-          onPublished({ ...editingPost, texte: updated.texte, animal: updated.animal, pratique: updated.pratique, contentRating: updated.content_rating, hashtags: updated.hashtags, mentions: updated.mentions });
+          onPublished({ ...editingPost, texte: updated.texte, titre: updated.titre || updated.texte, animal: updated.animal, pratique: updated.pratique, contentRating: updated.content_rating, hashtags: updated.hashtags, mentions: updated.mentions });
         } else {
           const saved = await postService.createPost({
-            texte: text, type, animal, pratique,
+            texte: text, titre: type === "video" ? titre : null, type, animal, pratique,
             dogId,
-            departement, contentRating, mediaFiles, groupId,
+            departement, contentRating, mediaFiles, mediaDurations, thumbnailFile: type === "video" ? thumbnailFile : null, groupId,
           });
           setSaving(false);
           onPublished({
@@ -2898,7 +3182,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             videoUrl: saved.media?.[0]?.type === "video" ? saved.media[0].url : null,
             type: saved.type, animal: saved.animal, pratique: saved.pratique,
             contentRating: saved.content_rating, hashtags: saved.hashtags || [], mentions: saved.mentions || [],
-            likes: 0, commentaires: 0, date: "à l'instant", createdAt: Date.now(), titre: saved.texte,
+            likes: 0, commentaires: 0, date: "à l'instant", createdAt: Date.now(), titre: saved.titre || saved.texte,
           });
         }
       } else {
@@ -2934,6 +3218,10 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <TextField label={captionLabel} value={text} onChange={setText} placeholder={type === "discussion" ? "Posez une question, lancez une discussion..." : "Ajouter une description... (#hashtag, @mention)"} textarea rows={isPoll ? 2 : 4} />
 
+        {type === "video" && !editingPost && (
+          <TextField label="Titre de la vidéo" value={titre} onChange={setTitre} placeholder="ex : Approche matinale en forêt" />
+        )}
+
         {isMedia && !editingPost && (
           <div style={{ marginBottom: 16 }}>
             <label
@@ -2944,15 +3232,18 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
               <span style={{ fontSize: 12.5, color: colors.textFaint }}>
                 {mediaFiles.length > 0 ? `${mediaFiles.length} fichier${mediaFiles.length > 1 ? "s" : ""} sélectionné${mediaFiles.length > 1 ? "s" : ""}` : "Choisir une ou plusieurs images/vidéos"}
               </span>
+              {type === "video_courte" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format vertical, 1 minute maximum</span>}
+              {type === "video" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format horizontal, 30 minutes maximum</span>}
             </label>
             <input
               id="piste-media-input"
               type="file"
               accept={type === "photo" ? "image/*" : type === "publication" ? "image/*,video/*" : "video/*"}
               multiple
-              onChange={(e) => setMediaFiles(Array.from(e.target.files || []))}
+              onChange={pickMedia}
               style={{ display: "none" }}
             />
+            {mediaError && <div style={{ marginTop: 8, fontSize: 12, color: colors.error }}>{mediaError}</div>}
             {mediaFiles.length > 0 && (
               <div className="flex flex-wrap gap-2" style={{ marginTop: 10 }}>
                 {mediaFiles.map((f, i) => (
@@ -2960,6 +3251,19 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {type === "video" && !editingPost && mediaFiles.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, display: "block" }}>Miniature (facultatif)</label>
+            <input id="piste-thumb-input" type="file" accept="image/*" onChange={pickThumbnail} style={{ display: "none" }} />
+            <label htmlFor="piste-thumb-input" className="flex items-center gap-3" style={{ cursor: "pointer" }}>
+              <div style={{ width: 66, height: 66, borderRadius: RADIUS.lg, background: colors.surfaceAlt, border: thumbnailPreview ? "none" : `1.5px dashed ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                {thumbnailPreview ? <img src={thumbnailPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Camera size={18} color={colors.textFaint} />}
+              </div>
+              <span style={{ fontSize: 12, color: colors.textFaint }}>{thumbnailPreview ? "Changer l'image de miniature" : "Sinon, une image sera extraite automatiquement de la vidéo"}</span>
+            </label>
           </div>
         )}
 
@@ -3829,6 +4133,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
   const [dogForm, setDogForm] = useState(false);
   const [openDog, setOpenDog] = useState(null);
   const [followSheet, setFollowSheet] = useState(null); // 'followers' | 'following' | null
+  const [viewingInstant, setViewingInstant] = useState(null);
   const [sheet, setSheet] = useState(null);
   const [repostedPosts, setRepostedPosts] = useState([]);
   const [repostsLoading, setRepostsLoading] = useState(true);
@@ -3983,7 +4288,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
                 reposted={reposted.includes(v.id)}
                 commentCount={(commentsByPost[v.id] || []).length}
                 onLike={() => onLike(v.id)}
-                onRepost={() => onRepost(v.id)}
+                onRepost={v.type === "video" ? undefined : () => onRepost(v.id)}
                 onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
                 onOpenActions={() => setSheet({ type: "actions", post: v })}
                 onOpenAuthor={() => onOpenProfile(v.username)}
@@ -4001,20 +4306,24 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         ) : (
           <div style={{ paddingTop: 10 }}>
             {repostedPosts.map((p) => (
-              <PostCard
-                key={p.id}
-                post={p}
-                liked={liked.includes(p.id)}
-                saved={saved.includes(p.id)}
-                reposted={true}
-                onRepost={() => onRepost(p.id)}
-                commentCount={(commentsByPost[p.id] || []).length}
-                onLike={() => onLike(p.id)}
-                onSave={() => onSave(p.id)}
-                onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
-                onOpenActions={() => setSheet({ type: "actions", post: p })}
-                onOpenAuthor={() => onOpenProfile(p.username)}
-              />
+              p.type === "video_courte" ? (
+                <RepostedInstantCard key={p.id} item={p} onOpen={setViewingInstant} />
+              ) : (
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  liked={liked.includes(p.id)}
+                  saved={saved.includes(p.id)}
+                  reposted={true}
+                  onRepost={() => onRepost(p.id)}
+                  commentCount={(commentsByPost[p.id] || []).length}
+                  onLike={() => onLike(p.id)}
+                  onSave={() => onSave(p.id)}
+                  onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
+                  onOpenActions={() => setSheet({ type: "actions", post: p })}
+                  onOpenAuthor={() => onOpenProfile(p.username)}
+                />
+              )
             ))}
           </div>
         )
@@ -4040,6 +4349,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
       {sheet?.type === "actions" && (
         <ContentActionSheet
           isOwn={sheet.post.nom === meName}
+          isAdmin={profile.role === "admin"}
           onClose={() => setSheet(null)}
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
           onDelete={() => { onDelete(sheet.post.id); setSheet(null); }}
@@ -4058,6 +4368,20 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
       {dogForm && <DogFormScreen onClose={() => setDogForm(false)} onSaved={(d) => { addDog(d); setDogForm(false); }} />}
       {openDog && <DogPage dog={openDog} onClose={() => setOpenDog(null)} />}
       {followSheet && <FollowListSheet userId={profile.id} mode={followSheet} onClose={() => setFollowSheet(null)} onOpenProfile={onOpenProfile} />}
+      {viewingInstant && (
+        <SingleInstantViewer
+          item={viewingInstant}
+          onClose={() => setViewingInstant(null)}
+          liked={liked.includes(viewingInstant.id)}
+          reposted={true}
+          commentCount={(commentsByPost[viewingInstant.id] || []).length}
+          onLike={() => onLike(viewingInstant.id)}
+          onRepost={() => onRepost(viewingInstant.id)}
+          onOpenComments={() => { setSheet({ type: "comments", post: viewingInstant }); onLoadComments(viewingInstant.id); }}
+          onOpenActions={() => setSheet({ type: "actions", post: viewingInstant })}
+          onOpenAuthor={() => onOpenProfile(viewingInstant.username)}
+        />
+      )}
     </div>
   );
 }
@@ -4420,7 +4744,9 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                   )}
                   <div
                     style={{
-                      background: mine ? colors.accent : colors.surfaceAlt,
+                      background: mine ? `linear-gradient(135deg, ${colors.accent}, ${colors.accent}dd)` : colors.headerBg,
+                      backdropFilter: mine ? "none" : "blur(20px)",
+                      WebkitBackdropFilter: mine ? "none" : "blur(20px)",
                       color: mine ? colors.onAccent : colors.text,
                       borderRadius: RADIUS.lg,
                       borderBottomRightRadius: mine ? 5 : RADIUS.lg,
@@ -4429,7 +4755,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                       fontSize: 13.5,
                       lineHeight: 1.4,
                       wordBreak: "break-word",
-                      boxShadow: mine ? `0 2px 8px ${colors.accent}30` : "none",
+                      boxShadow: mine ? `0 2px 8px ${colors.accent}30` : "0 1px 6px rgba(0,0,0,0.05)",
                     }}
                   >
                     {media && <MessageBubble mine={mine} media={media} colors={colors} />}
@@ -4751,9 +5077,9 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
       ) : conversations.length === 0 ? (
         <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." ctaLabel="Démarrer une conversation" onCta={() => setShowNew(true)} />
       ) : (
-        <div className="flex flex-col" style={{ padding: "16px 8px 4px" }}>
+        <div className="flex flex-col gap-1.5" style={{ padding: "16px 12px 4px" }}>
           {conversations.map((c) => (
-            <button key={c.id} onClick={() => setOpenConv({ id: c.id, title: c.nom, type: c.type, image: c.avatar, otherUser: c.type === "direct" ? c.members?.[0] || null : null })} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "10px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.sm }}>
+            <button key={c.id} onClick={() => setOpenConv({ id: c.id, title: c.nom, type: c.type, image: c.avatar, otherUser: c.type === "direct" ? c.members?.[0] || null : null })} className="flex items-center gap-3" style={{ width: "100%", background: c.unread ? colors.accentSoft : colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "none", padding: "10px 12px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.xl, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" }}>
               <div style={{ width: 46, height: 46, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                 {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : c.type === "group" ? <Users size={18} color={colors.textFaint} /> : <User size={18} color={colors.textFaint} />}
               </div>
@@ -5260,6 +5586,7 @@ function AideScreen() {
       <Button variant="secondary" onClick={() => setShowForm(true)}>Contacter PISTE</Button>
       <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, margin: "22px 0 8px" }}>QUESTIONS FRÉQUENTES</div>
       <div className="flex flex-col gap-2">
+        <AddToHomeScreenTip />
         {FAQ_ITEMS.map((f, i) => (
           <div key={i} style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, overflow: "hidden" }}>
             <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="flex items-center justify-between" style={{ width: "100%", background: "none", border: "none", padding: "13px 14px", cursor: "pointer" }}>
@@ -5645,7 +5972,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
 
   const handlePublished = (type, item) => {
     if (!item) return;
-    if (type === "video" || type === "video_courte") setVideos((v) => [{ ...item, titre: item.texte || "Sans titre" }, ...v]);
+    if (type === "video" || type === "video_courte") setVideos((v) => [{ ...item, titre: item.titre || item.texte || "Sans titre" }, ...v]);
     else setPosts((p) => [item, ...p]);
     showToast("Publication publiée.");
   };
@@ -5999,6 +6326,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         <AuthorProfileSheet
           username={openProfileUsername}
           meUsername={profile.username}
+          isAdmin={profile.role === "admin"}
           isFollowing={following.includes(openProfileUsername)}
           isPending={pendingFollowUsernames.includes(openProfileUsername)}
           bellOn={bellUsernames.includes(openProfileUsername)}
