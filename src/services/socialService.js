@@ -215,6 +215,33 @@ export async function fetchMyBlocks() {
   return data.map((r) => r.profiles?.username).filter(Boolean);
 }
 
+/**
+ * "Masquer" un contenu — persisté (table "hidden_posts", voir migration 031),
+ * contrairement à l'ancien comportement qui ne vivait que dans un useState
+ * local et disparaissait au moindre rafraîchissement de page.
+ */
+export async function hidePost(postId) {
+  const me = await requireUser();
+  const { error } = await supabase.from("hidden_posts").insert({ user_id: me.id, post_id: postId });
+  if (error) throw error;
+  return true;
+}
+
+export async function unhidePost(postId) {
+  const me = await requireUser();
+  const { error } = await supabase.from("hidden_posts").delete().eq("user_id", me.id).eq("post_id", postId);
+  if (error) throw error;
+  return true;
+}
+
+export async function fetchMyHiddenPostIds() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return [];
+  const { data, error } = await supabase.from("hidden_posts").select("post_id").eq("user_id", userData.user.id);
+  if (error) throw error;
+  return data.map((r) => r.post_id);
+}
+
 export async function reportContent({ targetId, targetType, reason, description }) {
   const me = await requireUser();
   const { data, error } = await supabase

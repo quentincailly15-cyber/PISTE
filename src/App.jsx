@@ -6033,6 +6033,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
     socialService.fetchMyFollowing().then(setFollowing).catch(() => {});
     socialService.fetchMyBellUsernames().then(setBellUsernames).catch(() => {});
     socialService.fetchMyBlocks().then(setBlockedAuthors).catch(() => {});
+    socialService.fetchMyHiddenPostIds().then(setHiddenPostIds).catch(() => {});
     socialService.fetchMyPendingRequestUsernames().then(setPendingFollowUsernames).catch(() => {});
     socialService.fetchIncomingFollowRequests().then((rows) => setIncomingRequestsCount(rows.length)).catch(() => {});
     traceService.fetchActiveTraces().then(setTraces).catch(() => {});
@@ -6263,7 +6264,16 @@ function MainApp({ session, onboardingData, ageInfo }) {
     } catch (e) { /* le retirer localement quand même : au pire il sera re-listé au refresh */ }
     setBlockedAuthors((b) => b.filter((x) => x !== username));
   };
-  const hidePost = (id) => { setHiddenPostIds((h) => [...h, id]); showToast("Contenu masqué."); };
+  const hidePost = async (id) => {
+    if (isLocalId(id)) { setHiddenPostIds((h) => [...h, id]); showToast("Contenu masqué."); return; }
+    try {
+      await socialService.hidePost(id);
+      setHiddenPostIds((h) => [...h, id]);
+      showToast("Contenu masqué.");
+    } catch (e) {
+      showToast("Impossible de masquer ce contenu pour le moment.");
+    }
+  };
   const toggleFollow = async (username) => {
     if (!username) return;
     const isFollowing = following.includes(username);
