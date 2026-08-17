@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>PISTE</title>
 
     <!-- Icône affichée sur l'écran d'accueil iOS après "Partager > Sur
@@ -13,7 +13,12 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#6B7A47" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- "black-translucent" est le seul réglage qui laisse vraiment le contenu
+         s'étendre sous la barre de statut/l'encoche en PWA plein écran — avec
+         "default", iOS réserve une bande opaque en haut et l'app n'utilise
+         jamais tout l'écran. Le contenu réel (en-têtes, boutons) se protège
+         de la barre de statut via env(safe-area-inset-top) côté CSS. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="PISTE" />
   </head>
   <body>

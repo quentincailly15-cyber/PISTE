@@ -285,7 +285,10 @@ function ScreenHeader({ title, onBack, onCloseX, rightAction, chromeMode = "full
       className="flex items-center justify-between px-4 py-3"
       style={{
         position: "sticky",
-        top: floating ? 8 : 0,
+        // env(safe-area-inset-top) : encoche/île dynamique en PWA plein écran
+        // sur iPhone (voir viewport-fit=cover, index.html) — vaut 0px partout
+        // ailleurs (navigateur classique, Android), donc sans effet là-bas.
+        top: floating ? "calc(8px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
         zIndex: 10,
         background: colors.headerBg,
         backdropFilter: "blur(24px)",
@@ -568,23 +571,21 @@ const REPORT_REASONS = [
 ];
 
 // --- Règlement PISTE ----------------------------------------------------------
-// Base de travail pour la modération — distingue explicitement une pratique de chasse
-// légale (autorisée) d'une pratique illégale ou de sa promotion (interdite).
+// Base de travail pour la modération et pour les utilisateurs — distingue
+// explicitement une pratique de chasse légale (autorisée) d'une pratique
+// illégale ou de sa promotion (interdite), et résume les droits RGPD
+// (accès, rectification, effacement, portabilité, minimisation, consentement,
+// suppression de compte) en attendant une politique de confidentialité dédiée.
 // À valider juridiquement avant tout lancement public.
 const RULES_SECTIONS = [
   {
-    title: "Contenus strictement interdits",
+    title: "Les principes de PISTE",
     items: [
-      "Braconnage ou toute incitation au braconnage",
-      "Pratiques manifestement illégales (hors périodes, espèces protégées, sans permis...)",
-      "Violence gratuite, menaces ou harcèlement",
-      "Discrimination ou discours de haine",
-      "Contenu sexuel interdit ou exploitation de mineurs",
-      "Contenu criminel ou glorification de violences illégales",
-      "Fraude, arnaque ou usurpation d'identité",
-      "Spam ou publicité non sollicitée",
-      "Publication de données personnelles d'autrui sans autorisation",
-      "Incitation à des pratiques dangereuses",
+      "Respect — des personnes, des animaux, de la nature et des territoires.",
+      "Transmission — partager ses connaissances et son expérience pour permettre aux autres d'apprendre.",
+      "Responsabilité — promouvoir une pratique légale, sécurisée et responsable.",
+      "Authenticité — partager des expériences réelles sans tromper volontairement la communauté.",
+      "Communauté — échanger entre passionnés sans harcèlement, intimidation ou provocation.",
     ],
   },
   {
@@ -596,12 +597,79 @@ const RULES_SECTIONS = [
     ],
   },
   {
+    title: "Contenus pédagogiques autorisés",
+    items: [
+      "PISTE encourage les contenus qui font apprendre : préparation et dépeçage du gibier, cuisine, entretien du matériel, identification des espèces, traces et indices, sécurité, réglementation, conduite d'un chien de chasse.",
+      "Le contexte et l'objectif comptent : « voici comment faire correctement » est autorisé — une mise en scène uniquement destinée à choquer ne l'est pas.",
+    ],
+  },
+  {
+    title: "Contenus strictement interdits",
+    items: [
+      "Braconnage, chasse d'espèces protégées ou interdites, ou toute incitation à ces pratiques",
+      "Conseils destinés à contourner volontairement la réglementation ou les contrôles",
+      "Organisation, financement ou facilitation d'une activité de chasse illégale",
+      "Vente illégale d'armes, de munitions ou de produits réglementés",
+      "Menaces, harcèlement, intimidation ou doxxing",
+      "Violence gratuite ou contenu extrêmement gore sans intérêt pédagogique, publié uniquement pour choquer",
+      "Mise en danger volontaire de soi-même ou d'autrui",
+      "Contenu sexuel ou pornographique",
+      "Contenu haineux ou discriminatoire",
+      "Arnaques, fraudes ou systèmes pyramidaux",
+      "Usurpation d'identité ou compte créé pour tromper la communauté",
+    ],
+  },
+  {
+    title: "Armes et sécurité",
+    items: [
+      "Les contenus pédagogiques sur la sécurité, l'entretien ou l'utilisation responsable du matériel de chasse sont autorisés.",
+      "Sont interdits : menaces avec une arme, utilisation dangereuse ou irresponsable, démonstrations mettant volontairement autrui en danger, transactions illégales d'armes ou de munitions.",
+    ],
+  },
+  {
+    title: "Localisation et territoires",
+    items: [
+      "Une position GPS précise n'est jamais affichée automatiquement dans une publication publique — elle peut être transformée en zone approximative.",
+      "Respect des propriétés privées, réserves et zones réglementées : PISTE ne doit jamais servir à organiser une intrusion.",
+    ],
+  },
+  {
+    title: "Respect des personnes et des opinions",
+    items: [
+      "Insultes répétées, harcèlement, menaces, intimidation, doxxing et discrimination sont interdits.",
+      "Le débat et le désaccord entre pratiques ou opinions sont autorisés — le harcèlement ne l'est jamais.",
+    ],
+  },
+  {
+    title: "Comptes, identité et contenus IA",
+    items: [
+      "Interdiction d'usurper une identité, de créer un compte pour tromper la communauté ou de multiplier les comptes pour contourner une sanction.",
+      "Un contenu généré ou fortement modifié par intelligence artificielle ne doit jamais être présenté comme une preuve ou une observation réelle — PISTE peut demander qu'il soit identifié comme tel.",
+    ],
+  },
+  {
+    title: "Signalement",
+    items: [
+      "Chaque publication, vidéo, photo, commentaire, profil ou message peut être signalé, pour un motif précis : contenu illégal, braconnage, danger/sécurité, cruauté, harcèlement, haine/discrimination, arnaque, contenu sexuel, spam, fausse information, ou autre.",
+    ],
+  },
+  {
     title: "Ce que la modération peut faire",
     items: [
-      "Examiner un contenu signalé",
-      "Le masquer temporairement le temps de l'examen",
-      "Le supprimer s'il enfreint le règlement",
-      "Avertir ou suspendre un compte en cas de récidive",
+      "Examiner un contenu signalé et le masquer temporairement le temps de l'examen",
+      "Restreindre sa visibilité, le supprimer, avertir ou suspendre un compte selon la gravité, le contexte et la récidive",
+      "Agir immédiatement face à un contenu manifestement grave (menace sérieuse, exploitation de mineurs, braconnage organisé) et coopérer avec les autorités lorsque la loi l'impose",
+      "Un compte sanctionné peut demander un réexamen de la décision de modération",
+    ],
+  },
+  {
+    title: "Vos données personnelles",
+    items: [
+      "Minimisation — seules les données nécessaires au fonctionnement de PISTE sont collectées.",
+      "Vous disposez d'un droit d'accès, de rectification, d'effacement et, lorsque applicable, de portabilité de vos données.",
+      "Votre consentement est demandé lorsque c'est nécessaire (par exemple pour des cookies non essentiels).",
+      "Vos données sont sécurisées, et vous pouvez supprimer votre compte et vos données à tout moment (Paramètres > Données).",
+      "Une politique de confidentialité dédiée détaille les données collectées, leur durée de conservation et leurs destinataires.",
     ],
   },
 ];
@@ -667,7 +735,7 @@ function BadgeRow({ badges }) {
    ============================================================ */
 function OnboardingHeader({ onBack, step, total }) {
   return (
-    <div className="flex items-center gap-3 px-5 pt-5 pb-2">
+    <div className="flex items-center gap-3 px-5 pb-2" style={{ paddingTop: "calc(20px + env(safe-area-inset-top, 0px))" }}>
       <IconButton icon={ArrowLeft} onClick={onBack} />
       <ProgressDots step={step} total={total} />
     </div>
@@ -820,7 +888,7 @@ function StepSignup({ data, setData, onNext, onBack, onLogin }) {
     <AuthBackdrop>
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <OnboardingHeader onBack={onBack} step={0} total={6} />
-        <div style={{ padding: "16px 20px", flex: 1, animation: "pisteFadeSlideUp 480ms cubic-bezier(0.22, 1, 0.36, 1) both" }}>
+        <div style={{ padding: "16px 20px calc(16px + env(safe-area-inset-bottom, 0px))", flex: 1, animation: "pisteFadeSlideUp 480ms cubic-bezier(0.22, 1, 0.36, 1) both" }}>
           <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
             <div style={{ fontSize: 19, fontWeight: 800, color: colors.text }}>Créer votre compte</div>
             <BetaBadge />
@@ -873,7 +941,7 @@ function StepBirthdate({ data, setData, onNext, onBack }) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <OnboardingHeader onBack={onBack} step={1} total={6} />
-      <div style={{ padding: "16px 20px", flex: 1 }}>
+      <div style={{ padding: "16px 20px calc(16px + env(safe-area-inset-bottom, 0px))", flex: 1 }}>
         <div style={{ fontSize: 19, fontWeight: 800, color: colors.text, marginBottom: 4 }}>Quand êtes-vous né ?</div>
         <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 22 }}>Cette information reste privée.</div>
         <div className="flex gap-2">
@@ -899,7 +967,7 @@ function StepRegion({ data, setData, onNext, onBack }) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <OnboardingHeader onBack={onBack} step={2} total={6} />
-      <div style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}>
+      <div style={{ padding: "16px 20px calc(16px + env(safe-area-inset-bottom, 0px))", flex: 1, overflowY: "auto" }}>
         <div style={{ fontSize: 19, fontWeight: 800, color: colors.text, marginBottom: 4 }}>Où êtes-vous ?</div>
         <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 18 }}>Votre position précise ne sera jamais affichée publiquement.</div>
         <div className="flex flex-wrap gap-2" style={{ marginBottom: 18 }}>
@@ -926,7 +994,7 @@ function StepInterests({ data, setData, onNext, onBack }) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <OnboardingHeader onBack={onBack} step={3} total={6} />
-      <div style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}>
+      <div style={{ padding: "16px 20px calc(16px + env(safe-area-inset-bottom, 0px))", flex: 1, overflowY: "auto" }}>
         <div style={{ fontSize: 19, fontWeight: 800, color: colors.text, marginBottom: 4 }}>Qu'est-ce qui vous intéresse ?</div>
         <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 18 }}>Sélectionnez tout ce qui vous parle.</div>
         <div className="flex flex-wrap gap-2">{INTERESTS.map((i) => <Chip key={i} label={i} active={data.interests.includes(i)} onClick={() => toggle(i)} />)}</div>
@@ -941,7 +1009,7 @@ function StepWhoYouAre({ data, setData, onNext, onBack }) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <OnboardingHeader onBack={onBack} step={4} total={6} />
-      <div style={{ padding: "16px 20px", flex: 1 }}>
+      <div style={{ padding: "16px 20px calc(16px + env(safe-area-inset-bottom, 0px))", flex: 1 }}>
         <div style={{ fontSize: 19, fontWeight: 800, color: colors.text, marginBottom: 4 }}>Vous êtes...</div>
         <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 18 }}>Plusieurs choix possibles.</div>
         <div className="flex flex-col gap-2">
@@ -1075,8 +1143,8 @@ function LoginScreen({ onBack, onSignup }) {
   return (
     <AuthBackdrop>
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <div className="flex items-center px-5 pt-5 pb-2"><IconButton icon={ArrowLeft} onClick={onBack} /></div>
-        <div style={{ padding: "16px 20px", flex: 1, animation: "pisteFadeSlideUp 480ms cubic-bezier(0.22, 1, 0.36, 1) both" }}>
+        <div className="flex items-center px-5 pb-2" style={{ paddingTop: "calc(20px + env(safe-area-inset-top, 0px))" }}><IconButton icon={ArrowLeft} onClick={onBack} /></div>
+        <div style={{ padding: "16px 20px calc(16px + env(safe-area-inset-bottom, 0px))", flex: 1, animation: "pisteFadeSlideUp 480ms cubic-bezier(0.22, 1, 0.36, 1) both" }}>
           <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
             <div style={{ fontSize: 19, fontWeight: 800, color: colors.text }}>Connexion</div>
             <BetaBadge />
@@ -1126,8 +1194,9 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         // La marge du haut sur un élément "sticky" ne crée pas un vrai espace
         // fiable (comportement différent d'un élément "fixed") — on décale
         // plutôt sa position elle-même pour obtenir le même détachement que
-        // la barre du bas.
-        top: floating ? 8 : 0,
+        // la barre du bas. env(safe-area-inset-top) : encoche/île dynamique
+        // en PWA plein écran sur iPhone (voir viewport-fit=cover, index.html).
+        top: floating ? "calc(8px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
         zIndex: 20,
         background: colors.headerBg,
         backdropFilter: "blur(24px)",
@@ -1373,7 +1442,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
   }, [username, isFollowing]);
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 64, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 64, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       {loading ? (
         <>
           <ScreenHeader title="Profil" onBack={onClose} />
@@ -2071,11 +2140,11 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
         )}
 
         {/* Zones de tap (précédent / suivant) + maintien pour mettre en pause */}
-        <div onPointerDown={onPressStart} onPointerUp={() => onPressEnd(false)} onPointerCancel={() => setPaused(false)} style={{ position: "absolute", left: 0, top: 60, bottom: 70, width: "35%", zIndex: 2 }} />
-        <div onPointerDown={onPressStart} onPointerUp={() => onPressEnd(true)} onPointerCancel={() => setPaused(false)} style={{ position: "absolute", right: 0, top: 60, bottom: 70, width: "65%", zIndex: 2 }} />
+        <div onPointerDown={onPressStart} onPointerUp={() => onPressEnd(false)} onPointerCancel={() => setPaused(false)} style={{ position: "absolute", left: 0, top: "calc(60px + env(safe-area-inset-top, 0px))", bottom: "calc(70px + env(safe-area-inset-bottom, 0px))", width: "35%", zIndex: 2 }} />
+        <div onPointerDown={onPressStart} onPointerUp={() => onPressEnd(true)} onPointerCancel={() => setPaused(false)} style={{ position: "absolute", right: 0, top: "calc(60px + env(safe-area-inset-top, 0px))", bottom: "calc(70px + env(safe-area-inset-bottom, 0px))", width: "65%", zIndex: 2 }} />
 
         {/* Barres de progression */}
-        <div className="flex gap-1" style={{ position: "absolute", top: 10, left: 10, right: 10, zIndex: 3 }}>
+        <div className="flex gap-1" style={{ position: "absolute", top: "calc(10px + env(safe-area-inset-top, 0px))", left: 10, right: 10, zIndex: 3 }}>
           {group.traces.map((t, i) => (
             <div key={t.id} style={{ flex: 1, height: 2.5, borderRadius: 2, background: "rgba(255,255,255,0.35)", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${i < traceIndex ? 100 : i === traceIndex ? progress * 100 : 0}%`, background: "#fff" }} />
@@ -2084,7 +2153,7 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
         </div>
 
         {/* En-tête : auteur + fermeture */}
-        <div className="flex items-center justify-between" style={{ position: "absolute", top: 20, left: 12, right: 12, zIndex: 3 }}>
+        <div className="flex items-center justify-between" style={{ position: "absolute", top: "calc(20px + env(safe-area-inset-top, 0px))", left: 12, right: 12, zIndex: 3 }}>
           <button onClick={() => onOpenProfile(group.username)} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer" }}>
             <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               {group.avatar ? <img src={group.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color={colors.textFaint} />}
@@ -2106,14 +2175,14 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
 
         {/* Légende */}
         {trace.texte && (
-          <div style={{ position: "absolute", left: 16, right: 16, bottom: isMine ? 64 : 24, zIndex: 3, fontSize: 13.5, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.5)", textAlign: "center" }}>
+          <div style={{ position: "absolute", left: 16, right: 16, bottom: `calc(${isMine ? 64 : 24}px + env(safe-area-inset-bottom, 0px))`, zIndex: 3, fontSize: 13.5, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.5)", textAlign: "center" }}>
             {trace.texte}
           </div>
         )}
 
         {/* Vues (propriétaire uniquement) */}
         {isMine && (
-          <button onClick={() => setShowViewers(true)} className="flex items-center gap-1.5" style={{ position: "absolute", left: 16, bottom: 22, zIndex: 3, background: "rgba(0,0,0,0.4)", border: "none", borderRadius: RADIUS.pill, padding: "7px 12px", cursor: "pointer" }}>
+          <button onClick={() => setShowViewers(true)} className="flex items-center gap-1.5" style={{ position: "absolute", left: 16, bottom: "calc(22px + env(safe-area-inset-bottom, 0px))", zIndex: 3, background: "rgba(0,0,0,0.4)", border: "none", borderRadius: RADIUS.pill, padding: "7px 12px", cursor: "pointer" }}>
             <Eye size={14} color="#fff" />
             <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{trace.viewCount ?? 0} vue{(trace.viewCount ?? 0) !== 1 ? "s" : ""}</span>
           </button>
@@ -2193,7 +2262,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
       <div
         style={{
           position: "sticky",
-          top: chromeMode !== "hidden" ? 74 : 0,
+          top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
           zIndex: 5,
           padding: "14px 16px 6px",
           opacity: chromeMode === "hidden" ? 0 : 1,
@@ -2278,7 +2347,7 @@ function FullScreenVideoPlayer({ video, onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#000", display: "flex", flexDirection: "column" }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "flex", justifyContent: "space-between", padding: 16 }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "flex", justifyContent: "space-between", padding: "16px", paddingTop: "calc(16px + env(safe-area-inset-top, 0px))" }}>
         <button onClick={rotate} aria-label="Plein écran / pivoter" style={{ background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <RotateCw size={16} color="#fff" />
         </button>
@@ -2421,10 +2490,10 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
           <div style={{ width: 56, height: 56, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={26} color="#fff" fill="#fff" /></div>
         </div>
       )}
-      <button onClick={() => setMuted((m) => !m)} style={{ position: "absolute", top: 18, right: 14, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+      <button onClick={() => setMuted((m) => !m)} style={{ position: "absolute", top: "calc(18px + env(safe-area-inset-top, 0px))", right: 14, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
         {muted ? <VolumeX size={16} color="#fff" /> : <Volume2 size={16} color="#fff" />}
       </button>
-      <div style={{ position: "absolute", left: 0, right: 68, bottom: 0, padding: "0 16px 22px", color: "#fff", pointerEvents: "none" }}>
+      <div style={{ position: "absolute", left: 0, right: 68, bottom: 0, padding: "0 16px calc(22px + env(safe-area-inset-bottom, 0px))", color: "#fff", pointerEvents: "none" }}>
         <button onClick={onOpenAuthor} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 8, pointerEvents: "auto" }}>
           <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
             {item.avatar ? <img src={item.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color="#fff" />}
@@ -2433,7 +2502,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
         </button>
         {item.texte && <div style={{ fontSize: 12.5, lineHeight: 1.4, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.texte}</div>}
       </div>
-      <div className="flex flex-col items-center gap-4" style={{ position: "absolute", right: 14, bottom: 24 }}>
+      <div className="flex flex-col items-center gap-4" style={{ position: "absolute", right: 14, bottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>
         <button onClick={onLike} className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
           <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Heart size={18} color={liked ? colors.accent : "#fff"} fill={liked ? colors.accent : "none"} strokeWidth={2} />
@@ -2504,7 +2573,7 @@ function SingleInstantViewer({ item, onClose, liked, reposted, commentCount, onL
     <div style={{ position: "fixed", inset: 0, zIndex: 90, background: "#000", display: "flex", justifyContent: "center" }}>
       <div style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%" }}>
         <InstantSlide item={item} liked={liked} reposted={reposted} commentCount={commentCount} onLike={onLike} onRepost={onRepost} onOpenComments={onOpenComments} onOpenActions={onOpenActions} onOpenAuthor={onOpenAuthor} />
-        <button onClick={onClose} style={{ position: "absolute", top: 20, left: 14, zIndex: 10, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+        <button onClick={onClose} style={{ position: "absolute", top: "calc(20px + env(safe-area-inset-top, 0px))", left: 14, zIndex: 10, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <ArrowLeft size={18} color="#fff" />
         </button>
       </div>
@@ -2542,8 +2611,9 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
             position: "absolute",
             // Header principal maintenant flottant PAR-DESSUS Instants (voir
             // le zIndex du conteneur plein écran ci-dessus) — même décalage
-            // que les autres sélecteurs d'onglets sous l'en-tête (top: 74).
-            top: 74,
+            // que les autres sélecteurs d'onglets sous l'en-tête (top: 74),
+            // + env(safe-area-inset-top) pour l'encoche en PWA plein écran.
+            top: "calc(74px + env(safe-area-inset-top, 0px))",
             left: 0,
             right: 0,
             zIndex: 5,
@@ -2640,7 +2710,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
         <div
           style={{
             position: "sticky",
-            top: chromeMode !== "hidden" ? 74 : 0,
+            top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
             zIndex: 5,
             padding: "14px 16px 6px",
             opacity: chromeMode === "hidden" ? 0 : 1,
@@ -2902,7 +2972,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
         <div
           style={{
             position: "sticky",
-            top: localMode !== "hidden" ? 74 : 0,
+            top: localMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
             zIndex: 5,
             padding: "10px 16px",
             background: colors.background,
@@ -3062,7 +3132,7 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
       <div
         style={{
           position: "sticky",
-          top: chromeMode !== "hidden" ? 74 : 0,
+          top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
           zIndex: 5,
           background: colors.headerBg,
           backdropFilter: "blur(24px)",
@@ -3436,7 +3506,7 @@ function TraceComposeScreen({ onClose, onPublished }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Nouvelle Trace" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={inputRef} type="file" accept="image/*,video/*" onChange={pick} style={{ display: "none" }} />
@@ -3792,7 +3862,7 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={isEdit ? "Modifier la sortie" : "Nouvelle sortie"} onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <TextField label="Date" value={date} onChange={setDate} type="date" />
@@ -4097,7 +4167,7 @@ function HuntingLogScreen({ onClose, dogs }) {
   const closeForm = () => { setShowForm(false); setEditingLog(null); };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 65, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Carnet de chasse" onBack={onClose} />
       <div className="flex items-center gap-1.5" style={{ padding: "10px 16px 0", fontSize: 11, color: colors.textFaint }}>
         <Lock size={11} /><span>Strictement privé — visible par vous seul.</span>
@@ -4294,7 +4364,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         className="px-4"
         style={{
           position: "sticky",
-          top: chromeMode !== "hidden" ? 74 : 0,
+          top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
           zIndex: 5,
           marginTop: 20,
           paddingBottom: 4,
@@ -4789,7 +4859,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
       {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
       <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -4919,7 +4989,7 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
   }, [query]);
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Rechercher" onCloseX={onClose} />
       <div style={{ padding: "14px 16px 10px" }}>
         <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
@@ -5018,7 +5088,7 @@ function NewConversationSheet({ onClose, onStarted }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={groupMode ? "Nouveau groupe" : "Nouveau message"} onCloseX={onClose} />
       <div style={{ padding: "14px 16px 10px" }}>
         <SegmentedControl
@@ -5126,7 +5196,7 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
       <div
         style={{
           position: "sticky",
-          top: chromeMode !== "hidden" ? 74 : 0,
+          top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
           zIndex: 5,
           background: colors.headerBg,
           backdropFilter: "blur(24px)",
@@ -5350,7 +5420,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onGoToF
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 50, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Notifications" onBack={onClose} />
       {items.some((n) => !n.lu) && (
         <div style={{ padding: "0 16px 8px", textAlign: "right" }}>
