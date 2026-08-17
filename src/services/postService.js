@@ -213,9 +213,10 @@ export async function toggleSave(postId, shouldSave) {
 export async function addComment(postId, texte, parentId = null) {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("Non authentifié");
+  const mentions = extractMentions(texte || "");
   const { data, error } = await supabase
     .from("comments")
-    .insert({ post_id: postId, author_id: userData.user.id, texte, parent_id: parentId })
+    .insert({ post_id: postId, author_id: userData.user.id, texte, parent_id: parentId, mentions })
     .select()
     .single();
   if (error) throw error;

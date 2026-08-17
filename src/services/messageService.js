@@ -286,6 +286,37 @@ export function subscribeToMyMessages(onInsert) {
   return () => supabase.removeChannel(channel);
 }
 
+/**
+ * État de lecture des AUTRES membres d'une conversation (jamais le mien) —
+ * sert à afficher "Lu" sous mon dernier message envoyé. RLS ("member reads
+ * own membership rows", migration 013) autorise déjà un membre à lire toutes
+ * les lignes conversation_members de ses propres conversations, pas
+ * seulement la sienne.
+ */
+export async function fetchConversationReadState(conversationId, meId) {
+  const { data, error } = await supabase
+    .from("conversation_members")
+    .select("user_id, last_read_at")
+    .eq("conversation_id", conversationId)
+    .is("left_at", null)
+    .neq("user_id", meId);
+  if (error) throw error;
+  return data;
+}
+
+/** Abonnement realtime aux mises à jour de last_read_at des autres membres
+ *  (voir migration 032) — permet à l'indicateur "Lu" de passer en direct dès
+ *  que le destinataire ouvre la conversation, sans recharger. */
+export function subscribeToReadState(conversationId, onUpdate) {
+  const channel = supabase
+    .channel(`read-state-${conversationId}`)
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversation_members", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+      onUpdate(payload.new);
+    })
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
 /** Marque une conversation comme lue "maintenant" — appelé à l'ouverture du
  *  fil (voir migration 016). */
 export async function markConversationRead(conversationId) {

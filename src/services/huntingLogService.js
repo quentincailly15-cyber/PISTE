@@ -19,7 +19,7 @@ async function requireUser() {
   return data.user;
 }
 
-const LOG_SELECT = "*, dogs(id, nom, photo_url), hunting_log_photos(id, path, ordre)";
+const LOG_SELECT = "*, dogs(id, nom, photo_url), hunting_log_photos(id, path, ordre), hunting_log_companions(user_id, profiles(id, username, nom, avatar_url)), profiles!hunting_logs_user_id_fkey(id, username, nom, avatar_url)";
 
 async function signPhotoUrls(photos) {
   if (!photos || photos.length === 0) return [];
@@ -34,7 +34,15 @@ async function signPhotoUrls(photos) {
   return signed.filter(Boolean);
 }
 
-function mapLogRow(row, photos) {
+/**
+ * meId sert à distinguer "ma sortie" ("isOwner: true") d'une sortie où je
+ * n'ai été qu'identifié comme compagnon (voir migration 034) — dans ce
+ * second cas, notes reste vide côté client même si jamais renvoyé par une
+ * requête mal filtrée : les notes personnelles ne regardent que le
+ * propriétaire, seul le fait de la sortie est partagé.
+ */
+function mapLogRow(row, photos, meId) {
+  const isOwner = row.user_id === meId;
   return {
     id: row.id,
     date: row.date,
@@ -57,32 +65,51 @@ function mapLogRow(row, photos) {
     terrain: row.terrain,
     distanceKm: row.distance_km,
     nombrePrises: row.nombre_prises,
-    notes: row.notes,
+    notes: isOwner ? row.notes : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    photos,
+    photos: isOwner ? photos : [],
+    isOwner,
+    owner: isOwner || !row.profiles ? null : { id: row.profiles.id, username: row.profiles.username, nom: row.profiles.nom || row.profiles.username, avatar: row.profiles.avatar_url },
+    companions: (row.hunting_log_companions || [])
+      .map((c) => (c.profiles ? { id: c.profiles.id, username: c.profiles.username, nom: c.profiles.nom || c.profiles.username, avatar: c.profiles.avatar_url } : null))
+      .filter(Boolean),
   };
 }
 
-/** Toutes les sorties de l'utilisateur connecté, les plus récentes en
- *  premier, avec leurs photos déjà résolues en URL signée temporaire. */
+/** Toutes les sorties visibles pour l'utilisateur connecté — les siennes et
+ *  celles où il a été identifié comme compagnon (voir migration 034), les
+ *  plus récentes en premier. Pas de filtre .eq("user_id", ...) ici : c'est
+ *  la policy RLS "owner and companions read hunting logs" qui détermine ce
+ *  qui est réellement visible, dans les deux cas. */
 export async function fetchMyLogs() {
   const me = await requireUser();
   const { data, error } = await supabase
     .from("hunting_logs")
     .select(LOG_SELECT)
-    .eq("user_id", me.id)
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return Promise.all(data.map(async (row) => mapLogRow(row, await signPhotoUrls(row.hunting_log_photos))));
+  return Promise.all(data.map(async (row) => mapLogRow(row, row.user_id === me.id ? await signPhotoUrls(row.hunting_log_photos) : [], me.id)));
 }
 
 export async function fetchLog(logId) {
   const me = await requireUser();
-  const { data, error } = await supabase.from("hunting_logs").select(LOG_SELECT).eq("id", logId).eq("user_id", me.id).single();
+  const { data, error } = await supabase.from("hunting_logs").select(LOG_SELECT).eq("id", logId).single();
   if (error) throw error;
-  return mapLogRow(data, await signPhotoUrls(data.hunting_log_photos));
+  return mapLogRow(data, data.user_id === me.id ? await signPhotoUrls(data.hunting_log_photos) : [], me.id);
+}
+
+/** Remplace la liste complète des compagnons identifiés sur une sortie (le
+ *  propriétaire seul peut le faire — voir la policy RLS de la migration
+ *  034). Utilisé à la création et à chaque modification du formulaire. */
+export async function setLogCompanions(logId, userIds) {
+  const { error: delError } = await supabase.from("hunting_log_companions").delete().eq("log_id", logId);
+  if (delError) throw delError;
+  if (!userIds || userIds.length === 0) return;
+  const rows = userIds.map((userId) => ({ log_id: logId, user_id: userId }));
+  const { error } = await supabase.from("hunting_log_companions").insert(rows);
+  if (error) throw error;
 }
 
 async function uploadLogPhotos(logId, files) {
@@ -124,9 +151,10 @@ function toRow({ date, lieuNom, lieuCommune, lieuLat, lieuLng, typeSortie, avecC
   };
 }
 
-/** Crée une sortie, puis ses photos éventuelles (le log doit exister avant
- *  l'upload, son id sert de dossier Storage). */
-export async function createLog(fields, photoFiles = []) {
+/** Crée une sortie, puis ses photos et compagnons éventuels (le log doit
+ *  exister avant l'upload/le tag, son id sert de dossier Storage / de clé
+ *  étrangère). */
+export async function createLog(fields, photoFiles = [], companionIds = []) {
   const me = await requireUser();
   const { data: log, error } = await supabase
     .from("hunting_logs")
@@ -137,14 +165,23 @@ export async function createLog(fields, photoFiles = []) {
   if (photoFiles.length > 0) {
     await uploadLogPhotos(log.id, photoFiles);
   }
+  if (companionIds.length > 0) {
+    await setLogCompanions(log.id, companionIds);
+  }
   return fetchLog(log.id);
 }
 
-export async function updateLog(logId, fields, newPhotoFiles = []) {
+/** companionIds à null = ne touche pas aux compagnons déjà enregistrés
+ *  (utile si le formulaire d'édition ne les a pas rechargés) ; un tableau
+ *  (même vide) remplace la liste complète. */
+export async function updateLog(logId, fields, newPhotoFiles = [], companionIds = null) {
   const { error } = await supabase.from("hunting_logs").update(toRow(fields)).eq("id", logId);
   if (error) throw error;
   if (newPhotoFiles.length > 0) {
     await uploadLogPhotos(logId, newPhotoFiles);
+  }
+  if (companionIds !== null) {
+    await setLogCompanions(logId, companionIds);
   }
   return fetchLog(logId);
 }

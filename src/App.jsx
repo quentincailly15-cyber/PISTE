@@ -6,7 +6,7 @@ import {
   Bookmark, HelpCircle, AlertTriangle, LogOut, Moon, Sun, Monitor, BarChart3,
   Heart, MessageSquare, Share2, MoreHorizontal, Camera, Play, BookOpen, Mic,
   Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud, Target,
-  RotateCw, Smartphone,
+  RotateCw, Smartphone, AtSign,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as traceService from "./services/traceService.js";
@@ -1668,7 +1668,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={meUsername} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={meUsername} onOpenProfile={onOpenProfile} />
       )}
     </div>
   );
@@ -1747,7 +1747,94 @@ function ReportSheet({ onClose, onSubmit }) {
     </Sheet>
   );
 }
-function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername }) {
+// Rend un texte en transformant chaque "@pseudo" réellement présent en lien
+// cliquable vers le profil — jamais de mention inventée, seulement celles
+// écrites par l'auteur (même regex que extractMentions).
+function renderTextWithMentions(text, colors, onOpenProfile) {
+  if (!text) return text;
+  const parts = text.split(/(@[a-z0-9_.]+)/gi);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    /^@[a-z0-9_.]+$/i.test(part) ? (
+      <span
+        key={i}
+        onClick={(e) => { e.stopPropagation(); onOpenProfile?.(part.slice(1)); }}
+        style={{ color: colors.accent, fontWeight: 700, cursor: onOpenProfile ? "pointer" : "default" }}
+      >
+        {part}
+      </span>
+    ) : (
+      part
+    )
+  );
+}
+// Bouton "@" à côté d'un champ de commentaire — ouvre une recherche de vrais
+// comptes PISTE et insère "@pseudo" dans le texte à la sélection, plutôt que
+// de laisser taper un nom à la main (risque de faute, mauvaise personne...).
+function MentionPickerButton({ onSelect }) {
+  const { colors } = useTheme();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const q = query.trim();
+    if (!q) { setResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(() => {
+      socialService.searchUsers(q).then((rows) => { if (!cancelled) setResults(rows); }).catch(() => {}).finally(() => { if (!cancelled) setSearching(false); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query, open]);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} aria-label="Identifier quelqu'un" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexShrink: 0 }}>
+        <AtSign size={19} color={colors.textFaint} />
+      </button>
+      {open && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 95 }}>
+          <div onClick={() => setOpen(false)} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+            <div style={{ width: "100%", maxWidth: 460, maxHeight: "60vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+              <div className="flex items-center justify-between" style={{ padding: "6px 16px 8px" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>Identifier quelqu'un</span>
+                <IconButton icon={X} onClick={() => setOpen(false)} size={28} />
+              </div>
+              <div style={{ padding: "0 16px 10px" }}>
+                <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un pseudo..." style={{ width: "100%", border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px", fontSize: 13.5, color: colors.text, outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", padding: "0 10px 10px" }}>
+                {searching ? (
+                  <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Recherche...</div>
+                ) : !query.trim() ? (
+                  <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Tapez un pseudo pour identifier quelqu'un.</div>
+                ) : results.length === 0 ? (
+                  <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Aucun résultat.</div>
+                ) : (
+                  results.map((u) => (
+                    <button key={u.id} onClick={() => { onSelect(u); setOpen(false); setQuery(""); }} className="flex items-center gap-2" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
+                      <div style={{ width: 28, height: 28, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={13} color={colors.textFaint} />}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
+                        <div style={{ fontSize: 11, color: colors.textFaint }}>@{u.username}</div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenProfile }) {
   const { colors } = useTheme();
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null); // { id, auteur } | null
@@ -1812,7 +1899,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername }) {
                     </button>
                   )}
                 </div>
-                <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{c.texte}</div>
+                <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(c.texte, colors, onOpenProfile)}</div>
                 <button onClick={() => setReplyTo({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: 4, padding: 0 }}>Répondre</button>
                 {repliesOf(c.id).map((r) => (
                   <div key={r.id} style={{ marginTop: 8, marginLeft: 18, paddingLeft: 10, borderLeft: `2px solid ${colors.border}` }}>
@@ -1827,7 +1914,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername }) {
                         </button>
                       )}
                     </div>
-                    <div style={{ fontSize: 12.5, color: colors.text, lineHeight: 1.4 }}>{r.texte}</div>
+                    <div style={{ fontSize: 12.5, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(r.texte, colors, onOpenProfile)}</div>
                   </div>
                 ))}
               </div>
@@ -1842,6 +1929,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername }) {
         </div>
       )}
       <div className="flex items-center gap-2" style={{ padding: "10px 16px 14px" }}>
+        <MentionPickerButton onSelect={(u) => setText((t) => (t && !t.endsWith(" ") ? t + " " : t) + `@${u.username} `)} />
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -2312,7 +2400,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
     </div>
   );
@@ -2372,6 +2460,11 @@ function FullScreenVideoPlayer({ video, onClose }) {
 function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onOpenComments, onOpenActions, onOpenAuthor, onOpenPlayer }) {
   const { colors } = useTheme();
   const canPlay = !!video.videoUrl;
+  // Contenu sensible : miniature floutée + avertissement tant que non révélée
+  // (même principe que SensitiveGate côté Fil) — un premier tap révèle la
+  // miniature, un second lance la lecture, comme n'importe quelle vignette.
+  const [revealed, setRevealed] = useState(false);
+  const gated = video.contentRating === "sensitive" && !revealed;
   const share = async () => {
     if (navigator.share) { try { await navigator.share({ title: "PISTE", text: video.titre || "Une vidéo PISTE" }); } catch (e) {} }
     else alert("Le partage natif n'est pas disponible sur cet appareil.");
@@ -2381,23 +2474,31 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
       <div className="flex gap-3" style={{ alignItems: "stretch" }}>
         {/* Vidéo en grand */}
         <button
-          onClick={canPlay ? onOpenPlayer : undefined}
-          disabled={!canPlay}
-          style={{ flex: 1, minWidth: 0, aspectRatio: "16/9", borderRadius: RADIUS.md, background: colors.surfaceAlt, position: "relative", overflow: "hidden", border: "none", padding: 0, cursor: canPlay ? "pointer" : "default" }}
+          onClick={gated ? () => setRevealed(true) : (canPlay ? onOpenPlayer : undefined)}
+          disabled={!gated && !canPlay}
+          style={{ flex: 1, minWidth: 0, aspectRatio: "16/9", borderRadius: RADIUS.md, background: colors.surfaceAlt, position: "relative", overflow: "hidden", border: "none", padding: 0, cursor: gated || canPlay ? "pointer" : "default" }}
         >
           {/* Vraie miniature (image capturée à l'envoi) en priorité — un <video>
               reste souvent noir tant qu'on n'a pas cliqué dessus, selon l'appareil. */}
           {video.image ? (
-            <img src={video.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={video.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: gated ? "blur(16px)" : "none" }} />
           ) : video.videoUrl ? (
-            <video src={video.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
+            <video src={video.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none", filter: gated ? "blur(16px)" : "none" }} />
           ) : null}
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Play size={19} color="white" fill="white" />
+          {gated ? (
+            <div style={{ position: "absolute", inset: 0, background: "rgba(20,18,16,0.55)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 10, textAlign: "center", gap: 5 }}>
+              <AlertTriangle size={17} color="#fff" strokeWidth={1.8} />
+              <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 700 }}>Contenu sensible</span>
+              <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.85)" }}>Toucher pour afficher</span>
             </div>
-          </div>
-          {video.duree && <span style={{ position: "absolute", right: 6, bottom: 6, fontSize: 10, color: "white", background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "1px 5px" }}>{video.duree}</span>}
+          ) : (
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Play size={19} color="white" fill="white" />
+              </div>
+            </div>
+          )}
+          {video.duree && !gated && <span style={{ position: "absolute", right: 6, bottom: 6, fontSize: 10, color: "white", background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "1px 5px" }}>{video.duree}</span>}
         </button>
         {/* Pilule verticale d'actions — like/commentaire/repost/partage/plus
             regroupées, jamais collée au bord droit de la carte. */}
@@ -2446,10 +2547,21 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
   const slideRef = useRef(null);
   const [muted, setMuted] = useState(true);
   const [playing, setPlaying] = useState(true);
+  // Contenu sensible : flouté et mis en pause tant que l'utilisateur n'a pas
+  // appuyé sur "Afficher le contenu" — même principe que SensitiveGate (Fil),
+  // adapté à une vidéo qui joue automatiquement au lieu d'une image statique.
+  const [revealed, setRevealed] = useState(false);
+  const gated = item.contentRating === "sensitive" && !revealed;
+  const gatedRef = useRef(gated);
   const share = async () => {
     if (navigator.share) { try { await navigator.share({ title: "PISTE", text: item.texte || "Un instant PISTE" }); } catch (e) {} }
     else alert("Le partage natif n'est pas disponible sur cet appareil.");
   };
+
+  useEffect(() => {
+    gatedRef.current = gated;
+    if (gated) { videoRef.current?.pause(); setPlaying(false); }
+  }, [gated]);
 
   useEffect(() => {
     const el = slideRef.current;
@@ -2458,8 +2570,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
-          vid.play().catch(() => {});
-          setPlaying(true);
+          if (!gatedRef.current) { vid.play().catch(() => {}); setPlaying(true); }
         } else {
           vid.pause();
           setPlaying(false);
@@ -2534,6 +2645,14 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
           </div>
         </button>
       </div>
+      {gated && (
+        <div style={{ position: "absolute", inset: 0, background: "rgba(20,18,16,0.6)", backdropFilter: "blur(22px)", WebkitBackdropFilter: "blur(22px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 28, textAlign: "center", gap: 12 }}>
+          <AlertTriangle size={24} color="#fff" strokeWidth={1.8} />
+          <div style={{ fontSize: 13, color: "#fff", fontWeight: 700 }}>Contenu sensible</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", lineHeight: 1.5, maxWidth: 260 }}>{CONTENT_RATINGS.sensitive.warning}</div>
+          <button onClick={() => setRevealed(true)} style={{ marginTop: 4, background: "#fff", color: "#14170D", border: "none", borderRadius: RADIUS.pill, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Afficher le contenu</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2547,9 +2666,9 @@ function RepostedInstantCard({ item, onOpen }) {
     <button onClick={() => onOpen(item)} className="flex items-center gap-3" style={{ width: "100%", background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "none", borderRadius: RADIUS.xl, padding: "10px 14px", margin: "0 12px 10px", cursor: "pointer", textAlign: "left", boxShadow: "0 1px 8px rgba(0,0,0,0.05)" }}>
       <div style={{ position: "relative", width: 52, height: 70, borderRadius: RADIUS.lg, overflow: "hidden", background: "#000", flexShrink: 0 }}>
         {item.image ? (
-          <img src={item.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={item.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: item.contentRating === "sensitive" ? "blur(10px)" : "none" }} />
         ) : item.videoUrl ? (
-          <video src={item.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <video src={item.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", filter: item.contentRating === "sensitive" ? "blur(10px)" : "none" }} />
         ) : null}
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Play size={14} color="#fff" fill="#fff" />
@@ -2816,7 +2935,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "video", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
     </div>
   );
@@ -3053,7 +3172,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
     </div>
   );
@@ -3801,6 +3920,77 @@ function formatDuree(minutes) {
   return `${h} h ${m}`;
 }
 
+// Champ "rechercher puis sélectionner" un ou plusieurs vrais comptes PISTE —
+// jamais du texte libre, pour être sûr que ce soit la bonne personne (voir
+// socialService.searchUsers). Utilisé par le carnet de chasse pour
+// identifier les compagnons d'une sortie.
+function UserPickerField({ label, selected, onChange, placeholder }) {
+  const { colors } = useTheme();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) { setResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(() => {
+      socialService.searchUsers(q)
+        .then((rows) => { if (!cancelled) setResults(rows.filter((u) => !selected.some((s) => s.id === u.id))); })
+        .catch(() => {})
+        .finally(() => { if (!cancelled) setSearching(false); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query, selected]);
+  const add = (u) => {
+    onChange([...selected, { id: u.id, username: u.username, nom: u.nom || u.username, avatar: u.avatar_url }]);
+    setQuery("");
+    setResults([]);
+  };
+  const remove = (id) => onChange(selected.filter((s) => s.id !== id));
+  return (
+    <div style={{ marginBottom: SPACE.lg }}>
+      {label && <label style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, display: "block" }}>{label}</label>}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" style={{ marginBottom: 8 }}>
+          {selected.map((s) => (
+            <span key={s.id} className="flex items-center gap-1.5" style={{ background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "3px 8px 3px 4px", fontSize: 12, fontWeight: 600, color: colors.accent }}>
+              <div style={{ width: 18, height: 18, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {s.avatar ? <img src={s.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={9} color={colors.textFaint} />}
+              </div>
+              {s.nom}
+              <button onClick={() => remove(s.id)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 0 }}><X size={11} color={colors.accent} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div style={{ position: "relative" }}>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder} style={{ width: "100%", border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13.5, color: colors.text, outline: "none", boxSizing: "border-box" }} />
+        {query.trim() && (
+          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.lg, boxShadow: "0 8px 24px rgba(0,0,0,0.14)", zIndex: 5, maxHeight: 220, overflowY: "auto" }}>
+            {searching ? (
+              <div style={{ padding: 12, fontSize: 12, color: colors.textFaint, textAlign: "center" }}>Recherche...</div>
+            ) : results.length === 0 ? (
+              <div style={{ padding: 12, fontSize: 12, color: colors.textFaint, textAlign: "center" }}>Aucun résultat.</div>
+            ) : (
+              results.map((u) => (
+                <button key={u.id} onClick={() => add(u)} className="flex items-center gap-2" style={{ width: "100%", background: "none", border: "none", padding: "9px 12px", cursor: "pointer", textAlign: "left" }}>
+                  <div style={{ width: 26, height: 26, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={12} color={colors.textFaint} />}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
+                    <div style={{ fontSize: 11, color: colors.textFaint }}>@{u.username}</div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
   const { colors } = useTheme();
   const isEdit = !!log;
@@ -3821,6 +4011,7 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
   const [distanceKm, setDistanceKm] = useState(log?.distanceKm != null ? String(log.distanceKm) : "");
   const [nombrePrises, setNombrePrises] = useState(log?.nombrePrises != null ? String(log.nombrePrises) : "");
   const [notes, setNotes] = useState(log?.notes || "");
+  const [companions, setCompanions] = useState(log?.companions || []);
   const [photoFiles, setPhotoFiles] = useState([]);
   const [photoPreviews, setPhotoPreviews] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -3852,8 +4043,9 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
       nombrePrises: nombrePrises ? parseInt(nombrePrises, 10) : null,
       notes,
     };
+    const companionIds = companions.map((c) => c.id);
     try {
-      const saved = isEdit ? await huntingLogService.updateLog(log.id, fields, photoFiles) : await huntingLogService.createLog(fields, photoFiles);
+      const saved = isEdit ? await huntingLogService.updateLog(log.id, fields, photoFiles, companionIds) : await huntingLogService.createLog(fields, photoFiles, companionIds);
       onSaved(saved);
     } catch (e) {
       setError(e.message || "Impossible d'enregistrer cette sortie pour le moment.");
@@ -3894,6 +4086,18 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
           <div style={{ flex: 1 }}><TextField label="Durée (minutes)" value={dureeMinutes} onChange={setDureeMinutes} type="number" placeholder="120" /></div>
           <div style={{ flex: 1 }}><TextField label="Personnes présentes" value={nombrePersonnes} onChange={setNombrePersonnes} type="number" placeholder="2" /></div>
         </div>
+
+        <UserPickerField
+          label="Identifier des compagnons (optionnel)"
+          selected={companions}
+          onChange={setCompanions}
+          placeholder="Rechercher un pseudo..."
+        />
+        {companions.length > 0 && (
+          <div style={{ fontSize: 11, color: colors.textFaint, marginTop: -10, marginBottom: 16, lineHeight: 1.4 }}>
+            Cette sortie apparaîtra aussi, en lecture seule, dans le carnet des personnes identifiées — sans vos photos ni vos notes personnelles.
+          </div>
+        )}
 
         <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>MÉTÉO</div>
         <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
@@ -3946,7 +4150,7 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
   );
 }
 
-function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete }) {
+function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }) {
   const { colors } = useTheme();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -3974,7 +4178,38 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete }) {
             <IconButton icon={X} onClick={onClose} size={30} />
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
-            <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "4px 10px", marginBottom: 12 }}>{HUNTING_TYPE_LABEL[log.typeSortie] || log.typeSortie}</span>
+            <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 12 }}>
+              <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "4px 10px" }}>{HUNTING_TYPE_LABEL[log.typeSortie] || log.typeSortie}</span>
+              {!log.isOwner && (
+                <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: colors.textSecondary, background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px" }}>Vous étiez présent</span>
+              )}
+            </div>
+            {!log.isOwner && log.owner && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: colors.textFaint, marginBottom: 6 }}>SORTIE DE</div>
+                <button onClick={() => onOpenProfile?.(log.owner.username)} className="flex items-center gap-1.5" style={{ background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.pill, padding: "4px 10px 4px 4px", cursor: onOpenProfile ? "pointer" : "default" }}>
+                  <div style={{ width: 20, height: 20, borderRadius: RADIUS.pill, background: colors.accentSoft, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {log.owner.avatar ? <img src={log.owner.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={10} color={colors.accent} />}
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{log.owner.nom}</span>
+                </button>
+              </div>
+            )}
+            {log.companions && log.companions.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: colors.textFaint, marginBottom: 6 }}>AVEC</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {log.companions.map((c) => (
+                    <button key={c.id} onClick={() => onOpenProfile?.(c.username)} className="flex items-center gap-1.5" style={{ background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.pill, padding: "4px 10px 4px 4px", cursor: onOpenProfile ? "pointer" : "default" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: RADIUS.pill, background: colors.accentSoft, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={10} color={colors.accent} />}
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{c.nom}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {log.photos.length > 0 && (
               <div className="flex gap-2" style={{ overflowX: "auto", marginBottom: 14 }}>
                 {log.photos.map((p) => (
@@ -4002,7 +4237,7 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete }) {
                 <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.5 }}>{log.notes}</div>
               </div>
             )}
-            {!confirmDelete ? (
+            {!log.isOwner ? null : !confirmDelete ? (
               <div className="flex gap-2" style={{ marginTop: 8 }}>
                 <Button full={false} variant="secondary" onClick={() => onEdit(log)}>Modifier</Button>
                 <Button full={false} variant="secondary" onClick={() => setConfirmDelete(true)}><span style={{ color: colors.error }}>Supprimer</span></Button>
@@ -4130,7 +4365,7 @@ function HuntingLogStatsView({ stats }) {
   );
 }
 
-function HuntingLogScreen({ onClose, dogs }) {
+function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
   const { colors } = useTheme();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4170,7 +4405,7 @@ function HuntingLogScreen({ onClose, dogs }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 65, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Carnet de chasse" onBack={onClose} />
       <div className="flex items-center gap-1.5" style={{ padding: "10px 16px 0", fontSize: 11, color: colors.textFaint }}>
-        <Lock size={11} /><span>Strictement privé — visible par vous seul.</span>
+        <Lock size={11} /><span>Strictement privé — visible par vous et les personnes que vous identifiez sur une sortie.</span>
       </div>
       <div className="px-4" style={{ paddingTop: 12, paddingBottom: 4 }}>
         <SegmentedControl options={[{ key: "liste", label: "Liste" }, { key: "calendrier", label: "Calendrier" }, { key: "stats", label: "Statistiques" }]} value={tab} onChange={setTab} />
@@ -4222,6 +4457,9 @@ function HuntingLogScreen({ onClose, dogs }) {
                       <div className="flex items-center gap-2">
                         <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{l.lieuNom || HUNTING_TYPE_LABEL[l.typeSortie]}</span>
                         {l.avecChien && <Dog size={12} color={colors.textFaint} />}
+                        {!l.isOwner && (
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "2px 7px", flexShrink: 0 }}>{l.owner?.nom || "Compagnon"}</span>
+                        )}
                       </div>
                       <div style={{ fontSize: 11.5, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {new Date(l.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })} · {HUNTING_TYPE_LABEL[l.typeSortie]}{l.espece ? ` · ${l.espece}` : ""}
@@ -4262,12 +4500,13 @@ function HuntingLogScreen({ onClose, dogs }) {
               refresh();
             } catch (e) { /* la bulle de confirmation reste affichée, l'utilisateur peut réessayer */ }
           }}
+          onOpenProfile={onOpenProfile}
         />
       )}
     </div>
   );
 }
-function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile, chromeMode = "full", incomingRequestsCount = 0, onApproveRequest, onRejectRequest, traceGroup, onOpenTrace }) {
+function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile, chromeMode = "full", incomingRequestsCount = 0, onApproveRequest, onRejectRequest, traceGroup, onOpenTrace, onOpenFollowers }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("publications");
   const [editing, setEditing] = useState(false);
@@ -4331,7 +4570,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         <div style={{ marginTop: 14, background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.lg, padding: "12px 4px", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }} className="flex">
           {[["Abonnés", stats.abonnes, "followers"], ["Abonnements", stats.abonnements, "following"], ["Publications", posts.length, null]].map(([label, val, mode]) => (
             mode ? (
-              <button key={label} onClick={() => setFollowSheet(mode)} style={{ flex: 1, textAlign: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+              <button key={label} onClick={() => { setFollowSheet(mode); if (mode === "followers") onOpenFollowers?.(); }} style={{ flex: 1, textAlign: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
                 <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
               </button>
@@ -4359,7 +4598,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         )}
       </div>
       {showRequests && <FollowRequestsSheet onClose={() => setShowRequests(false)} onApprove={onApproveRequest} onReject={onRejectRequest} />}
-      {showCarnet && <HuntingLogScreen onClose={() => setShowCarnet(false)} dogs={dogs} />}
+      {showCarnet && <HuntingLogScreen onClose={() => setShowCarnet(false)} dogs={dogs} onOpenProfile={onOpenProfile} />}
       <div
         className="px-4"
         style={{
@@ -4505,7 +4744,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
       {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile(p); setEditing(false); }} />}
       {dogForm && <DogFormScreen onClose={() => setDogForm(false)} onSaved={(d) => { addDog(d); setDogForm(false); }} />}
@@ -4752,14 +4991,35 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const [mediaError, setMediaError] = useState("");
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  // last_read_at des AUTRES membres (jamais le mien) — sert à afficher "Lu"
+  // sous mon dernier message envoyé, tenu à jour en direct par realtime.
+  const [readState, setReadState] = useState([]);
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const refetch = () => messageService.fetchMessages(conversationId).then(setMessages).catch(() => {});
-  const markRead = () => messageService.markConversationRead(conversationId).then(() => onRead?.()).catch(() => {});
+  const markRead = async () => {
+    // Deux systèmes distincts à mettre à jour : last_read_at (badge de la
+    // barre de navigation) et les notifications "message"/"group_invite" en
+    // base (badge de la cloche, voir migration 014) — indépendants l'un de
+    // l'autre jusqu'ici, d'où la notification qui ne se retirait jamais.
+    await Promise.allSettled([
+      messageService.markConversationRead(conversationId),
+      notificationService.markReadByTarget(conversationId, ["message", "group_invite"]),
+    ]);
+    onRead?.();
+  };
+
+  // Remet le champ à sa hauteur d'une ligne une fois le message envoyé — la
+  // hauteur est sinon pilotée directement en DOM par l'auto-grandissement
+  // (onChange du textarea), donc jamais réinitialisée par React seul.
+  useEffect(() => {
+    if (text === "" && textareaRef.current) textareaRef.current.style.height = "auto";
+  }, [text]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4769,13 +5029,20 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
       .then((rows) => { if (!cancelled) setMessages(rows); })
       .catch((e) => { if (!cancelled) setLoadError(e.message || "Impossible de charger les messages."); })
       .finally(() => { if (!cancelled) setLoading(false); });
+    messageService.fetchConversationReadState(conversationId, meId).then((rows) => { if (!cancelled) setReadState(rows); }).catch(() => {});
     markRead(); // ouvrir la conversation = la marquer comme lue
     // Le payload realtime brut ne contient pas les jointures (profil, média) —
     // on recharge donc le fil complet à chaque nouveau message plutôt que
     // d'ajouter la ligne brute reçue. La conversation reste "lue" tant qu'elle
     // est ouverte : on remet à jour last_read_at à chaque message reçu ici.
     const unsubscribe = messageService.subscribeToConversation(conversationId, () => { if (!cancelled) { refetch(); markRead(); } });
-    return () => { cancelled = true; unsubscribe(); };
+    // Fait passer "Lu" en direct dès que l'autre personne ouvre la conversation,
+    // sans avoir besoin de rouvrir/recharger la sienne (voir migration 032).
+    const unsubscribeRead = messageService.subscribeToReadState(conversationId, (updated) => {
+      if (cancelled || updated.user_id === meId) return;
+      setReadState((rs) => rs.map((r) => (r.user_id === updated.user_id ? { ...r, last_read_at: updated.last_read_at } : r)));
+    });
+    return () => { cancelled = true; unsubscribe(); unsubscribeRead(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
@@ -4858,6 +5125,10 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     }
   };
 
+  // "Lu" affiché uniquement sous mon tout dernier message envoyé (comme
+  // WhatsApp/iMessage) — pas sous chaque bulle, pour ne pas surcharger.
+  const lastMineId = [...messages].reverse().find((x) => x.sender_id === meId)?.id || null;
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
@@ -4873,6 +5144,9 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
           messages.map((m) => {
             const mine = m.sender_id === meId;
             const media = m.message_media?.[0];
+            // En groupe, "Lu" signifie lu par TOUS les autres membres.
+            const isLastMine = mine && m.id === lastMineId;
+            const readByAll = isLastMine && readState.length > 0 && readState.every((r) => r.last_read_at && new Date(r.last_read_at) >= new Date(m.created_at));
             return (
               <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
                 <div style={{ maxWidth: "78%" }}>
@@ -4904,7 +5178,10 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                     {media && <MessageBubble mine={mine} media={media} colors={colors} />}
                     {m.texte && <div style={{ marginTop: media ? 6 : 0 }}>{m.texte}</div>}
                   </div>
-                  <div style={{ fontSize: 9.5, color: colors.textFaint, marginTop: 2, textAlign: mine ? "right" : "left" }}>{formatRelativeDate(m.created_at)}</div>
+                  <div style={{ fontSize: 9.5, color: colors.textFaint, marginTop: 2, textAlign: mine ? "right" : "left" }}>
+                    {formatRelativeDate(m.created_at)}
+                    {isLastMine && (readByAll ? <span style={{ color: colors.accent, fontWeight: 600 }}> · Lu</span> : <span> · Envoyé</span>)}
+                  </div>
                 </div>
               </div>
             );
@@ -4912,7 +5189,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
         )}
       </div>
       {mediaError && <div style={{ margin: "0 12px 8px", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "8px 12px", fontSize: 11.5, color: colors.error }}>{mediaError}</div>}
-      <div className="flex items-center gap-2" style={{ padding: `10px 16px calc(14px + env(safe-area-inset-bottom, 0px))` }}>
+      <div className="flex items-end gap-2" style={{ padding: `10px 16px calc(14px + env(safe-area-inset-bottom, 0px))` }}>
         <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={pickMedia} style={{ display: "none" }} />
         {recording ? (
           <button onClick={stopRecording} className="flex items-center gap-2" style={{ flex: 1, border: `1.5px solid ${colors.error}`, background: colors.errorSoft, borderRadius: RADIUS.pill, padding: "10px 16px", cursor: "pointer" }}>
@@ -4921,13 +5198,20 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
           </button>
         ) : (
           <>
-            <IconButton icon={ImageIcon} onClick={() => fileInputRef.current?.click()} />
-            <input
+            <div style={{ paddingBottom: 1 }}><IconButton icon={ImageIcon} onClick={() => fileInputRef.current?.click()} /></div>
+            <textarea
+              ref={textareaRef}
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !sending) submit(); }}
+              onChange={(e) => {
+                setText(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+              }}
+              rows={1}
               placeholder="Écrire un message..."
-              style={{ flex: 1, border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13.5, color: colors.text, outline: "none" }}
+              // Entrée insère un saut de ligne (comportement par défaut d'un
+              // textarea) — l'envoi ne se fait plus qu'au tap sur la flèche.
+              style={{ flex: 1, border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.xl, padding: "11px 16px", fontSize: 13.5, color: colors.text, outline: "none", resize: "none", maxHeight: 120, overflowY: "auto", lineHeight: 1.35, fontFamily: FONT }}
             />
             {text.trim() ? (
               <button onClick={submit} disabled={sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: `0 2px 8px ${colors.accent}40` }}>
@@ -6090,9 +6374,12 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const openTraceGroup = (groupIndex) => setViewingTraces({ groups: traceGroups, startGroupIndex: groupIndex });
   const createOwnTrace = () => { setCreateInitialType("trace"); setCreateOpen(true); };
 
+  const refreshUnreadCount = () => {
+    notificationService.fetchUnreadCount().then(setUnreadCount).catch(() => {});
+  };
   useEffect(() => {
     if (!session || !profileLoaded) return;
-    notificationService.fetchUnreadCount().then(setUnreadCount).catch(() => {});
+    refreshUnreadCount();
     const unsubscribe = notificationService.subscribeToNotifications(session.user.id, () => {
       setUnreadCount((c) => c + 1);
     });
@@ -6102,6 +6389,21 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const refreshUnreadConversations = () => {
     messageService.fetchUnreadConversationCount().then(setUnreadConversations).catch(() => {});
   };
+  // Marque comme lue(s), en base, la ou les notifications correspondant à un
+  // contenu qu'on vient d'ouvrir "en vrai" ailleurs dans l'app (messages,
+  // commentaires, abonnés...) — pas seulement depuis le panneau Notifications
+  // lui-même — puis rafraîchit le badge de la cloche en conséquence.
+  const markNotifTargetRead = (targetId, types) => {
+    notificationService.markReadByTarget(targetId, types).then(refreshUnreadCount).catch(() => {});
+  };
+  // Même principe sans cible précise (ex : "follow" — voir ScreenProfil,
+  // ouvrir ses abonnés résout toutes les notifications de nouveaux abonnés).
+  const markNotifTypeRead = (types) => {
+    notificationService.markReadByType(types).then(refreshUnreadCount).catch(() => {});
+  };
+  // Ouvrir une conversation touche à la fois le badge "messages" de la barre
+  // de navigation et celui de la cloche (voir ConversationThread.markRead).
+  const refreshUnread = () => { refreshUnreadConversations(); refreshUnreadCount(); };
   useEffect(() => {
     if (!session || !profileLoaded) return;
     refreshUnreadConversations();
@@ -6156,6 +6458,10 @@ function MainApp({ session, onboardingData, ageInfo }) {
   // précédente resteraient invisibles (commentsByPost part vide à chaque chargement).
   const loadComments = async (postId) => {
     if (isLocalId(postId)) return;
+    // Ouvrir les commentaires d'un post = avoir vu ce qui s'y est passé :
+    // retire les notifications like/comment/repost/nouvelle-publication qui
+    // pointent vers ce post, sans attendre un passage par le panneau Notifications.
+    markNotifTargetRead(postId, ["like", "comment", "repost", "new_post", "mention"]);
     try {
       const rows = await postService.fetchComments(postId);
       const mapped = rows.map((r) => ({
@@ -6418,7 +6724,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         chromeMode={chromeMode}
       />
     ),
-    messages: <ScreenMessages meId={session?.user?.id} initialConversationId={pendingConversationId} onConsumeInitialConversation={() => setPendingConversationId(null)} onOpenProfile={setOpenProfileUsername} onBlock={blockAuthor} onReport={reportContent} onRead={refreshUnreadConversations} chromeMode={chromeMode} />,
+    messages: <ScreenMessages meId={session?.user?.id} initialConversationId={pendingConversationId} onConsumeInitialConversation={() => setPendingConversationId(null)} onOpenProfile={setOpenProfileUsername} onBlock={blockAuthor} onReport={reportContent} onRead={refreshUnread} chromeMode={chromeMode} />,
     profil: (
       <ScreenProfil
         profile={profile}
@@ -6450,6 +6756,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onRejectRequest={rejectRequest}
         traceGroup={traceGroups[0]}
         onOpenTrace={() => openTraceGroup(0)}
+        onOpenFollowers={() => markNotifTypeRead(["follow"])}
       />
     ),
   };
