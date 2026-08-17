@@ -764,13 +764,58 @@ function StepSplash({ onStart, onLogin }) {
     </AuthBackdrop>
   );
 }
+// Propose un pseudo libre proche de celui déjà pris — quelques suffixes
+// numériques essayés dans l'ordre, chacun réellement vérifié côté base
+// (authService.checkUsernameAvailable) avant d'être suggéré.
+async function suggestAvailableUsername(base) {
+  const cleanBase = (base || "chasseur").replace(/[^a-z0-9_.]/g, "").slice(0, 18) || "chasseur";
+  for (let i = 0; i < 5; i++) {
+    const suffix = Math.floor(10 + Math.random() * 990);
+    const candidate = `${cleanBase}${suffix}`;
+    try {
+      const result = await authService.checkUsernameAvailable(candidate);
+      if (result.available) return candidate;
+    } catch (e) { /* on essaie le suffixe suivant */ }
+  }
+  return null;
+}
 function StepSignup({ data, setData, onNext, onBack, onLogin }) {
   const { colors } = useTheme();
   const [touched, setTouched] = useState(false);
+  // idle | checking | available | taken — vérification réelle côté base (contrainte
+  // UNIQUE sur profiles.username), jamais juste un format local. On ne bloque
+  // "Continuer" que sur un pseudo confirmé pris : un échec réseau du check ne
+  // doit pas empêcher l'inscription (l'insertion elle-même reste le filet de
+  // sécurité final, voir StepAccess.submit()).
+  const [pseudoCheck, setPseudoCheck] = useState({ status: "idle", suggestion: null });
+  const checkSeq = useRef(0);
+  useEffect(() => {
+    const raw = data.pseudo.trim();
+    if (raw.length < 3) { setPseudoCheck({ status: "idle", suggestion: null }); return; }
+    const seq = ++checkSeq.current;
+    setPseudoCheck({ status: "checking", suggestion: null });
+    const t = setTimeout(async () => {
+      try {
+        const result = await authService.checkUsernameAvailable(raw);
+        if (seq !== checkSeq.current) return; // réponse obsolète (l'utilisateur a retapé entre-temps)
+        if (result.available) {
+          setPseudoCheck({ status: "available", suggestion: null });
+        } else {
+          const suggestion = await suggestAvailableUsername(result.normalized || raw);
+          if (seq !== checkSeq.current) return;
+          setPseudoCheck({ status: "taken", suggestion });
+        }
+      } catch (e) {
+        if (seq !== checkSeq.current) return;
+        setPseudoCheck({ status: "idle", suggestion: null });
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [data.pseudo]);
   const pseudoErr = touched && data.pseudo.trim().length < 3 ? "3 caractères minimum" : null;
   const emailErr = touched && !/^\S+@\S+\.\S+$/.test(data.email) ? "Adresse e-mail invalide" : null;
   const pwErr = touched && data.password.length < 8 ? "8 caractères minimum" : null;
-  const valid = data.pseudo.trim().length >= 3 && /^\S+@\S+\.\S+$/.test(data.email) && data.password.length >= 8;
+  const valid = data.pseudo.trim().length >= 3 && pseudoCheck.status !== "taken" && /^\S+@\S+\.\S+$/.test(data.email) && data.password.length >= 8;
   return (
     <AuthBackdrop>
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -782,6 +827,31 @@ function StepSignup({ data, setData, onNext, onBack, onLogin }) {
           </div>
           <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 22 }}>Rejoignez la communauté PISTE.</div>
           <TextField label="Pseudo" value={data.pseudo} onChange={(v) => setData({ ...data, pseudo: v })} placeholder="ex : chasseur_vosges" error={pseudoErr} />
+          {!pseudoErr && pseudoCheck.status === "checking" && (
+            <div style={{ fontSize: 11.5, color: colors.textFaint, marginTop: -10, marginBottom: 16 }}>Vérification de la disponibilité...</div>
+          )}
+          {!pseudoErr && pseudoCheck.status === "available" && (
+            <div className="flex items-center gap-1" style={{ fontSize: 11.5, color: colors.accent, marginTop: -10, marginBottom: 16, fontWeight: 600 }}>
+              <Check size={12} strokeWidth={3} /> Pseudo disponible
+            </div>
+          )}
+          {!pseudoErr && pseudoCheck.status === "taken" && (
+            <div style={{ marginTop: -10, marginBottom: 16 }}>
+              <div style={{ fontSize: 11.5, color: colors.error, fontWeight: 600, marginBottom: pseudoCheck.suggestion ? 6 : 0 }}>Ce pseudo est déjà utilisé.</div>
+              {pseudoCheck.suggestion && (
+                <button
+                  onClick={() => setData({ ...data, pseudo: pseudoCheck.suggestion })}
+                  className="flex items-center gap-1.5"
+                  style={{ background: colors.accentSoft, border: "none", borderRadius: RADIUS.pill, padding: "6px 12px 6px 6px", cursor: "pointer" }}
+                >
+                  <div style={{ width: 18, height: 18, borderRadius: RADIUS.pill, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Check size={10} color={colors.onAccent} strokeWidth={3} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: colors.accent }}>Essayer « {pseudoCheck.suggestion} »</span>
+                </button>
+              )}
+            </div>
+          )}
           <TextField label="E-mail" value={data.email} onChange={(v) => setData({ ...data, email: v })} placeholder="vous@exemple.com" type="email" error={emailErr} />
           <TextField label="Mot de passe" value={data.password} onChange={(v) => setData({ ...data, password: v })} placeholder="8 caractères minimum" type="password" error={pwErr} />
           <Button disabled={touched ? !valid : false} onClick={() => { setTouched(true); if (valid) onNext(); }}>Continuer</Button>
@@ -2099,7 +2169,10 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
     const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], myGroupIds: myGroupIds || [], now: Date.now() };
     let ordered;
     if (tab === "pourtoi") ordered = buildFeed(posts, ctx);
-    else if (tab === "abonnements") ordered = buildFeed(posts.filter((p) => following.includes(p.username)), ctx);
+    // Abonnements = chronologique strict (comme Vidéo - Vidéo) : on veut voir les
+    // dernières publications des comptes suivis dans l'ordre, pas un classement
+    // pondéré qui ferait remonter un ancien post populaire devant un tout nouveau.
+    else if (tab === "abonnements") ordered = buildChronologicalFeed(posts.filter((p) => following.includes(p.username)), ctx);
     else ordered = buildDiscoverFeed(posts, { ...ctx, seenIds: getDiscoverSeenIds(profile.id) }); // Découvrir : pipeline dédié — voir buildDiscoverFeed()
     return ordered.map((p) => p.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps

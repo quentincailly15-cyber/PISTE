@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#6B7A47"/>
+  <g transform="translate(128,128) scale(5.33333)">
+    <path fill-rule="evenodd" clip-rule="evenodd"
+      d="M14 8H26C33 8 38 12.5 38 19C38 25.5 33 30 26 30H20V40H14V8Z M20 14H26C29 14 31.5 16 31.5 19C31.5 22 29 24 26 24H20V14Z"
+      fill="#ffffff"/>
+  </g>
+</svg>
