@@ -17,6 +17,22 @@ async function requireUser() {
   return data.user;
 }
 
+/** Recherche de vrais utilisateurs (pseudo ou nom d'affichage) — sert par
+ *  exemple à choisir un destinataire pour démarrer une conversation. */
+export async function searchUsers(query) {
+  const me = await requireUser();
+  const q = query.trim();
+  if (!q) return [];
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, username, nom, avatar_url")
+    .neq("id", me.id)
+    .or(`username.ilike.%${q}%,nom.ilike.%${q}%`)
+    .limit(20);
+  if (error) throw error;
+  return data;
+}
+
 async function resolveUserIdByUsername(username) {
   const { data, error } = await supabase.from("profiles").select("id").eq("username", username).single();
   if (error) throw error;
@@ -48,6 +64,47 @@ export async function fetchMyFollowing() {
     .from("follows")
     .select("profiles!follows_followed_id_fkey(username)")
     .eq("follower_id", userData.user.id);
+  if (error) throw error;
+  return data.map((r) => r.profiles?.username).filter(Boolean);
+}
+
+/**
+ * Active/désactive la "cloche" (notifications à chaque nouvelle publication
+ * de cette personne) — réutilise follows.notifications_enabled (déjà présent
+ * dans 001_init.sql). Si l'utilisateur ne suit pas encore la personne et
+ * active la cloche, ça l'abonne au passage (la cloche implique de suivre).
+ */
+export async function setFollowNotifications(username, enabled) {
+  const me = await requireUser();
+  const targetId = await resolveUserIdByUsername(username);
+  const { data: existing, error: fetchError } = await supabase
+    .from("follows")
+    .select("follower_id")
+    .eq("follower_id", me.id)
+    .eq("followed_id", targetId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+
+  if (!existing) {
+    if (!enabled) return true; // pas encore abonné : rien à désactiver
+    const { error } = await supabase.from("follows").insert({ follower_id: me.id, followed_id: targetId, notifications_enabled: true });
+    if (error) throw error;
+    return true;
+  }
+  const { error } = await supabase.from("follows").update({ notifications_enabled: enabled }).eq("follower_id", me.id).eq("followed_id", targetId);
+  if (error) throw error;
+  return true;
+}
+
+/** Comptes pour lesquels la cloche est activée — à charger au démarrage. */
+export async function fetchMyBellUsernames() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return [];
+  const { data, error } = await supabase
+    .from("follows")
+    .select("profiles!follows_followed_id_fkey(username)")
+    .eq("follower_id", userData.user.id)
+    .eq("notifications_enabled", true);
   if (error) throw error;
   return data.map((r) => r.profiles?.username).filter(Boolean);
 }

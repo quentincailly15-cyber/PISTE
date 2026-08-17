@@ -4,7 +4,7 @@ import {
   Image as ImageIcon, Type as TypeIcon, CalendarDays, Settings, ChevronRight,
   Check, Video, Film, Dog, Repeat2, MapPin,
   Bookmark, HelpCircle, AlertTriangle, LogOut, Moon, Sun, Monitor, BarChart3,
-  Heart, MessageSquare, Share2, MoreHorizontal, Camera, Play, BookOpen,
+  Heart, MessageSquare, Share2, MoreHorizontal, Camera, Play, BookOpen, Mic,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as postService from "./services/postService.js";
@@ -12,10 +12,12 @@ import * as profileService from "./services/profileService.js";
 import * as dogService from "./services/dogService.js";
 import * as groupService from "./services/groupService.js";
 import * as socialService from "./services/socialService.js";
+import * as messageService from "./services/messageService.js";
+import * as notificationService from "./services/notificationService.js";
 import { supabase } from "./services/supabaseClient.js";
 
 /* ============================================================
-   1. TOKENS DE DESIGN — un seul accent (orange), pas de vert dominant
+   1. TOKENS DE DESIGN — un seul accent (vert kaki)
    ============================================================ */
 const RADIUS = { sm: 10, md: 16, lg: 22, xl: 28, pill: 999 };
 const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
@@ -31,8 +33,8 @@ const THEMES = {
     text: "#1A1A18",
     textSecondary: "#8A8A85",
     textFaint: "#B7B7B1",
-    accent: "#C96A2E",
-    accentSoft: "#F5E4D6",
+    accent: "#6B7A47",
+    accentSoft: "#E6E9D9",
     onAccent: "#FFFFFF",
     error: "#C0453A",
     errorSoft: "#F6E2DF",
@@ -49,9 +51,9 @@ const THEMES = {
     text: "#F4F2EF",
     textSecondary: "#A8A8A4",
     textFaint: "#6E6E6A",
-    accent: "#DD8449",
-    accentSoft: "rgba(221,132,73,0.16)",
-    onAccent: "#1A1310",
+    accent: "#94A66C",
+    accentSoft: "rgba(148,166,108,0.16)",
+    onAccent: "#14170D",
     error: "#E17466",
     errorSoft: "rgba(225,116,102,0.16)",
     overlay: "rgba(0,0,0,0.6)",
@@ -338,7 +340,7 @@ function isContentVisible(rating, viewerIsMinor) {
 // backend sans changer l'interface : getCandidatePosts → filterSafety → filterAge →
 // calculateScores → sortFeed → diversifyFeed. Chaque étape est une fonction pure,
 // testable indépendamment (voir piste_core.js / piste_core.test.js).
-const FEED_WEIGHTS = { affinity: 3, recency: 2, interaction: 2, interest: 1.5, quality: 1 };
+const FEED_WEIGHTS = { affinity: 3, recency: 2, interaction: 2, interest: 1.5, quality: 1, groupAffinity: 1.2, alreadySeen: -2.5 };
 
 function getCandidatePosts(posts) {
   return posts; // point d'entrée unique — deviendra un vrai fetch paginé côté backend
@@ -350,7 +352,7 @@ function filterAge(posts, viewerIsMinor) {
   return posts.filter((p) => isContentVisible(p.contentRating || "normal", viewerIsMinor));
 }
 function calculateScores(posts, ctx) {
-  const { following = [], interests = [], now = Date.now() } = ctx;
+  const { following = [], interests = [], now = Date.now(), myGroupIds = [], seenIds = [] } = ctx;
   return posts.map((p) => {
     const affinity = following.includes(p.username) ? 1 : 0;
     const ageHours = p.createdAt ? (now - p.createdAt) / 36e5 : null;
@@ -358,7 +360,20 @@ function calculateScores(posts, ctx) {
     const interaction = Math.min(1, ((p.likes || 0) + (p.commentaires || 0) * 2) / 20);
     const interestMatch = (p.animal && interests.includes(p.animal)) || (p.pratique && interests.includes(p.pratique)) ? 1 : 0;
     const quality = p.texte && p.texte.length > 20 ? 1 : 0.5;
-    const score = affinity * FEED_WEIGHTS.affinity + recency * FEED_WEIGHTS.recency + interaction * FEED_WEIGHTS.interaction + interestMatch * FEED_WEIGHTS.interest + quality * FEED_WEIGHTS.quality;
+    // Signal groupe : un post publié dans un groupe que l'utilisateur a rejoint
+    // est plus pertinent — n'a d'effet que si p.groupId existe (voir mapPostRow).
+    const groupAffinity = p.groupId && myGroupIds.includes(p.groupId) ? 1 : 0;
+    // Pénalité "déjà vu" : fait redescendre (sans l'exclure) un contenu déjà
+    // montré récemment dans Découvrir — voir buildDiscoverFeed().
+    const alreadySeen = seenIds.includes(p.id) ? 1 : 0;
+    const score =
+      affinity * FEED_WEIGHTS.affinity +
+      recency * FEED_WEIGHTS.recency +
+      interaction * FEED_WEIGHTS.interaction +
+      interestMatch * FEED_WEIGHTS.interest +
+      quality * FEED_WEIGHTS.quality +
+      groupAffinity * FEED_WEIGHTS.groupAffinity +
+      alreadySeen * FEED_WEIGHTS.alreadySeen;
     return { ...p, _score: score };
   });
 }
@@ -385,6 +400,46 @@ function buildFeed(posts, ctx) {
   const ageOk = filterAge(safe, !!ctx.viewerIsMinor);
   const scored = calculateScores(ageOk, ctx);
   return diversifyFeed(sortFeed(scored));
+}
+
+// --- Découvrir : mémoire locale des contenus déjà montrés --------------------
+// Persistée dans localStorage (survit à un rafraîchissement), scindée par
+// utilisateur. Volontairement pas de table Supabase dédiée pour l'instant :
+// c'est une préférence d'affichage locale, pas une donnée sociale à partager
+// entre appareils — simple à migrer vers une vraie table plus tard si besoin.
+const DISCOVER_SEEN_LIMIT = 300;
+function getDiscoverSeenIds(userId) {
+  if (!userId) return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(`piste_discover_seen_${userId}`) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+function markDiscoverSeen(userId, ids) {
+  if (!userId || ids.length === 0) return;
+  const current = getDiscoverSeenIds(userId);
+  const merged = Array.from(new Set([...current, ...ids])).slice(-DISCOVER_SEEN_LIMIT);
+  try {
+    window.localStorage.setItem(`piste_discover_seen_${userId}`, JSON.stringify(merged));
+  } catch (e) { /* quota localStorage dépassé : tant pis, pas bloquant */ }
+}
+/**
+ * Pipeline "Découvrir" : réutilise buildFeed (mêmes étapes sécurité/âge/score/
+ * diversité) en ajoutant deux dimensions propres à cet onglet :
+ *  - affinité de groupe (myGroupIds) et pénalité "déjà vu" (seenIds), via
+ *    calculateScores ;
+ *  - priorité stricte au contenu jamais vu : on ne complète avec du déjà-vu
+ *    que s'il n'y a pas assez de contenu frais, pour ne jamais vider le fil.
+ * Aucun doublon possible : unseen et seen sont des partitions disjointes du
+ * même tableau dédupliqué par id.
+ */
+function buildDiscoverFeed(posts, ctx) {
+  const seenIds = ctx.seenIds || [];
+  const unseen = posts.filter((p) => !seenIds.includes(p.id));
+  const seen = posts.filter((p) => seenIds.includes(p.id));
+  const discoverCtx = { ...ctx, following: [] }; // pas de biais d'affinité : priorité récence/qualité/diversité/groupe
+  return [...buildFeed(unseen, discoverCtx), ...buildFeed(seen, discoverCtx)];
 }
 // Extraction de #hashtags et @mentions depuis le texte réellement saisi par l'auteur
 // (jamais inventés) — prépare la recherche par hashtag et les mentions futures.
@@ -415,7 +470,8 @@ function mapPostRow(row) {
     username: row.profiles?.username || null,
     avatar: row.profiles?.avatar_url || null,
     texte: row.texte,
-    image: row.post_media?.[0]?.url || null,
+    image: row.post_media?.[0]?.type === "video" ? null : row.post_media?.[0]?.url || null,
+    videoUrl: row.post_media?.[0]?.type === "video" ? row.post_media[0].url : null,
     type: row.type,
     animal: row.animal,
     pratique: row.pratique,
@@ -424,6 +480,9 @@ function mapPostRow(row) {
     mentions: row.mentions || [],
     likes: row.likes_count || 0,
     commentaires: row.comments_count || 0,
+    reposts: row.reposts_count || 0,
+    repostedAt: row.repostedAt || null,
+    groupId: row.group_id || null,
     date: formatRelativeDate(row.created_at),
     createdAt: new Date(row.created_at).getTime(),
     titre: row.texte, // pour VideoCard, qui affiche "titre"
@@ -834,20 +893,27 @@ function LoginScreen({ onBack, onSignup }) {
 /* ============================================================
    5. APP SHELL — header + nav TOUJOURS fixes
    ============================================================ */
-function Header({ onBell, onMenu }) {
+function Header({ onBell, onMenu, unreadCount = 0 }) {
   const { colors } = useTheme();
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 20, background: colors.headerBg, backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", borderBottom: `1px solid ${colors.border}` }} className="flex items-center justify-between px-4 py-3">
       <div className="flex items-center gap-2"><Logo size={28} /><Wordmark /></div>
       <div className="flex items-center gap-1">
-        <IconButton icon={Bell} onClick={onBell} />
+        <div style={{ position: "relative" }}>
+          <IconButton icon={Bell} onClick={onBell} />
+          {unreadCount > 0 && (
+            <span style={{ position: "absolute", top: 2, right: 2, minWidth: 15, height: 15, borderRadius: 8, background: colors.accent, color: colors.onAccent, fontSize: 9.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </div>
         <IconButton icon={Menu} onClick={onMenu} />
       </div>
     </div>
   );
 }
 const NAV_HEIGHT = 66;
-function BottomNav({ active, setActive, onCreate }) {
+function BottomNav({ active, setActive, onCreate, unreadConversations = 0 }) {
   const { colors } = useTheme();
   const items = [
     { key: "fil", label: "Fil", icon: Home },
@@ -876,7 +942,14 @@ function BottomNav({ active, setActive, onCreate }) {
             }
             return (
               <button key={it.key} onClick={() => setActive(it.key)} className="flex flex-col items-center gap-1" style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "2px 0", minWidth: 0 }}>
-                <Icon size={19} strokeWidth={isActive ? 2.2 : 1.8} color={isActive ? colors.accent : colors.textFaint} />
+                <div style={{ position: "relative" }}>
+                  <Icon size={19} strokeWidth={isActive ? 2.2 : 1.8} color={isActive ? colors.accent : colors.textFaint} />
+                  {it.key === "messages" && unreadConversations > 0 && (
+                    <span style={{ position: "absolute", top: -4, right: -8, minWidth: 14, height: 14, borderRadius: 7, background: colors.accent, color: colors.onAccent, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+                      {unreadConversations > 9 ? "9+" : unreadConversations}
+                    </span>
+                  )}
+                </div>
                 <span style={{ fontSize: 9.5, fontWeight: isActive ? 700 : 500, color: isActive ? colors.accent : colors.textFaint, whiteSpace: "nowrap" }}>{it.label}</span>
               </button>
             );
@@ -886,14 +959,14 @@ function BottomNav({ active, setActive, onCreate }) {
     </div>
   );
 }
-function AppShell({ children, header, active, setActive, onCreate }) {
+function AppShell({ children, header, active, setActive, onCreate, unreadConversations }) {
   const { colors } = useTheme();
   return (
     <div style={{ minHeight: "100vh", background: colors.background }}>
       <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", position: "relative", background: colors.background }}>
         {header}
         <div key={active} style={{ paddingBottom: NAV_HEIGHT + 12, animation: "piste-fade-in 220ms ease" }}>{children}</div>
-        <BottomNav active={active} setActive={setActive} onCreate={onCreate} />
+        <BottomNav active={active} setActive={setActive} onCreate={onCreate} unreadConversations={unreadConversations} />
       </div>
       <style>{`
         @keyframes piste-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -945,25 +1018,129 @@ function ContentActionSheet({ isOwn, onClose, onDelete, onEdit, onReport, onHide
     </div>
   );
 }
-function AuthorProfileSheet({ author, isFollowing, isSelf, onClose, onToggleFollow }) {
+/**
+ * Vrai écran de profil public — remplace l'ancienne coquille qui n'affichait
+ * qu'un nom. Ouvert depuis n'importe où (post, vidéo, notification, message)
+ * via un simple username, rendu une seule fois au niveau de MainApp pour
+ * pouvoir réutiliser directement ses handlers (like/save/repost/commentaire).
+ */
+function AuthorProfileSheet({ username, meUsername, isFollowing, bellOn, onClose, onToggleFollow, onToggleBell, onMessage, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
   const { colors } = useTheme();
+  const isSelf = username === meUsername;
+  const [profile, setProfile] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [sheet, setSheet] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    profileService.fetchPublicProfile(username)
+      .then((p) => {
+        if (cancelled) return;
+        setProfile(p);
+        return postService.fetchUserPosts(p.id).then((rows) => { if (!cancelled) setPosts(rows.map(mapPostRow)); });
+      })
+      .catch((e) => { if (!cancelled) setError(e.message || "Profil introuvable."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [username]);
+
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 64, background: colors.background, display: "flex", flexDirection: "column" }}>
-      <ScreenHeader title="Profil" onCloseX={onClose} />
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "40px 28px", gap: 12 }}>
-        <div style={{ width: 68, height: 68, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center" }}><User size={28} color={colors.textFaint} /></div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{author}</div>
-        {isSelf ? (
-          <div style={{ fontSize: 12, color: colors.textFaint }}>C'est vous.</div>
-        ) : (
-          <>
-            <div style={{ fontSize: 12, color: colors.textFaint, lineHeight: 1.5, maxWidth: 260 }}>Le reste du profil (publications, statistiques) s'affichera une fois les comptes réellement connectés.</div>
-            <div style={{ marginTop: 8 }}>
-              <Button full={false} variant={isFollowing ? "secondary" : "primary"} onClick={onToggleFollow}>{isFollowing ? "Abonné" : "Suivre"}</Button>
+    <div style={{ position: "fixed", inset: 0, zIndex: 64, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title={profile?.username ? `@${profile.username}` : "Profil"} onBack={onClose} />
+      {loading ? (
+        <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 40 }}>Chargement...</div>
+      ) : error ? (
+        <div style={{ textAlign: "center", fontSize: 12.5, color: colors.error, marginTop: 40, padding: "0 24px" }}>{error}</div>
+      ) : (
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          <div style={{ width: "100%", height: 96, background: profile.imageCouverture ? `url(${profile.imageCouverture}) center/cover` : colors.surfaceAlt }} />
+          <div className="px-4">
+            <div style={{ marginTop: -34 }}>
+              <div style={{ width: 72, height: 72, borderRadius: RADIUS.md, background: colors.surface, border: `3px solid ${colors.background}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={30} color={colors.textFaint} strokeWidth={1.6} />}
+              </div>
             </div>
-          </>
-        )}
-      </div>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{profile.nom}</div>
+              <div style={{ fontSize: 13, color: colors.textFaint }}>@{profile.username}</div>
+              <BadgeRow badges={profile.badges} />
+              {profile.localisation && <div className="flex items-center gap-1" style={{ marginTop: 4 }}><MapPin size={13} color={colors.textFaint} /><span style={{ fontSize: 12.5, color: colors.textFaint }}>{profile.localisation}</span></div>}
+              {profile.bio && <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 8, lineHeight: 1.5 }}>{profile.bio}</div>}
+            </div>
+            <div style={{ marginTop: 16, background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: "12px 4px" }} className="flex">
+              {[["Abonnés", profile.stats.abonnes], ["Abonnements", profile.stats.abonnements], ["Publications", profile.stats.publications]].map(([label, val]) => (
+                <div key={label} style={{ flex: 1, textAlign: "center" }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
+                  <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
+                </div>
+              ))}
+            </div>
+            {isSelf ? (
+              <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: colors.textFaint }}>C'est vous.</div>
+            ) : (
+              <div className="flex items-center gap-2" style={{ marginTop: 14 }}>
+                <Button full={false} variant={isFollowing ? "secondary" : "primary"} onClick={onToggleFollow}>{isFollowing ? "Abonné" : "Suivre"}</Button>
+                <Button full={false} variant="secondary" onClick={() => onMessage(profile.id, profile.nom)}>Message</Button>
+                {onToggleBell && (
+                  <button
+                    onClick={onToggleBell}
+                    aria-label={bellOn ? "Désactiver les notifications" : "Activer les notifications"}
+                    style={{ width: 38, height: 38, borderRadius: RADIUS.pill, border: `1.5px solid ${bellOn ? colors.accent : colors.border}`, background: bellOn ? colors.accentSoft : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <Bell size={16} color={bellOn ? colors.accent : colors.textFaint} fill={bellOn ? colors.accent : "none"} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="px-2 mt-5" style={{ borderBottom: `1px solid ${colors.border}`, paddingBottom: 8 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, paddingLeft: 8 }}>PUBLICATIONS</span>
+          </div>
+          {posts.length === 0 ? (
+            <EmptyState title="Aucune publication" subtitle="Les publications de ce compte apparaîtront ici." />
+          ) : (
+            <div style={{ paddingTop: 10 }}>
+              {posts.map((p) => (
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  liked={liked.includes(p.id)}
+                  saved={saved.includes(p.id)}
+                  reposted={reposted.includes(p.id)}
+                  onRepost={() => onRepost(p.id)}
+                  commentCount={(commentsByPost[p.id] || []).length}
+                  onLike={() => onLike(p.id)}
+                  onSave={() => onSave(p.id)}
+                  onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
+                  onOpenActions={() => setSheet({ type: "actions", post: p })}
+                  onOpenAuthor={() => {}}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {sheet?.type === "actions" && (
+        <ContentActionSheet
+          isOwn={isSelf}
+          onClose={() => setSheet(null)}
+          onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
+          onDelete={() => { onDelete(sheet.post.id); setPosts((p) => p.filter((x) => x.id !== sheet.post.id)); setSheet(null); }}
+          onReport={() => setSheet({ type: "report", post: sheet.post })}
+          onHide={() => { onHide(sheet.post.id); setSheet(null); }}
+          onBlock={() => { onBlock(sheet.post.username); setSheet(null); onClose(); }}
+        />
+      )}
+      {sheet?.type === "report" && (
+        <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
+      )}
+      {sheet?.type === "comments" && (
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} />
+      )}
     </div>
   );
 }
@@ -1073,7 +1250,7 @@ function SensitiveGate({ rating, children }) {
     </div>
   );
 }
-function PostCard({ post, liked, saved, commentCount, onLike, onSave, onOpenComments, onOpenActions, onOpenAuthor }) {
+function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, onRepost, onOpenComments, onOpenActions, onOpenAuthor }) {
   const { colors } = useTheme();
   const share = async () => {
     if (navigator.share) { try { await navigator.share({ title: "PISTE", text: post.texte || "Une publication PISTE" }); } catch (e) {} }
@@ -1081,6 +1258,11 @@ function PostCard({ post, liked, saved, commentCount, onLike, onSave, onOpenComm
   };
   return (
     <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, margin: "0 16px 14px", overflow: "hidden" }}>
+      {post.repostedAt && (
+        <div className="flex items-center gap-1.5" style={{ padding: "10px 14px 0", fontSize: 11.5, color: colors.textFaint, fontWeight: 600 }}>
+          <Repeat2 size={13} /> Reposté
+        </div>
+      )}
       <div className="flex items-center justify-between" style={{ padding: "12px 14px" }}>
         <button onClick={onOpenAuthor} className="flex items-center gap-2.5" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
           <div style={{ width: 34, height: 34, borderRadius: 11, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
@@ -1110,6 +1292,12 @@ function PostCard({ post, liked, saved, commentCount, onLike, onSave, onOpenComm
           <MessageSquare size={17} color={colors.textSecondary} strokeWidth={1.8} />
           <span style={{ fontSize: 12, color: colors.textSecondary }}>{commentCount}</span>
         </button>
+        {onRepost && (
+          <button onClick={onRepost} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <Repeat2 size={17} color={reposted ? colors.accent : colors.textSecondary} strokeWidth={1.8} />
+            <span style={{ fontSize: 12, color: reposted ? colors.accent : colors.textSecondary, fontWeight: reposted ? 700 : 400 }}>{post.reposts || 0}</span>
+          </button>
+        )}
         <button onClick={share} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><Share2 size={17} color={colors.textSecondary} strokeWidth={1.8} /></button>
         <div style={{ flex: 1 }} />
         <button onClick={onSave} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
@@ -1126,7 +1314,7 @@ function PostCard({ post, liked, saved, commentCount, onLike, onSave, onOpenComm
     </div>
   );
 }
-function ScreenFil({ posts, profile, liked, saved, commentsByPost, following, onToggleFollow, onLike, onSave, onAddComment, onDelete, onEdit, onReport, onHide, onBlock, onEditRequest, onLoadComments }) {
+function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, following, myGroupIds, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onSave, onRepost, onAddComment, onDelete, onEdit, onReport, onHide, onBlock, onEditRequest, onLoadComments }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("pourtoi");
   const [sheet, setSheet] = useState(null); // { type: 'actions'|'report'|'comments'|'author', post }
@@ -1139,11 +1327,20 @@ function ScreenFil({ posts, profile, liked, saved, commentsByPost, following, on
   const meName = profile.nom || "Vous";
   // Pipeline centralisé (voir buildFeed) — même logique de sécurité/âge partout, seule la
   // pondération change selon l'onglet.
-  const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], now: Date.now() };
+  const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], myGroupIds: myGroupIds || [], now: Date.now() };
+  const seenIds = tab === "decouvrir" ? getDiscoverSeenIds(profile.id) : [];
   const visible =
     tab === "pourtoi" ? buildFeed(posts, ctx) :
     tab === "abonnements" ? buildFeed(posts.filter((p) => following.includes(p.username)), ctx) :
-    buildFeed(posts, { ...ctx, following: [] }); // Découvrir : pas de biais d'affinité, priorité récence/qualité/diversité
+    buildDiscoverFeed(posts, { ...ctx, seenIds }); // Découvrir : pipeline dédié — voir buildDiscoverFeed()
+
+  // Mémorise ce qui a été montré dans Découvrir pour ne pas le remontrer en
+  // priorité la prochaine fois (persiste dans localStorage, survit au refresh).
+  useEffect(() => {
+    if (tab !== "decouvrir" || !profile.id || visible.length === 0) return;
+    markDiscoverSeen(profile.id, visible.map((p) => p.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, profile.id, visible.map((p) => p.id).join(",")]);
 
   return (
     <div style={{ position: "relative" }}>
@@ -1158,12 +1355,14 @@ function ScreenFil({ posts, profile, liked, saved, commentsByPost, following, on
               post={p}
               liked={liked.includes(p.id)}
               saved={saved.includes(p.id)}
+              reposted={reposted.includes(p.id)}
+              onRepost={() => onRepost(p.id)}
               commentCount={(commentsByPost[p.id] || []).length}
               onLike={() => onLike(p.id)}
               onSave={() => onSave(p.id)}
               onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
               onOpenActions={() => setSheet({ type: "actions", post: p })}
-              onOpenAuthor={() => setSheet({ type: "author", post: p })}
+              onOpenAuthor={() => onOpenProfile(p.username)}
             />
           ))}
         </div>
@@ -1185,15 +1384,6 @@ function ScreenFil({ posts, profile, liked, saved, commentsByPost, following, on
       {sheet?.type === "comments" && (
         <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} />
       )}
-      {sheet?.type === "author" && (
-        <AuthorProfileSheet
-          author={sheet.post.nom}
-          isSelf={sheet.post.nom === meName}
-          isFollowing={following.includes(sheet.post.username)}
-          onClose={() => setSheet(null)}
-          onToggleFollow={() => onToggleFollow(sheet.post.username)}
-        />
-      )}
     </div>
   );
 }
@@ -1201,17 +1391,47 @@ function ScreenFil({ posts, profile, liked, saved, commentsByPost, following, on
 /* ============================================================
    7. VIDÉO — VideoCard
    ============================================================ */
-function VideoCard({ video, liked, commentCount, onLike, onOpenComments, onOpenActions, onOpenAuthor }) {
+function FullScreenVideoPlayer({ video, onClose }) {
+  if (!video) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#000", display: "flex", flexDirection: "column" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "flex", justifyContent: "flex-end", padding: 16 }}>
+        <button onClick={onClose} aria-label="Fermer" style={{ background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <X size={18} color="#fff" />
+        </button>
+      </div>
+      <video
+        src={video.videoUrl}
+        controls
+        autoPlay
+        playsInline
+        style={{ width: "100%", height: "100%", objectFit: "contain", margin: "auto" }}
+      />
+    </div>
+  );
+}
+function VideoCard({ video, liked, commentCount, onLike, onOpenComments, onOpenActions, onOpenAuthor, onOpenPlayer }) {
   const { colors } = useTheme();
+  const canPlay = !!video.videoUrl;
   return (
     <div className="flex gap-3" style={{ padding: "10px 16px" }}>
-      <div style={{ width: 128, aspectRatio: "16/10", borderRadius: RADIUS.sm, background: colors.surfaceAlt, flexShrink: 0, position: "relative", overflow: "hidden" }}>
-        {video.image && <img src={video.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+      <button
+        onClick={canPlay ? onOpenPlayer : undefined}
+        disabled={!canPlay}
+        style={{ width: 128, aspectRatio: "16/10", borderRadius: RADIUS.sm, background: colors.surfaceAlt, flexShrink: 0, position: "relative", overflow: "hidden", border: "none", padding: 0, cursor: canPlay ? "pointer" : "default" }}
+      >
+        {video.videoUrl ? (
+          <video src={video.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
+        ) : video.image ? (
+          <img src={video.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : null}
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={18} color="white" fill="white" /></div>
         {video.duree && <span style={{ position: "absolute", right: 5, bottom: 5, fontSize: 10, color: "white", background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "1px 5px" }}>{video.duree}</span>}
-      </div>
+      </button>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: colors.text, lineHeight: 1.3 }}>{video.titre}</div>
+        <button onClick={canPlay ? onOpenPlayer : undefined} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: canPlay ? "pointer" : "default" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: colors.text, lineHeight: 1.3 }}>{video.titre}</div>
+        </button>
         <button onClick={onOpenAuthor} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}><div style={{ fontSize: 11.5, color: colors.textSecondary, marginTop: 4 }}>{video.nom}</div></button>
         <div className="flex items-center gap-3" style={{ marginTop: 6 }}>
           <button onClick={onLike} className="flex items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
@@ -1228,26 +1448,59 @@ function VideoCard({ video, liked, commentCount, onLike, onOpenComments, onOpenA
     </div>
   );
 }
-function ScreenVideo({ videos, profile, liked, commentsByPost, following, onToggleFollow, onLike, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
+function ScreenVideo({ videos, profile, liked, commentsByPost, following, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("instants");
   const [sheet, setSheet] = useState(null);
+  const [query, setQuery] = useState("");
   const options = [{ key: "instants", label: "Instants" }, { key: "videos", label: "Vidéos" }, { key: "recherche", label: "Recherche" }];
   const meName = profile.nom || "Vous";
   // Même pipeline que le Fil (interaction pondérée davantage : vues/relecture à brancher
   // plus tard quand un vrai lecteur vidéo remontera ces signaux).
-  const ranked = buildFeed(videos, { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], now: Date.now() });
+  const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], now: Date.now() };
+  const ranked = buildFeed(videos.filter((v) => v.type === "video"), ctx);
+  const rankedInstants = buildFeed(videos.filter((v) => v.type === "video_courte"), ctx);
+  const activeList = tab === "instants" ? rankedInstants : ranked;
+  // Recherche sur les vraies vidéos déjà chargées depuis Supabase (titre/texte,
+  // pseudo ou nom d'affichage de l'auteur) — pas de résultats inventés.
+  const q = query.trim().toLowerCase();
+  const searchResults = q
+    ? videos.filter((v) => (v.titre || "").toLowerCase().includes(q) || (v.nom || "").toLowerCase().includes(q) || (v.username || "").toLowerCase().includes(q))
+    : [];
   return (
     <div style={{ position: "relative" }}>
       <div style={{ padding: "14px 16px 6px" }}><SegmentedControl options={options} value={tab} onChange={setTab} /></div>
       {tab === "recherche" ? (
         <div className="px-4 pt-3">
-          <div className="flex items-center gap-2" style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "10px 14px" }}><Search size={17} color={colors.textFaint} /><span style={{ fontSize: 13.5, color: colors.textFaint }}>Rechercher une vidéo</span></div>
-          <EmptyState title="Aucun résultat" subtitle="Lancez une recherche pour trouver des vidéos publiées par la communauté." />
+          <div className="flex items-center gap-2" style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "10px 14px" }}>
+            <Search size={17} color={colors.textFaint} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une vidéo, un instant, un créateur" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
+          </div>
+          {!q ? (
+            <EmptyState title="Rechercher une vidéo" subtitle="Lancez une recherche pour trouver des vidéos publiées par la communauté." />
+          ) : searchResults.length === 0 ? (
+            <EmptyState title="Aucun résultat" subtitle={`Aucune vidéo ne correspond à « ${query} ».`} />
+          ) : (
+            <div style={{ paddingTop: 6 }}>
+              {searchResults.map((v) => (
+                <VideoCard
+                  key={v.id}
+                  video={v}
+                  liked={liked.includes(v.id)}
+                  commentCount={(commentsByPost[v.id] || []).length}
+                  onLike={() => onLike(v.id)}
+                  onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
+                  onOpenActions={() => setSheet({ type: "actions", post: v })}
+                  onOpenAuthor={() => onOpenProfile(v.username)}
+                  onOpenPlayer={() => onOpenPlayer(v)}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      ) : tab === "videos" && ranked.length > 0 ? (
+      ) : activeList.length > 0 ? (
         <div style={{ paddingTop: 6 }}>
-          {ranked.map((v) => (
+          {activeList.map((v) => (
             <VideoCard
               key={v.id}
               video={v}
@@ -1256,7 +1509,8 @@ function ScreenVideo({ videos, profile, liked, commentsByPost, following, onTogg
               onLike={() => onLike(v.id)}
               onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
               onOpenActions={() => setSheet({ type: "actions", post: v })}
-              onOpenAuthor={() => setSheet({ type: "author", post: v })}
+              onOpenAuthor={() => onOpenProfile(v.username)}
+              onOpenPlayer={() => onOpenPlayer(v)}
             />
           ))}
         </div>
@@ -1279,15 +1533,6 @@ function ScreenVideo({ videos, profile, liked, commentsByPost, following, onTogg
       )}
       {sheet?.type === "comments" && (
         <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} />
-      )}
-      {sheet?.type === "author" && (
-        <AuthorProfileSheet
-          author={sheet.post.nom}
-          isSelf={sheet.post.nom === meName}
-          isFollowing={following.includes(sheet.post.username)}
-          onClose={() => setSheet(null)}
-          onToggleFollow={() => onToggleFollow(sheet.post.username)}
-        />
       )}
     </div>
   );
@@ -1336,33 +1581,165 @@ function GroupCategoryTile({ group, onOpen }) {
     </button>
   );
 }
-function GroupPage({ group, onClose, onToggleJoin, onCreatePost }) {
+function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated, onOpenProfile, profile, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("publications");
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sheet, setSheet] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState("");
   const tabs = [["publications", "Publications"], ["videos", "Vidéos"], ["discussions", "Discussions"], ["membres", "Membres"]];
+  const meName = profile?.nom || "Vous";
+  // La policy RLS "creator or admin updates group" (001_init.sql) applique déjà
+  // cette même règle côté base — ce contrôle ici n'est qu'un raccourci d'UX.
+  const canEditImage = profile?.role === "admin" || (group.createdBy && group.createdBy === profile?.id);
+  const groupImageInputRef = useRef(null);
+  const pickGroupImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    setImageError("");
+    try {
+      const url = await groupService.uploadGroupImage(group.id, file);
+      onGroupUpdated({ ...group, imageUrl: url });
+    } catch (err) {
+      setImageError(err.message || "Impossible de mettre à jour l'image pour le moment.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    postService.fetchGroupPosts(group.id)
+      .then((rows) => { if (!cancelled) setPosts(rows.map(mapPostRow)); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [group.id]);
+
+  const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setMembersLoading(true);
+    groupService.fetchGroupMembers(group.id)
+      .then((rows) => { if (!cancelled) setMembers(rows); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setMembersLoading(false); });
+    return () => { cancelled = true; };
+  }, [group.id, group.nombreMembres]);
+
+  const groupPosts = posts.filter((p) => p.type !== "video" && p.type !== "video_courte");
+
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title={group.nom} onBack={onClose} />
-      <div style={{ position: "relative" }}>
-        <GroupImageArea group={group} height={150} iconSize={26} />
-        {group.imageUrl && (
-          <div style={{ position: "absolute", left: 16, right: 16, bottom: 12 }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{group.nom}</div>
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ position: "relative" }}>
+          <GroupImageArea group={group} height={150} iconSize={26} />
+          {group.imageUrl && (
+            <div style={{ position: "absolute", left: 16, right: 16, bottom: 12 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{group.nom}</div>
+            </div>
+          )}
+          {canEditImage && (
+            <>
+              <input ref={groupImageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickGroupImage} style={{ display: "none" }} />
+              <button
+                onClick={() => groupImageInputRef.current?.click()}
+                disabled={uploadingImage}
+                aria-label="Changer l'image du groupe"
+                style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+              >
+                <Camera size={15} color="#fff" />
+              </button>
+            </>
+          )}
+        </div>
+        {imageError && <div style={{ margin: "10px 16px 0", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "10px 14px", fontSize: 12, color: colors.error }}>{imageError}</div>}
+        <div style={{ padding: "14px 16px" }}>
+          {group.description && <div style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 1.5, marginBottom: 6 }}>{group.description}</div>}
+          <div className="flex items-center justify-between">
+            <span style={{ fontSize: 12, color: colors.textFaint, fontWeight: 600 }}>{group.nombreMembres ?? 0} membre{(group.nombreMembres ?? 0) !== 1 ? "s" : ""}</span>
+            <Button full={false} variant={group.joined ? "secondary" : "primary"} onClick={() => onToggleJoin(group.id)}>{group.joined ? "Rejoint" : "Rejoindre"}</Button>
           </div>
+        </div>
+        <div className="flex gap-4 px-4" style={{ overflowX: "auto", borderBottom: `1px solid ${colors.border}` }}>
+          {tabs.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ background: "none", border: "none", padding: "6px 0 10px", whiteSpace: "nowrap", borderBottom: `2px solid ${tab === k ? colors.accent : "transparent"}`, color: tab === k ? colors.text : colors.textFaint, fontSize: 12.5, fontWeight: tab === k ? 700 : 500, cursor: "pointer" }}>{l}</button>)}
+        </div>
+        {tab === "publications" ? (
+          loading ? (
+            <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
+          ) : groupPosts.length === 0 ? (
+            <EmptyState title="Aucune publication" subtitle="Les publications de ce groupe apparaîtront ici." />
+          ) : (
+            <div style={{ paddingTop: 6 }}>
+              {groupPosts.map((p) => (
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  liked={liked.includes(p.id)}
+                  saved={saved.includes(p.id)}
+                  reposted={reposted.includes(p.id)}
+                  onRepost={() => onRepost(p.id)}
+                  commentCount={(commentsByPost[p.id] || []).length}
+                  onLike={() => onLike(p.id)}
+                  onSave={() => onSave(p.id)}
+                  onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
+                  onOpenActions={() => setSheet({ type: "actions", post: p })}
+                  onOpenAuthor={() => onOpenProfile(p.username)}
+                />
+              ))}
+            </div>
+          )
+        ) : tab === "membres" ? (
+          membersLoading ? (
+            <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
+          ) : members.length === 0 ? (
+            <EmptyState title="Aucun membre" subtitle="Les membres de ce groupe apparaîtront ici." />
+          ) : (
+            <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
+              {members.map((m) => (
+                <button key={m.id} onClick={() => onOpenProfile(m.username)} className="flex items-center gap-3" style={{ padding: "8px 4px", background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                    {m.avatar ? <img src={m.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{m.nom}</div>
+                    <div style={{ fontSize: 11.5, color: colors.textFaint }}>@{m.username}</div>
+                  </div>
+                  {m.role === "admin" && (
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "3px 9px" }}>Admin du groupe</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )
+        ) : (
+          <EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de ce groupe est vide pour le moment.`} />
         )}
       </div>
-      <div style={{ padding: "14px 16px" }}>
-        {group.description && <div style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 1.5, marginBottom: 6 }}>{group.description}</div>}
-        <div className="flex items-center justify-between">
-          <span style={{ fontSize: 12, color: colors.textFaint, fontWeight: 600 }}>{group.nombreMembres ?? 0} membre{(group.nombreMembres ?? 0) !== 1 ? "s" : ""}</span>
-          <Button full={false} variant={group.joined ? "secondary" : "primary"} onClick={() => onToggleJoin(group.id)}>{group.joined ? "Rejoint" : "Rejoindre"}</Button>
-        </div>
-      </div>
-      <div className="flex gap-4 px-4" style={{ overflowX: "auto", borderBottom: `1px solid ${colors.border}` }}>
-        {tabs.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ background: "none", border: "none", padding: "6px 0 10px", whiteSpace: "nowrap", borderBottom: `2px solid ${tab === k ? colors.accent : "transparent"}`, color: tab === k ? colors.text : colors.textFaint, fontSize: 12.5, fontWeight: tab === k ? 700 : 500, cursor: "pointer" }}>{l}</button>)}
-      </div>
-      <div style={{ flex: 1, overflowY: "auto" }}><EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de ce groupe est vide pour le moment.`} /></div>
-      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button onClick={() => { onClose(); onCreatePost(); }}>Publier dans ce groupe</Button></div>
+      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button onClick={() => { onClose(); onCreatePost(group.id); }}>Publier dans ce groupe</Button></div>
+      {sheet?.type === "actions" && (
+        <ContentActionSheet
+          isOwn={sheet.post.nom === meName}
+          onClose={() => setSheet(null)}
+          onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
+          onDelete={() => { onDelete(sheet.post.id); setSheet(null); setPosts((p) => p.filter((x) => x.id !== sheet.post.id)); }}
+          onReport={() => setSheet({ type: "report", post: sheet.post })}
+          onHide={() => setSheet(null)}
+          onBlock={() => { onBlock(sheet.post.username); setSheet(null); }}
+        />
+      )}
+      {sheet?.type === "report" && (
+        <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
+      )}
+      {sheet?.type === "comments" && (
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} />
+      )}
     </div>
   );
 }
@@ -1373,11 +1750,24 @@ function CreateGroupForm({ onClose, onCreated }) {
   const [categorie, setCategorie] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const imageInputRef = useRef(null);
+  const pickImage = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
   const submit = async () => {
     setSaving(true);
     setError("");
     try {
       const g = await groupService.createGroup({ nom, description, categorie, imageUrl: null });
+      if (imageFile) {
+        const url = await groupService.uploadGroupImage(g.id, imageFile);
+        g.imageUrl = url;
+      }
       onCreated(g);
     } catch (e) {
       setError(e.message || "Impossible de créer ce groupe pour le moment.");
@@ -1389,10 +1779,20 @@ function CreateGroupForm({ onClose, onCreated }) {
     <div style={{ position: "absolute", inset: 0, zIndex: 46, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title="Créer un groupe" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-        <div style={{ border: `1.5px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: "22px 14px", textAlign: "center", marginBottom: 16 }}>
-          <Camera size={20} color={colors.textFaint} style={{ margin: "0 auto 6px" }} />
-          <div style={{ fontSize: 12.5, color: colors.textFaint }}>Ajouter une image — activé une fois le stockage connecté</div>
-        </div>
+        <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickImage} style={{ display: "none" }} />
+        <button
+          onClick={() => imageInputRef.current?.click()}
+          style={{ width: "100%", border: `1.5px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: imagePreview ? 0 : "22px 14px", textAlign: "center", marginBottom: 16, background: "transparent", cursor: "pointer", overflow: "hidden" }}
+        >
+          {imagePreview ? (
+            <img src={imagePreview} alt="" style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
+          ) : (
+            <>
+              <Camera size={20} color={colors.textFaint} style={{ margin: "0 auto 6px" }} />
+              <div style={{ fontSize: 12.5, color: colors.textFaint }}>Ajouter une image</div>
+            </>
+          )}
+        </button>
         <TextField label="Nom du groupe" value={nom} onChange={setNom} placeholder="ex : Approche en Normandie" />
         <TextField label="Description" value={description} onChange={setDescription} placeholder="Décrivez l'objet de ce groupe." textarea />
         <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>CATÉGORIE</div>
@@ -1403,7 +1803,7 @@ function CreateGroupForm({ onClose, onCreated }) {
     </div>
   );
 }
-function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost }) {
+function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUpdated, onOpenProfile, profile, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
   const { colors } = useTheme();
   const [openGroup, setOpenGroup] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -1437,7 +1837,31 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost }) {
         <div className="grid grid-cols-2 gap-3 px-4 pb-4">{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
       )}
 
-      {currentOpen && <GroupPage group={currentOpen} onClose={() => setOpenGroup(null)} onToggleJoin={onToggleJoin} onCreatePost={onCreatePost} />}
+      {currentOpen && (
+        <GroupPage
+          group={currentOpen}
+          onClose={() => setOpenGroup(null)}
+          onToggleJoin={onToggleJoin}
+          onCreatePost={onCreatePost}
+          onGroupUpdated={onGroupUpdated}
+          onOpenProfile={onOpenProfile}
+          profile={profile}
+          liked={liked}
+          saved={saved}
+          reposted={reposted}
+          onRepost={onRepost}
+          commentsByPost={commentsByPost}
+          onLike={onLike}
+          onSave={onSave}
+          onAddComment={onAddComment}
+          onDelete={onDelete}
+          onEditRequest={onEditRequest}
+          onReport={onReport}
+          onHide={onHide}
+          onBlock={onBlock}
+          onLoadComments={onLoadComments}
+        />
+      )}
       {creating && <CreateGroupForm onClose={() => setCreating(false)} onCreated={(g) => { addGroup(g); setCreating(false); }} />}
     </div>
   );
@@ -1455,7 +1879,7 @@ const CREATE_OPTIONS = [
   { key: "sondage", label: "Sondage", icon: BarChart3 },
   { key: "sortie", label: "Sortie", icon: CalendarDays },
 ];
-function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPost }) {
+function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPost, groupId }) {
   const { colors } = useTheme();
   const label = editingPost ? "Modifier" : CREATE_OPTIONS.find((o) => o.key === type)?.label || "Publication";
   const [text, setText] = useState(editingPost?.texte || "");
@@ -1493,12 +1917,14 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
           const saved = await postService.createPost({
             texte: text, type, animal, pratique,
             dogId: null, // les chiens ne sont pas encore reliés à un vrai compte — à connecter avec le service chiens
-            departement, contentRating, mediaFiles,
+            departement, contentRating, mediaFiles, groupId,
           });
           setSaving(false);
           onPublished({
             id: saved.id, nom: authorName, avatar: null,
-            texte: saved.texte, image: saved.mediaUrls?.[0] || null,
+            texte: saved.texte,
+            image: saved.media?.[0]?.type === "video" ? null : saved.media?.[0]?.url || null,
+            videoUrl: saved.media?.[0]?.type === "video" ? saved.media[0].url : null,
             type: saved.type, animal: saved.animal, pratique: saved.pratique,
             contentRating: saved.content_rating, hashtags: saved.hashtags || [], mentions: saved.mentions || [],
             likes: 0, commentaires: 0, date: "à l'instant", createdAt: Date.now(), titre: saved.texte,
@@ -1626,7 +2052,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     </div>
   );
 }
-function CreateFlow({ open, onClose, dogs, onPublished, authorName, editingPost, onEdited }) {
+function CreateFlow({ open, onClose, dogs, onPublished, authorName, editingPost, onEdited, groupId }) {
   const { colors } = useTheme();
   const [step, setStep] = useState(editingPost ? "compose" : "pick");
   const [type, setType] = useState(editingPost ? editingPost.type : null);
@@ -1643,6 +2069,7 @@ function CreateFlow({ open, onClose, dogs, onPublished, authorName, editingPost,
         dogs={dogs}
         authorName={authorName}
         editingPost={editingPost}
+        groupId={editingPost ? null : groupId}
         onPublished={(p) => { close(); if (editingPost) onEdited(p); else onPublished(type, p); }}
       />
     );
@@ -1679,13 +2106,22 @@ function ProfileEditor({ profile, onClose, onSave }) {
   const [error, setError] = useState("");
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(profile.avatar || null);
+  const [bannerFile, setBannerFile] = useState(null);
+  const [bannerPreview, setBannerPreview] = useState(profile.imageCouverture || null);
   const fileInputRef = useRef(null);
+  const bannerInputRef = useRef(null);
 
   const pickAvatar = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
+  };
+  const pickBanner = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBannerFile(file);
+    setBannerPreview(URL.createObjectURL(file));
   };
 
   const submit = async () => {
@@ -1696,13 +2132,17 @@ function ProfileEditor({ profile, onClose, onSave }) {
       if (avatarFile) {
         avatarUrl = await profileService.uploadAvatar(avatarFile);
       }
+      let bannerUrl = profile.imageCouverture;
+      if (bannerFile) {
+        bannerUrl = await profileService.uploadBanner(bannerFile);
+      }
       const saved = await profileService.updateProfile({
         nom: form.nom,
         username: form.username,
         bio: form.bio,
         localisation: form.localisation,
       });
-      onSave({ ...saved, avatar: avatarUrl, interets: form.interets });
+      onSave({ ...saved, avatar: avatarUrl, imageCouverture: bannerUrl, interets: form.interets });
     } catch (e) {
       setError(e.message || "Impossible d'enregistrer le profil pour le moment.");
     } finally {
@@ -1714,9 +2154,13 @@ function ProfileEditor({ profile, onClose, onSave }) {
     <div style={{ position: "absolute", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title="Modifier le profil" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <div style={{ width: "100%", height: 100, background: colors.surfaceAlt, position: "relative" }}>
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><Camera size={20} color={colors.textFaint} /></div>
-        </div>
+        <input ref={bannerInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickBanner} style={{ display: "none" }} />
+        <button
+          onClick={() => bannerInputRef.current?.click()}
+          style={{ width: "100%", height: 100, background: bannerPreview ? `url(${bannerPreview}) center/cover` : colors.surfaceAlt, position: "relative", border: "none", padding: 0, cursor: "pointer", display: "block" }}
+        >
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: bannerPreview ? "rgba(0,0,0,0.25)" : "transparent" }}><Camera size={20} color={bannerPreview ? "#fff" : colors.textFaint} /></div>
+        </button>
         <div style={{ padding: "0 20px" }}>
           <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickAvatar} style={{ display: "none" }} />
           <button
@@ -1751,11 +2195,20 @@ function DogFormScreen({ onClose, onSaved }) {
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const photoInputRef = useRef(null);
+  const pickPhoto = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  };
   const submit = async () => {
     setSaving(true);
     setError("");
     try {
-      const dog = await dogService.createDog({ nom, race, age, sexe, specialite, description });
+      const dog = await dogService.createDog({ nom, race, age, sexe, specialite, description, photoFile });
       onSaved(dog);
     } catch (e) {
       setError(e.message || "Impossible d'enregistrer ce chien pour le moment.");
@@ -1767,10 +2220,20 @@ function DogFormScreen({ onClose, onSaved }) {
     <div style={{ position: "absolute", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title="Ajouter un chien" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-        <div style={{ border: `1.5px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: "22px 14px", textAlign: "center", marginBottom: 16 }}>
-          <Dog size={20} color={colors.textFaint} style={{ margin: "0 auto 6px" }} />
-          <div style={{ fontSize: 12.5, color: colors.textFaint }}>Ajouter une photo — activé une fois le stockage connecté</div>
-        </div>
+        <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickPhoto} style={{ display: "none" }} />
+        <button
+          onClick={() => photoInputRef.current?.click()}
+          style={{ width: "100%", border: `1.5px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: photoPreview ? 0 : "22px 14px", textAlign: "center", marginBottom: 16, background: "transparent", cursor: "pointer", overflow: "hidden" }}
+        >
+          {photoPreview ? (
+            <img src={photoPreview} alt="" style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
+          ) : (
+            <>
+              <Dog size={20} color={colors.textFaint} style={{ margin: "0 auto 6px" }} />
+              <div style={{ fontSize: 12.5, color: colors.textFaint }}>Ajouter une photo</div>
+            </>
+          )}
+        </button>
         <TextField label="Nom" value={nom} onChange={setNom} placeholder="ex : Basco" />
         <TextField label="Race" value={race} onChange={setRace} placeholder="ex : Épagneul breton" />
         <TextField label="Âge" value={age} onChange={setAge} placeholder="ex : 3 ans" type="number" />
@@ -1797,7 +2260,9 @@ function DogPage({ dog, onClose }) {
     <div style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title={dog.nom} onBack={onClose} />
       <div className="px-5 pt-4">
-        <div style={{ width: 64, height: 64, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}><Dog size={26} color={colors.textFaint} /></div>
+        <div style={{ width: 64, height: 64, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden" }}>
+          {dog.photo_url ? <img src={dog.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={26} color={colors.textFaint} />}
+        </div>
         <div style={{ fontSize: 16, fontWeight: 800, color: colors.text }}>{dog.nom}</div>
         <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}>{[dog.race, dog.sexe, dog.age && `${dog.age} ans`, dog.specialite].filter(Boolean).join(" · ")}</div>
         {dog.description && <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 8, lineHeight: 1.5 }}>{dog.description}</div>}
@@ -1809,16 +2274,27 @@ function DogPage({ dog, onClose }) {
     </div>
   );
 }
-function ScreenProfil({ profile, setProfile, dogs, addDog, posts, liked, saved, commentsByPost, onLike, onSave, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
+function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("publications");
   const [editing, setEditing] = useState(false);
   const [dogForm, setDogForm] = useState(false);
   const [openDog, setOpenDog] = useState(null);
   const [sheet, setSheet] = useState(null);
+  const [repostedPosts, setRepostedPosts] = useState([]);
+  const [repostsLoading, setRepostsLoading] = useState(true);
   const tabs = [["publications", "Publications", Home], ["videos", "Vidéos", Video], ["chiens", "Chiens", Dog], ["reposts", "Reposts", Repeat2]];
   const stats = profile.statistiques || { abonnes: 0, abonnements: 0, publications: posts.length };
   const meName = profile.nom || "Vous";
+
+  useEffect(() => {
+    let cancelled = false;
+    postService.fetchMyRepostedPosts()
+      .then((rows) => { if (!cancelled) setRepostedPosts(rows.map(mapPostRow)); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setRepostsLoading(false); });
+    return () => { cancelled = true; };
+  }, [reposted]);
 
   return (
     <div style={{ position: "relative" }}>
@@ -1864,19 +2340,64 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, liked, saved, 
                 post={p}
                 liked={liked.includes(p.id)}
                 saved={saved.includes(p.id)}
+                reposted={reposted.includes(p.id)}
+                onRepost={() => onRepost(p.id)}
                 commentCount={(commentsByPost[p.id] || []).length}
                 onLike={() => onLike(p.id)}
                 onSave={() => onSave(p.id)}
                 onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
                 onOpenActions={() => setSheet({ type: "actions", post: p })}
-                onOpenAuthor={() => {}}
+                onOpenAuthor={() => onOpenProfile(p.username)}
               />
             ))}
           </div>
         )
       )}
-      {tab === "videos" && <EmptyState title="Aucune vidéo" subtitle="Vos vidéos apparaîtront ici." />}
-      {tab === "reposts" && <EmptyState title="Aucun repost" subtitle="Les publications que vous repartagez apparaîtront ici." />}
+      {tab === "videos" && (
+        videos.length === 0 ? <EmptyState title="Aucune vidéo" subtitle="Vos vidéos apparaîtront ici." /> : (
+          <div style={{ paddingTop: 6 }}>
+            {videos.map((v) => (
+              <VideoCard
+                key={v.id}
+                video={v}
+                liked={liked.includes(v.id)}
+                commentCount={(commentsByPost[v.id] || []).length}
+                onLike={() => onLike(v.id)}
+                onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
+                onOpenActions={() => setSheet({ type: "actions", post: v })}
+                onOpenAuthor={() => onOpenProfile(v.username)}
+                onOpenPlayer={() => onOpenPlayer && onOpenPlayer(v)}
+              />
+            ))}
+          </div>
+        )
+      )}
+      {tab === "reposts" && (
+        repostsLoading ? (
+          <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
+        ) : repostedPosts.length === 0 ? (
+          <EmptyState title="Aucun repost" subtitle="Les publications que vous repartagez apparaîtront ici." />
+        ) : (
+          <div style={{ paddingTop: 10 }}>
+            {repostedPosts.map((p) => (
+              <PostCard
+                key={p.id}
+                post={p}
+                liked={liked.includes(p.id)}
+                saved={saved.includes(p.id)}
+                reposted={true}
+                onRepost={() => onRepost(p.id)}
+                commentCount={(commentsByPost[p.id] || []).length}
+                onLike={() => onLike(p.id)}
+                onSave={() => onSave(p.id)}
+                onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
+                onOpenActions={() => setSheet({ type: "actions", post: p })}
+                onOpenAuthor={() => onOpenProfile(p.username)}
+              />
+            ))}
+          </div>
+        )
+      )}
       {tab === "chiens" && (
         dogs.length === 0 ? (
           <EmptyState title="Aucun chien enregistré" subtitle="Créez le profil de votre chien pour partager ses sorties et ses publications." ctaLabel="Ajouter un chien" onCta={() => setDogForm(true)} />
@@ -1884,7 +2405,9 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, liked, saved, 
           <div className="px-4 pt-4 flex flex-col gap-2">
             {dogs.map((d) => (
               <button key={d.id} onClick={() => setOpenDog(d)} className="flex items-center gap-3" style={{ border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: 12, background: colors.surface, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ width: 40, height: 40, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center" }}><Dog size={18} color={colors.textFaint} /></div>
+                <div style={{ width: 40, height: 40, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                  {d.photo_url ? <img src={d.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={18} color={colors.textFaint} />}
+                </div>
                 <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>{d.nom}</span>
               </button>
             ))}
@@ -1913,6 +2436,487 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, liked, saved, 
       {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile(p); setEditing(false); }} />}
       {dogForm && <DogFormScreen onClose={() => setDogForm(false)} onSaved={(d) => { addDog(d); setDogForm(false); }} />}
       {openDog && <DogPage dog={openDog} onClose={() => setOpenDog(null)} />}
+    </div>
+  );
+}
+
+/* ============================================================
+   10.5 MESSAGERIE
+   ============================================================ */
+function MessageBubble({ mine, media, colors }) {
+  if (!media) return null;
+  if (media.type === "image") {
+    return <img src={media.url} alt="" style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
+  }
+  if (media.type === "video") {
+    return <video src={media.url} controls playsInline style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
+  }
+  if (media.type === "audio") {
+    return (
+      <div className="flex items-center gap-2" style={{ minWidth: 180 }}>
+        <audio src={media.url} controls style={{ height: 32, flex: 1 }} />
+        {media.duration_seconds != null && (
+          <span style={{ fontSize: 10.5, color: mine ? colors.onAccent : colors.textFaint, flexShrink: 0 }}>
+            {Math.floor(media.duration_seconds / 60)}:{String(media.duration_seconds % 60).padStart(2, "0")}
+          </span>
+        )}
+      </div>
+    );
+  }
+  return null;
+}
+function ConversationThread({ conversationId, meId, onClose, title, subtitle, onOpenProfile, onRead }) {
+  const { colors } = useTheme();
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [mediaError, setMediaError] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const listRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const recorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const timerRef = useRef(null);
+
+  const refetch = () => messageService.fetchMessages(conversationId).then(setMessages).catch(() => {});
+  const markRead = () => messageService.markConversationRead(conversationId).then(() => onRead?.()).catch(() => {});
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError("");
+    messageService.fetchMessages(conversationId)
+      .then((rows) => { if (!cancelled) setMessages(rows); })
+      .catch((e) => { if (!cancelled) setLoadError(e.message || "Impossible de charger les messages."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    markRead(); // ouvrir la conversation = la marquer comme lue
+    // Le payload realtime brut ne contient pas les jointures (profil, média) —
+    // on recharge donc le fil complet à chaque nouveau message plutôt que
+    // d'ajouter la ligne brute reçue. La conversation reste "lue" tant qu'elle
+    // est ouverte : on remet à jour last_read_at à chaque message reçu ici.
+    const unsubscribe = messageService.subscribeToConversation(conversationId, () => { if (!cancelled) { refetch(); markRead(); } });
+    return () => { cancelled = true; unsubscribe(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [messages.length]);
+
+  const submit = async () => {
+    const texte = text.trim();
+    if (!texte) return;
+    setSending(true);
+    setText("");
+    try {
+      const sent = await messageService.sendMessage(conversationId, texte);
+      setMessages((m) => (m.some((x) => x.id === sent.id) ? m : [...m, sent]));
+    } catch (e) {
+      setText(texte); // on redonne le texte pour ne pas le perdre
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const pickMedia = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setMediaError("");
+    setSending(true);
+    try {
+      const mediaType = file.type.startsWith("video") ? "video" : "image";
+      const sent = await messageService.sendMediaMessage(conversationId, file, mediaType);
+      setMessages((m) => (m.some((x) => x.id === sent.id) ? m : [...m, sent]));
+    } catch (e2) {
+      setMediaError(e2.message || "Impossible d'envoyer ce fichier.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const startRecording = async () => {
+    setMediaError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.start();
+      recorderRef.current = { recorder, stream };
+      setRecordSeconds(0);
+      setRecording(true);
+      timerRef.current = window.setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+    } catch (e) {
+      setMediaError("Microphone indisponible ou accès refusé.");
+    }
+  };
+
+  const stopRecording = async () => {
+    const ref = recorderRef.current;
+    if (!ref) return;
+    window.clearInterval(timerRef.current);
+    const duration = recordSeconds;
+    setRecording(false);
+    await new Promise((resolve) => {
+      ref.recorder.onstop = resolve;
+      ref.recorder.stop();
+    });
+    ref.stream.getTracks().forEach((t) => t.stop());
+    recorderRef.current = null;
+    if (duration < 1) return; // enregistrement trop court, probablement annulé
+    const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+    const file = new File([blob], `vocal-${Date.now()}.webm`, { type: "audio/webm" });
+    setSending(true);
+    try {
+      const sent = await messageService.sendMediaMessage(conversationId, file, "audio", duration);
+      setMessages((m) => (m.some((x) => x.id === sent.id) ? m : [...m, sent]));
+    } catch (e) {
+      setMediaError(e.message || "Impossible d'envoyer le message vocal.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title={title} onBack={onClose} />
+      {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
+      <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {loading ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
+        ) : loadError ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.error, marginTop: 24, padding: "0 20px" }}>{loadError}</div>
+        ) : messages.length === 0 ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Aucun message. Dites bonjour !</div>
+        ) : (
+          messages.map((m) => {
+            const mine = m.sender_id === meId;
+            const media = m.message_media?.[0];
+            return (
+              <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
+                <div style={{ maxWidth: "78%" }}>
+                  {!mine && (
+                    m.profiles?.username ? (
+                      <button onClick={() => onOpenProfile(m.profiles.username)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 10.5, color: colors.textFaint, marginBottom: 2, marginLeft: 4 }}>
+                        {m.profiles?.nom || m.profiles?.username}
+                      </button>
+                    ) : (
+                      <div style={{ fontSize: 10.5, color: colors.textFaint, marginBottom: 2, marginLeft: 4 }}>Utilisateur</div>
+                    )
+                  )}
+                  <div style={{ background: mine ? colors.accent : colors.surface, border: mine ? "none" : `1px solid ${colors.border}`, color: mine ? colors.onAccent : colors.text, borderRadius: RADIUS.md, padding: media && !m.texte ? 6 : "9px 13px", fontSize: 13.5, lineHeight: 1.4, wordBreak: "break-word" }}>
+                    {media && <MessageBubble mine={mine} media={media} colors={colors} />}
+                    {m.texte && <div style={{ marginTop: media ? 6 : 0 }}>{m.texte}</div>}
+                  </div>
+                  <div style={{ fontSize: 9.5, color: colors.textFaint, marginTop: 2, textAlign: mine ? "right" : "left" }}>{formatRelativeDate(m.created_at)}</div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      {mediaError && <div style={{ margin: "0 12px 8px", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "8px 12px", fontSize: 11.5, color: colors.error }}>{mediaError}</div>}
+      <div className="flex items-center gap-2" style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
+        <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={pickMedia} style={{ display: "none" }} />
+        {recording ? (
+          <button onClick={stopRecording} className="flex items-center gap-2" style={{ flex: 1, border: `1.5px solid ${colors.error}`, background: colors.errorSoft, borderRadius: RADIUS.pill, padding: "10px 16px", cursor: "pointer" }}>
+            <span style={{ width: 8, height: 8, borderRadius: 4, background: colors.error }} />
+            <span style={{ fontSize: 13, color: colors.error, fontWeight: 600 }}>Enregistrement... {recordSeconds}s (toucher pour envoyer)</span>
+          </button>
+        ) : (
+          <>
+            <IconButton icon={ImageIcon} onClick={() => fileInputRef.current?.click()} />
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !sending) submit(); }}
+              placeholder="Écrire un message..."
+              style={{ flex: 1, border: `1.5px solid ${colors.border}`, background: colors.surface, borderRadius: RADIUS.pill, padding: "10px 16px", fontSize: 13.5, color: colors.text, outline: "none" }}
+            />
+            {text.trim() ? (
+              <button onClick={submit} disabled={sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                <ArrowLeft size={16} color={colors.onAccent} style={{ transform: "rotate(135deg)" }} />
+              </button>
+            ) : (
+              <button onClick={startRecording} disabled={sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                <Mic size={16} color={colors.textFaint} />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+function NewConversationSheet({ onClose, onStarted }) {
+  const { colors } = useTheme();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [groupMode, setGroupMode] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const [groupName, setGroupName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) { setResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(() => {
+      socialService.searchUsers(q)
+        .then((rows) => { if (!cancelled) setResults(rows); })
+        .catch(() => {})
+        .finally(() => { if (!cancelled) setSearching(false); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query]);
+
+  const toggleSelect = (u) => setSelected((s) => (s.some((x) => x.id === u.id) ? s.filter((x) => x.id !== u.id) : [...s, u]));
+
+  const startDirect = async (u) => {
+    setError("");
+    try {
+      const conversationId = await messageService.startDirectConversation(u.id);
+      onStarted(conversationId, u.nom || u.username);
+    } catch (e) {
+      setError(e.message || "Impossible de démarrer la conversation.");
+    }
+  };
+
+  const createGroup = async () => {
+    if (!groupName.trim() || selected.length === 0) return;
+    setCreating(true);
+    setError("");
+    try {
+      const conversationId = await messageService.createGroupConversation(groupName.trim(), selected.map((u) => u.id));
+      onStarted(conversationId, groupName.trim());
+    } catch (e) {
+      setError(e.message || "Impossible de créer ce groupe pour le moment.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title={groupMode ? "Nouveau groupe" : "Nouveau message"} onCloseX={onClose} />
+      <div style={{ padding: "0 16px 10px" }}>
+        <SegmentedControl
+          options={[{ key: "direct", label: "Message direct" }, { key: "group", label: "Groupe" }]}
+          value={groupMode ? "group" : "direct"}
+          onChange={(k) => setGroupMode(k === "group")}
+        />
+      </div>
+      {groupMode && (
+        <div style={{ padding: "0 16px 10px" }}>
+          <TextField label="Nom du groupe" value={groupName} onChange={setGroupName} placeholder="ex : Sortie du week-end" />
+        </div>
+      )}
+      <div style={{ padding: "0 16px 10px" }}>
+        <div className="flex items-center gap-2" style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "10px 14px" }}>
+          <Search size={17} color={colors.textFaint} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un pseudo ou un nom" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
+        </div>
+      </div>
+      {groupMode && selected.length > 0 && (
+        <div className="flex flex-wrap gap-2" style={{ padding: "0 16px 10px" }}>
+          {selected.map((u) => <Chip key={u.id} label={u.nom || u.username} active onClick={() => toggleSelect(u)} />)}
+        </div>
+      )}
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px" }}>
+        {searching ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 20 }}>Recherche...</div>
+        ) : results.length === 0 ? (
+          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher un utilisateur"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour démarrer."} />
+        ) : (
+          results.map((u) => (
+            <button
+              key={u.id}
+              onClick={() => (groupMode ? toggleSelect(u) : startDirect(u))}
+              className="flex items-center gap-3"
+              style={{ width: "100%", background: "none", border: "none", padding: "10px 2px", cursor: "pointer", textAlign: "left" }}
+            >
+              <div style={{ width: 38, height: 38, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
+                <div style={{ fontSize: 11.5, color: colors.textFaint }}>@{u.username}</div>
+              </div>
+              {groupMode && (
+                <div style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${selected.some((x) => x.id === u.id) ? colors.accent : colors.border}`, background: selected.some((x) => x.id === u.id) ? colors.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {selected.some((x) => x.id === u.id) && <Check size={12} color={colors.onAccent} strokeWidth={3} />}
+                </div>
+              )}
+            </button>
+          ))
+        )}
+      </div>
+      {error && <div style={{ margin: "0 16px 10px", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "10px 14px", fontSize: 12, color: colors.error }}>{error}</div>}
+      {groupMode && (
+        <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}>
+          <Button disabled={!groupName.trim() || selected.length === 0 || creating} onClick={createGroup}>{creating ? "Création..." : "Créer le groupe"}</Button>
+        </div>
+      )}
+    </div>
+  );
+}
+function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversation, onOpenProfile, onRead }) {
+  const { colors } = useTheme();
+  const [conversations, setConversations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openConv, setOpenConv] = useState(null); // { id, title }
+  const [showNew, setShowNew] = useState(false);
+
+  const refresh = () => {
+    messageService.fetchConversations().then(setConversations).catch(() => {});
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    messageService.fetchConversations().then(setConversations).catch(() => {}).finally(() => setLoading(false));
+    const unsubscribe = messageService.subscribeToMyMessages(() => refresh());
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ouverture directe d'une conversation depuis une notification (message /
+  // ajout à un groupe) — voir NotificationsPanel.
+  useEffect(() => {
+    if (!initialConversationId || conversations.length === 0) return;
+    const conv = conversations.find((c) => c.id === initialConversationId);
+    if (conv) setOpenConv({ id: conv.id, title: conv.nom });
+    onConsumeInitialConversation?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialConversationId, conversations]);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Messages</span>
+        <button onClick={() => setShowNew(true)} style={{ border: `1px solid ${colors.accent}`, color: colors.accent, background: "transparent", borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>+ Nouveau</button>
+      </div>
+      {loading ? (
+        <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
+      ) : conversations.length === 0 ? (
+        <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." ctaLabel="Démarrer une conversation" onCta={() => setShowNew(true)} />
+      ) : (
+        <div className="flex flex-col" style={{ padding: "4px 8px" }}>
+          {conversations.map((c) => (
+            <button key={c.id} onClick={() => setOpenConv({ id: c.id, title: c.nom })} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "10px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.sm }}>
+              <div style={{ width: 46, height: 46, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                {c.type === "group" ? <Users size={18} color={colors.textFaint} /> : c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={18} color={colors.textFaint} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text }}>{c.nom}</div>
+                <div style={{ fontSize: 12, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {c.lastMessage
+                    ? `${c.lastSenderIsMe ? "Vous : " : ""}${c.lastMessage}`
+                    : c.hasLastMessage
+                    ? (c.lastSenderIsMe ? "Vous : nouveau message" : "Nouveau message")
+                    : "Aucun message"}
+                </div>
+              </div>
+              <div style={{ fontSize: 10.5, color: colors.textFaint, flexShrink: 0 }}>{formatRelativeDate(c.lastMessageAt)}</div>
+            </button>
+          ))}
+        </div>
+      )}
+      {openConv && <ConversationThread conversationId={openConv.id} meId={meId} onClose={() => { setOpenConv(null); refresh(); }} title={openConv.title} onOpenProfile={onOpenProfile} onRead={onRead} />}
+      {showNew && (
+        <NewConversationSheet
+          onClose={() => setShowNew(false)}
+          onStarted={(conversationId, title) => { setShowNew(false); setOpenConv({ id: conversationId, title }); refresh(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+const NOTIF_ICON = { like: Heart, comment: MessageSquare, follow: User, repost: Repeat2, message: MessageCircle, group_invite: Users, new_post: Bell, mention: MessageSquare, moderation: AlertTriangle, system: Bell };
+const NOTIF_TEXT = {
+  like: (nom) => `${nom} a aimé votre publication.`,
+  comment: (nom) => `${nom} a commenté votre publication.`,
+  follow: (nom) => `${nom} a commencé à vous suivre.`,
+  repost: (nom) => `${nom} a reposté votre publication.`,
+  message: (nom) => `${nom} vous a envoyé un message.`,
+  group_invite: (nom) => `${nom} vous a ajouté à un groupe de messagerie.`,
+  new_post: (nom) => `${nom} a publié quelque chose de nouveau.`,
+  mention: (nom) => `${nom} vous a mentionné.`,
+  moderation: () => `Une action de modération concerne votre compte.`,
+  system: () => `Notification système.`,
+};
+function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onGoToFeed, onUnreadChange }) {
+  const { colors } = useTheme();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    notificationService.fetchNotifications()
+      .then((rows) => { setItems(rows); onUnreadChange?.(rows.filter((r) => !r.lu).length); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const open = (n) => {
+    if (!n.lu) {
+      notificationService.markAsRead(n.id).catch(() => {});
+      setItems((its) => its.map((x) => (x.id === n.id ? { ...x, lu: true } : x)));
+      onUnreadChange?.((prev) => Math.max(0, prev - 1));
+    }
+    if (n.type === "message" || n.type === "group_invite") onOpenConversation(n.targetId);
+    else if (n.actor?.username) onOpenAuthor(n.actor.username);
+    else onGoToFeed();
+    onClose();
+  };
+
+  const markAll = () => {
+    notificationService.markAllAsRead().catch(() => {});
+    setItems((its) => its.map((x) => ({ ...x, lu: true })));
+    onUnreadChange?.(0);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title="Notifications" onBack={onClose} />
+      {items.some((n) => !n.lu) && (
+        <div style={{ padding: "0 16px 8px", textAlign: "right" }}>
+          <button onClick={markAll} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Tout marquer comme lu</button>
+        </div>
+      )}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {loading ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
+        ) : items.length === 0 ? (
+          <EmptyState title="Aucune notification pour le moment" subtitle="Vous serez averti ici des interactions et des nouveautés qui vous concernent." />
+        ) : (
+          items.map((n) => {
+            const Icon = NOTIF_ICON[n.type] || Bell;
+            const nom = n.actor?.nom || n.actor?.username || "Quelqu'un";
+            const text = NOTIF_TEXT[n.type] ? NOTIF_TEXT[n.type](nom) : "Nouvelle notification.";
+            return (
+              <button key={n.id} onClick={() => open(n)} className="flex items-center gap-3" style={{ width: "100%", background: n.lu ? "none" : colors.accentSoft, border: "none", borderBottom: `1px solid ${colors.border}`, padding: "12px 16px", cursor: "pointer", textAlign: "left" }}>
+                <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                  {n.actor?.avatar ? <img src={n.actor.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon size={16} color={colors.textFaint} />}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{text}</div>
+                  <div style={{ fontSize: 11, color: colors.textFaint, marginTop: 2 }}>{formatRelativeDate(n.createdAt)}</div>
+                </div>
+                {!n.lu && <div style={{ width: 8, height: 8, borderRadius: 4, background: colors.accent, flexShrink: 0 }} />}
+              </button>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
@@ -2247,8 +3251,14 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const { colors } = useTheme();
   const [active, setActive] = useState("fil");
   const [notif, setNotif] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadConversations, setUnreadConversations] = useState(0);
+  const [pendingConversationId, setPendingConversationId] = useState(null);
+  // Écran de profil public — ouvert depuis n'importe où (post, notif, message) par username.
+  const [openProfileUsername, setOpenProfileUsername] = useState(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createGroupId, setCreateGroupId] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(!session); // true immédiatement si pas de session réelle (ancien flux onboarding local)
 
   // État en session uniquement au départ — écrasé par le vrai profil Supabase juste après
@@ -2278,20 +3288,25 @@ function MainApp({ session, onboardingData, ageInfo }) {
       const { data, error } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
       if (cancelled) return;
       if (!error && data) {
+        // `profiles` n'a pas de colonne "est_mineur" en base (seulement une fonction SQL
+        // du même nom, non sélectionnée par select("*")) — on recalcule donc le statut
+        // mineur ici à partir de la date de naissance, comme le fait déjà StepAccess.
+        const age = data.date_naissance ? computeAge(new Date(data.date_naissance).getDate(), new Date(data.date_naissance).getMonth() + 1, new Date(data.date_naissance).getFullYear()) : null;
         setProfile((p) => ({
           ...p,
           id: data.id,
           nom: data.nom || "",
           username: data.username || "",
           avatar: data.avatar_url || null,
-          imageCouverture: null,
+          imageCouverture: data.banniere_url || null,
           bio: data.bio || "",
           localisation: data.departement || "",
           interets: p.interets,
           badges: data.badges || [],
-          age: data.date_naissance ? computeAge(new Date(data.date_naissance).getDate(), new Date(data.date_naissance).getMonth() + 1, new Date(data.date_naissance).getFullYear()) : null,
-          estMineur: !!data.est_mineur,
+          age,
+          estMineur: age !== null && age <= MODERATION_AGE_RULES.minor.maxAge,
           verificationStatus: data.verification_status || p.verificationStatus,
+          role: data.role || "user",
         }));
       }
       setProfileLoaded(true);
@@ -2317,14 +3332,17 @@ function MainApp({ session, onboardingData, ageInfo }) {
   // session locale pour l'instant — pas encore branché.
   const [likedIds, setLikedIds] = useState([]);
   const [savedPostIds, setSavedPostIds] = useState([]);
+  const [repostedIds, setRepostedIds] = useState([]);
   const [commentsByPost, setCommentsByPost] = useState({});
   const [following, setFollowing] = useState([]);
+  const [bellUsernames, setBellUsernames] = useState([]);
   const [blockedAuthors, setBlockedAuthors] = useState([]);
   const [hiddenPostIds, setHiddenPostIds] = useState([]);
   const [reports, setReports] = useState([]);
   const [notifPrefs, setNotifPrefs] = useState({ likes: true, commentaires: true, abonnes: true, publications: true, groupes: true, messages: true, systeme: true });
   const [privacy, setPrivacy] = useState({ compte: "public", commentaires: "tout_le_monde", messages: "tout_le_monde" });
   const [toast, setToast] = useState(null);
+  const [playingVideo, setPlayingVideo] = useState(null);
   const showToast = (msg) => { setToast(msg); window.clearTimeout(showToast._t); showToast._t = window.setTimeout(() => setToast(null), 2200); };
 
   // Chargement initial des vraies publications + de mes likes/enregistrements,
@@ -2340,10 +3358,36 @@ function MainApp({ session, onboardingData, ageInfo }) {
     refreshPosts().catch(() => showToast("Impossible de charger le fil pour le moment."));
     postService.fetchMyLikes().then(setLikedIds).catch(() => {});
     postService.fetchMySaves().then(setSavedPostIds).catch(() => {});
+    postService.fetchMyReposts().then(setRepostedIds).catch(() => {});
     dogService.fetchMyDogs().then(setDogs).catch(() => {});
     groupService.fetchGroups().then(setGroups).catch(() => showToast("Impossible de charger les groupes pour le moment."));
     socialService.fetchMyFollowing().then(setFollowing).catch(() => {});
+    socialService.fetchMyBellUsernames().then(setBellUsernames).catch(() => {});
     socialService.fetchMyBlocks().then(setBlockedAuthors).catch(() => {});
+  }, [session, profileLoaded]);
+
+  useEffect(() => {
+    if (!session || !profileLoaded) return;
+    notificationService.fetchUnreadCount().then(setUnreadCount).catch(() => {});
+    const unsubscribe = notificationService.subscribeToNotifications(session.user.id, () => {
+      setUnreadCount((c) => c + 1);
+    });
+    return unsubscribe;
+  }, [session, profileLoaded]);
+
+  const refreshUnreadConversations = () => {
+    messageService.fetchUnreadConversationCount().then(setUnreadConversations).catch(() => {});
+  };
+  useEffect(() => {
+    if (!session || !profileLoaded) return;
+    refreshUnreadConversations();
+    // Un nouveau message n'importe où peut changer le nombre de conversations
+    // non lues (une conversation déjà lue redevient non lue) — on recalcule
+    // plutôt que d'incrémenter, pour ne jamais compter 2 messages d'une même
+    // conversation comme 2 conversations non lues.
+    const unsubscribe = messageService.subscribeToMyMessages(() => refreshUnreadConversations());
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, profileLoaded]);
 
   const handlePublished = (type, item) => {
@@ -2412,6 +3456,24 @@ function MainApp({ session, onboardingData, ageInfo }) {
     setSavedPostIds((s) => (isSaved ? s.filter((x) => x !== id) : [...s, id]));
     showToast(isSaved ? "Retiré des enregistrements." : "Enregistré.");
   };
+  const toggleRepost = async (id) => {
+    if (isLocalId(id)) { showToast("Ce contenu ne peut pas encore être reposté."); return; }
+    const isReposted = repostedIds.includes(id);
+    try {
+      await postService.toggleRepost(id, !isReposted);
+    } catch (e) {
+      showToast("Action impossible pour le moment.");
+      return;
+    }
+    setRepostedIds((r) => (isReposted ? r.filter((x) => x !== id) : [...r, id]));
+    bumpReposts(id, isReposted ? -1 : 1);
+    showToast(isReposted ? "Repost annulé." : "Publication repostée.");
+  };
+  const bumpReposts = (id, delta) => {
+    const apply = (arr) => arr.map((it) => (it.id === id ? { ...it, reposts: Math.max(0, (it.reposts || 0) + delta) } : it));
+    setPosts(apply);
+    setVideos(apply);
+  };
   const addComment = async (id, texte, parentId) => {
     let comment;
     if (isLocalId(id)) {
@@ -2477,6 +3539,19 @@ function MainApp({ session, onboardingData, ageInfo }) {
     setFollowing((f) => (isFollowing ? f.filter((x) => x !== username) : [...f, username]));
     showToast(isFollowing ? `Vous ne suivez plus ${username}.` : `Vous suivez ${username}.`);
   };
+  const toggleBell = async (username) => {
+    if (!username) return;
+    const isOn = bellUsernames.includes(username);
+    try {
+      await socialService.setFollowNotifications(username, !isOn);
+    } catch (e) {
+      showToast("Action impossible pour le moment.");
+      return;
+    }
+    setBellUsernames((b) => (isOn ? b.filter((x) => x !== username) : [...b, username]));
+    if (!isOn && !following.includes(username)) setFollowing((f) => [...f, username]); // la cloche abonne aussi
+    showToast(isOn ? "Notifications désactivées." : "Vous serez notifié de ses publications.");
+  };
 
   const visiblePosts = posts.filter((p) => !hiddenPostIds.includes(p.id) && !blockedAuthors.includes(p.username));
   const visibleVideos = videos.filter((v) => !hiddenPostIds.includes(v.id) && !blockedAuthors.includes(v.username));
@@ -2488,11 +3563,17 @@ function MainApp({ session, onboardingData, ageInfo }) {
         profile={profile}
         liked={likedIds}
         saved={savedPostIds}
+        reposted={repostedIds}
         commentsByPost={commentsByPost}
         following={following}
+        myGroupIds={groups.filter((g) => g.joined).map((g) => g.id)}
+        bellUsernames={bellUsernames}
         onToggleFollow={toggleFollow}
+        onToggleBell={toggleBell}
+        onOpenProfile={setOpenProfileUsername}
         onLike={toggleLike}
         onSave={toggleSave}
+        onRepost={toggleRepost}
         onAddComment={addComment}
         onDelete={deleteContent}
         onEditRequest={setEditingPost}
@@ -2509,8 +3590,37 @@ function MainApp({ session, onboardingData, ageInfo }) {
         liked={likedIds}
         commentsByPost={commentsByPost}
         following={following}
+        bellUsernames={bellUsernames}
         onToggleFollow={toggleFollow}
+        onToggleBell={toggleBell}
+        onOpenProfile={setOpenProfileUsername}
         onLike={toggleLike}
+        onAddComment={addComment}
+        onDelete={deleteContent}
+        onEditRequest={setEditingPost}
+        onReport={reportContent}
+        onHide={hidePost}
+        onBlock={blockAuthor}
+        onLoadComments={loadComments}
+        onOpenPlayer={setPlayingVideo}
+      />
+    ),
+    groupes: (
+      <ScreenGroupes
+        groups={groups}
+        addGroup={(g) => setGroups((gs) => [{ ...g, joined: true }, ...gs])}
+        onToggleJoin={toggleJoinGroup}
+        onCreatePost={(groupId) => { setCreateGroupId(groupId || null); setCreateOpen(true); }}
+        onGroupUpdated={(g) => setGroups((gs) => gs.map((x) => (x.id === g.id ? { ...x, ...g } : x)))}
+        onOpenProfile={setOpenProfileUsername}
+        profile={profile}
+        liked={likedIds}
+        saved={savedPostIds}
+        reposted={repostedIds}
+        commentsByPost={commentsByPost}
+        onLike={toggleLike}
+        onSave={toggleSave}
+        onRepost={toggleRepost}
         onAddComment={addComment}
         onDelete={deleteContent}
         onEditRequest={setEditingPost}
@@ -2520,17 +3630,21 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onLoadComments={loadComments}
       />
     ),
-    groupes: <ScreenGroupes groups={groups} addGroup={(g) => setGroups((gs) => [{ ...g, joined: true }, ...gs])} onToggleJoin={toggleJoinGroup} onCreatePost={() => setCreateOpen(true)} />,
-    messages: <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." />,
+    messages: <ScreenMessages meId={session?.user?.id} initialConversationId={pendingConversationId} onConsumeInitialConversation={() => setPendingConversationId(null)} onOpenProfile={setOpenProfileUsername} onRead={refreshUnreadConversations} />,
     profil: (
       <ScreenProfil
         profile={profile}
         setProfile={setProfile}
         dogs={dogs}
         addDog={(d) => setDogs((ds) => [d, ...ds])}
-        posts={posts}
+        posts={posts.filter((p) => p.username === profile.username)}
+        videos={videos.filter((v) => v.username === profile.username)}
+        onOpenPlayer={setPlayingVideo}
+        onOpenProfile={setOpenProfileUsername}
         liked={likedIds}
         saved={savedPostIds}
+        reposted={repostedIds}
+        onRepost={toggleRepost}
         commentsByPost={commentsByPost}
         onLike={toggleLike}
         onSave={toggleSave}
@@ -2554,22 +3668,61 @@ function MainApp({ session, onboardingData, ageInfo }) {
   }
 
   return (
-    <AppShell header={<Header onBell={() => setNotif(true)} onMenu={() => setPlusOpen(true)} />} active={active} setActive={setActive} onCreate={() => setCreateOpen(true)}>
+    <AppShell header={<Header onBell={() => setNotif(true)} onMenu={() => setPlusOpen(true)} unreadCount={unreadCount} />} active={active} setActive={setActive} onCreate={() => setCreateOpen(true)} unreadConversations={unreadConversations}>
       {screens[active]}
       {notif && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
-          <ScreenHeader title="Notifications" onBack={() => setNotif(false)} />
-          <div style={{ flex: 1, overflowY: "auto" }}><EmptyState title="Aucune notification pour le moment" subtitle="Vous serez averti ici des interactions et des nouveautés qui vous concernent." /></div>
-        </div>
+        <NotificationsPanel
+          onClose={() => setNotif(false)}
+          onUnreadChange={setUnreadCount}
+          onOpenConversation={(conversationId) => { setPendingConversationId(conversationId); setActive("messages"); }}
+          onOpenAuthor={setOpenProfileUsername}
+          onGoToFeed={() => setActive("fil")}
+        />
+      )}
+      {openProfileUsername && (
+        <AuthorProfileSheet
+          username={openProfileUsername}
+          meUsername={profile.username}
+          isFollowing={following.includes(openProfileUsername)}
+          bellOn={bellUsernames.includes(openProfileUsername)}
+          onClose={() => setOpenProfileUsername(null)}
+          onToggleFollow={() => toggleFollow(openProfileUsername)}
+          onToggleBell={() => toggleBell(openProfileUsername)}
+          onMessage={async (userId) => {
+            try {
+              const conversationId = await messageService.startDirectConversation(userId);
+              setOpenProfileUsername(null);
+              setPendingConversationId(conversationId);
+              setActive("messages");
+            } catch (e) {
+              showToast("Impossible de démarrer la conversation.");
+            }
+          }}
+          liked={likedIds}
+          saved={savedPostIds}
+          reposted={repostedIds}
+          commentsByPost={commentsByPost}
+          onLike={toggleLike}
+          onSave={toggleSave}
+          onRepost={toggleRepost}
+          onAddComment={addComment}
+          onDelete={deleteContent}
+          onEditRequest={setEditingPost}
+          onReport={reportContent}
+          onHide={hidePost}
+          onBlock={blockAuthor}
+          onLoadComments={loadComments}
+        />
       )}
       <CreateFlow
         open={createOpen || !!editingPost}
-        onClose={() => { setCreateOpen(false); setEditingPost(null); }}
+        onClose={() => { setCreateOpen(false); setCreateGroupId(null); setEditingPost(null); }}
         dogs={dogs}
         authorName={profile.nom || "Vous"}
         onPublished={handlePublished}
         editingPost={editingPost}
         onEdited={handleEdited}
+        groupId={createGroupId}
       />
       <PlusPanel
         open={plusOpen}
@@ -2590,6 +3743,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onLogout={handleLogout}
       />
       <Toast message={toast} />
+      <FullScreenVideoPlayer video={playingVideo} onClose={() => setPlayingVideo(null)} />
     </AppShell>
   );
 }

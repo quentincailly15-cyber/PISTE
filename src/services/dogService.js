@@ -1,14 +1,25 @@
 // dogService.js
 // Appels Supabase réels pour les chiens (table "dogs" — voir 001_init.sql).
-// L'upload de photo n'est pas couvert : le formulaire actuel (DogFormScreen
-// dans App.jsx) n'a pas de vrai sélecteur de fichier pour l'instant.
+// Photo : bucket Storage "dogs" — voir supabase/migrations/006_dogs_bucket.sql.
 
 import { supabase } from "./supabaseClient.js";
 
-export async function createDog({ nom, race, age, sexe, specialite, description }) {
+export async function createDog({ nom, race, age, sexe, specialite, description, photoFile }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
+
+  let photoUrl = null;
+  if (photoFile) {
+    const path = `${userData.user.id}/${Date.now()}-${photoFile.name}`;
+    const { error: uploadError } = await supabase.storage.from("dogs").upload(path, photoFile, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+    if (uploadError) throw uploadError;
+    const { data: publicUrl } = supabase.storage.from("dogs").getPublicUrl(path);
+    photoUrl = publicUrl.publicUrl;
+  }
 
   const { data, error } = await supabase
     .from("dogs")
@@ -20,6 +31,7 @@ export async function createDog({ nom, race, age, sexe, specialite, description 
       sexe,
       specialite,
       description,
+      photo_url: photoUrl,
     })
     .select()
     .single();

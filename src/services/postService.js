@@ -6,7 +6,7 @@
 import { supabase } from "./supabaseClient.js";
 import { extractHashtags, extractMentions } from "../lib/piste_core.js";
 
-export async function createPost({ texte, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [] }) {
+export async function createPost({ texte, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], groupId = null }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
@@ -26,6 +26,7 @@ export async function createPost({ texte, type, animal, pratique, dogId, departe
       content_rating: contentRating || "normal",
       hashtags,
       mentions,
+      group_id: groupId,
     })
     .select()
     .single();
@@ -37,7 +38,7 @@ export async function createPost({ texte, type, animal, pratique, dogId, departe
   }
 
   // Upload média réel vers Supabase Storage (bucket "posts" à créer côté Dashboard).
-  const uploadedUrls = [];
+  const uploadedMedia = [];
   for (let i = 0; i < mediaFiles.length; i++) {
     const file = mediaFiles[i];
     const path = `${userData.user.id}/${post.id}/${i}-${file.name}`;
@@ -47,17 +48,18 @@ export async function createPost({ texte, type, animal, pratique, dogId, departe
     });
     if (uploadError) throw uploadError;
     const { data: publicUrl } = supabase.storage.from("posts").getPublicUrl(path);
+    const mediaType = file.type.startsWith("video") ? "video" : "image";
     const { error: mediaError } = await supabase.from("post_media").insert({
       post_id: post.id,
       url: publicUrl.publicUrl,
       ordre: i,
-      type: file.type.startsWith("video") ? "video" : "image",
+      type: mediaType,
     });
     if (mediaError) throw mediaError;
-    uploadedUrls.push(publicUrl.publicUrl);
+    uploadedMedia.push({ url: publicUrl.publicUrl, type: mediaType });
   }
 
-  return { ...post, mediaUrls: uploadedUrls };
+  return { ...post, mediaUrls: uploadedMedia.map((m) => m.url), media: uploadedMedia };
 }
 
 export async function updatePost(postId, fields) {
@@ -140,6 +142,31 @@ export async function fetchCandidatePosts({ limit = 50 } = {}) {
   return data;
 }
 
+/** Publications rattachées à un groupe précis (colonne group_id — voir
+ *  migration 008) — sert à afficher l'onglet "Publications" d'un groupe. */
+export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
+  const { data, error } = await supabase
+    .from("posts")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type)")
+    .eq("group_id", groupId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data;
+}
+
+/** Publications d'un utilisateur précis — pour l'écran de profil public. */
+export async function fetchUserPosts(userId, { limit = 50 } = {}) {
+  const { data, error } = await supabase
+    .from("posts")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type)")
+    .eq("author_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data;
+}
+
 export async function fetchComments(postId) {
   const { data, error } = await supabase
     .from("comments")
@@ -166,5 +193,43 @@ export async function fetchMySaves() {
   const { data, error } = await supabase.from("saves").select("post_id").eq("user_id", userData.user.id);
   if (error) throw error;
   return data.map((r) => r.post_id);
+}
+
+export async function fetchMyReposts() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return [];
+  const { data, error } = await supabase.from("reposts").select("post_id").eq("user_id", userData.user.id);
+  if (error) throw error;
+  return data.map((r) => r.post_id);
+}
+
+/** Ajoute/retire un repost (table "reposts" — voir migration 010). Ne duplique
+ *  jamais le contenu original : juste une relation (user_id, post_id). */
+export async function toggleRepost(postId, shouldRepost) {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) throw new Error("Non authentifié");
+  if (shouldRepost) {
+    const { error } = await supabase.from("reposts").insert({ user_id: userData.user.id, post_id: postId });
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("reposts").delete().eq("user_id", userData.user.id).eq("post_id", postId);
+    if (error) throw error;
+  }
+  return true;
+}
+
+/** Publications repostées par l'utilisateur connecté — pour l'onglet
+ *  Profil → Reposts. Le contenu original (auteur, texte, médias) est bien
+ *  celui de la publication d'origine, pas une copie. */
+export async function fetchMyRepostedPosts() {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return [];
+  const { data, error } = await supabase
+    .from("reposts")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type))")
+    .eq("user_id", userData.user.id)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.filter((r) => r.posts).map((r) => ({ ...r.posts, repostedAt: r.created_at }));
 }
 

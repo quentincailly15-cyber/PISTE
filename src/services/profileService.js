@@ -31,16 +31,39 @@ export async function updateProfile({ nom, username, bio, localisation }) {
   return data;
 }
 
-/**
- * Upload la photo de profil dans le bucket "avatars" puis enregistre son URL
- * publique dans profiles.avatar_url. Renvoie l'URL publique.
- */
-export async function uploadAvatar(file) {
+/** Profil public de n'importe quel utilisateur (pas seulement le sien) —
+ *  sert à afficher un vrai écran de profil quand on clique sur un pseudo,
+ *  où que ce soit dans l'app (post, notification, message...). */
+export async function fetchPublicProfile(username) {
+  const { data, error } = await supabase.from("profiles").select("*").eq("username", username).single();
+  if (error) throw error;
+
+  const [{ count: abonnes }, { count: abonnements }, { count: publications }] = await Promise.all([
+    supabase.from("follows").select("follower_id", { count: "exact", head: true }).eq("followed_id", data.id),
+    supabase.from("follows").select("followed_id", { count: "exact", head: true }).eq("follower_id", data.id),
+    supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", data.id),
+  ]);
+
+  return {
+    id: data.id,
+    username: data.username,
+    nom: data.nom || data.username,
+    avatar: data.avatar_url,
+    imageCouverture: data.banniere_url,
+    bio: data.bio,
+    localisation: data.departement,
+    badges: data.badges || [],
+    verificationStatus: data.verification_status,
+    stats: { abonnes: abonnes || 0, abonnements: abonnements || 0, publications: publications || 0 },
+  };
+}
+
+async function uploadToAvatarsBucket(file, prefix) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
 
-  const path = `${userData.user.id}/${Date.now()}-${file.name}`;
+  const path = `${userData.user.id}/${prefix}-${Date.now()}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
     cacheControl: "3600",
     upsert: false,
@@ -48,12 +71,27 @@ export async function uploadAvatar(file) {
   if (uploadError) throw uploadError;
 
   const { data: publicUrl } = supabase.storage.from("avatars").getPublicUrl(path);
+  return { userId: userData.user.id, url: publicUrl.publicUrl };
+}
 
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ avatar_url: publicUrl.publicUrl })
-    .eq("id", userData.user.id);
-  if (updateError) throw updateError;
+/**
+ * Upload la photo de profil dans le bucket "avatars" puis enregistre son URL
+ * publique dans profiles.avatar_url. Renvoie l'URL publique.
+ */
+export async function uploadAvatar(file) {
+  const { userId, url } = await uploadToAvatarsBucket(file, "avatar");
+  const { error } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", userId);
+  if (error) throw error;
+  return url;
+}
 
-  return publicUrl.publicUrl;
+/**
+ * Upload la bannière de profil (même bucket "avatars", chemin différent) puis
+ * enregistre son URL publique dans profiles.banniere_url (voir migration 007).
+ */
+export async function uploadBanner(file) {
+  const { userId, url } = await uploadToAvatarsBucket(file, "banner");
+  const { error } = await supabase.from("profiles").update({ banniere_url: url }).eq("id", userId);
+  if (error) throw error;
+  return url;
 }
