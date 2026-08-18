@@ -6682,7 +6682,13 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
               </button>
             ))
           )}
-          <button onClick={() => setDogForm(true)} style={{ marginTop: 4, border: `1px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: 12, background: "transparent", color: colors.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Ajouter un chien</button>
+          {/* Carré arrondi + fond translucide (colors.surfaceAlt) : même
+              habillage que les vignettes/tuiles utilisées partout ailleurs
+              (miniatures, avatars de secours...), plutôt qu'un contour
+              pointillé qui détonnait avec le reste de l'app. */}
+          <button onClick={() => setDogForm(true)} className="flex items-center justify-center gap-2 active:scale-[0.98] transition-transform" style={{ marginTop: 4, border: "none", borderRadius: RADIUS.md, padding: 12, background: colors.surfaceAlt, color: colors.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            <Plus size={15} strokeWidth={2.4} /> Ajouter un chien
+          </button>
         </div>
       )}
 
