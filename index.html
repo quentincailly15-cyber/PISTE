@@ -2,7 +2,15 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content : dit au navigateur de vraiment
+         rétrécir le viewport visible quand le clavier iOS s'ouvre, plutôt
+         que de le laisser flotter par-dessus le contenu sans le redimensionner
+         (comportement par défaut sur certaines versions récentes de Safari/
+         Chrome) — sans ça, un champ de saisie en bas d'un écran plein écran
+         (position: fixed) peut se retrouver caché sous le clavier. Ignoré
+         silencieusement par les navigateurs qui ne le reconnaissent pas
+         encore, donc sans risque. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>PISTE</title>
 
     <!-- Icône affichée sur l'écran d'accueil iOS après "Partager > Sur
