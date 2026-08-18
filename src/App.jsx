@@ -7134,6 +7134,15 @@ function audioExtensionFor(mimeType) {
   if (mimeType.includes("mpeg")) return "mp3";
   return "webm";
 }
+// Repli quand le message cité n'a pas de texte (photo, vidéo, vocal,
+// publication partagée) — sans ça, la citation de réponse n'affichait que le
+// nom de l'auteur, impossible de savoir à quel message précis on répondait.
+function replyPreviewFallback(mediaType) {
+  if (mediaType === "image") return { Icon: ImageIcon, label: "Photo" };
+  if (mediaType === "video") return { Icon: Film, label: "Vidéo" };
+  if (mediaType === "audio") return { Icon: Mic, label: "Message vocal" };
+  return { Icon: Feather, label: "Publication partagée" };
+}
 function ConversationThread({ conversationId, meId, onClose, onLeave, title, subtitle, type, image, otherUser, onOpenProfile, onBlock, onReport, onRead, onOpenSharedPost }) {
   const { colors } = useTheme();
   const [groupImage, setGroupImage] = useState(image || null);
@@ -7396,7 +7405,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
             const triggerReply = () => {
               longPressFiredRef.current = true;
               if (navigator.vibrate) navigator.vibrate(10);
-              setReplyTo({ id: m.id, texte: m.texte, auteur: mine ? "Vous" : senderLabel || "ce message" });
+              setReplyTo({ id: m.id, texte: m.texte, auteur: mine ? "Vous" : senderLabel || "ce message", mediaType: media?.type, hasSharedPost: !!m.shared_post });
             };
             const startLongPress = () => {
               longPressFiredRef.current = false;
@@ -7463,9 +7472,16 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                           {(m.reply_to.profiles?.nom || m.reply_to.profiles?.username) && (
                             <div style={{ fontSize: 10.5, fontWeight: 700, color: mine ? "#fff" : colors.accent }}>{m.reply_to.profiles?.nom || m.reply_to.profiles?.username}</div>
                           )}
-                          {m.reply_to.texte && (
+                          {m.reply_to.texte ? (
                             <div style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200, opacity: 0.9 }}>{m.reply_to.texte}</div>
-                          )}
+                          ) : (m.reply_to.message_media?.[0]?.type || m.reply_to.shared_post_id) && (() => {
+                            const { Icon, label } = replyPreviewFallback(m.reply_to.shared_post_id ? null : m.reply_to.message_media[0].type);
+                            return (
+                              <div className="flex items-center gap-1" style={{ fontSize: 11, opacity: 0.9 }}>
+                                <Icon size={10.5} /> {label}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}
@@ -7527,7 +7543,16 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
             <Reply size={14} color={colors.accent} style={{ marginTop: 2, flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.accent }}>Réponse à {replyTo.auteur}</div>
-              {replyTo.texte && <div style={{ fontSize: 12, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{replyTo.texte}</div>}
+              {replyTo.texte ? (
+                <div style={{ fontSize: 12, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{replyTo.texte}</div>
+              ) : (replyTo.mediaType || replyTo.hasSharedPost) && (() => {
+                const { Icon, label } = replyPreviewFallback(replyTo.hasSharedPost ? null : replyTo.mediaType);
+                return (
+                  <div className="flex items-center gap-1" style={{ fontSize: 12, color: colors.textSecondary }}>
+                    <Icon size={11} /> {label}
+                  </div>
+                );
+              })()}
             </div>
           </div>
           <button onClick={() => setReplyTo(null)} aria-label="Annuler la réponse" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, marginLeft: 8, display: "flex" }}><X size={15} color={colors.textFaint} /></button>
@@ -7609,7 +7634,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
               <button
                 onClick={() => {
                   const isMine = msgMenu.sender_id === meId;
-                  setReplyTo({ id: msgMenu.id, texte: msgMenu.texte, auteur: isMine ? "Vous" : (msgMenu.profiles?.nom || msgMenu.profiles?.username || "ce message") });
+                  setReplyTo({ id: msgMenu.id, texte: msgMenu.texte, auteur: isMine ? "Vous" : (msgMenu.profiles?.nom || msgMenu.profiles?.username || "ce message"), mediaType: msgMenu.message_media?.[0]?.type, hasSharedPost: !!msgMenu.shared_post });
                   setMsgMenu(null);
                 }}
                 className="flex items-center gap-2.5"

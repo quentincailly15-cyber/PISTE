@@ -223,7 +223,11 @@ export async function fetchConversationMembers(conversationId) {
 // ("Could not find a relationship..."). Le nom de colonne ne dépend d'aucune
 // convention de nommage côté Postgres et fonctionne dès que la clé étrangère
 // existe, quel que soit son nom.
-const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!reply_to_id(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username)), message_reactions(user_id, emoji), shared_post:posts!shared_post_id(id, type, texte, titre, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url))";
+// reply_to embarque aussi message_media(type) et shared_post_id : sans ça,
+// répondre à un message sans texte (photo, vidéo, vocal, publication
+// partagée) affichait une citation vide — juste le nom de l'auteur, aucun
+// moyen de savoir à quel message précis la réponse renvoyait.
+const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!reply_to_id(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username), message_media(type), shared_post_id), message_reactions(user_id, emoji), shared_post:posts!shared_post_id(id, type, texte, titre, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url))";
 
 export async function fetchMessages(conversationId) {
   const { data, error } = await supabase
@@ -270,10 +274,13 @@ export async function sendSharedPost(conversationId, postId, note = null) {
  */
 export async function sendMediaMessage(conversationId, file, mediaType, durationSeconds = null, replyToId = null) {
   const me = await requireUser();
+  // MESSAGE_SELECT (pas une version allégée) : sans reply_to embarqué ici,
+  // répondre à un message avec une pièce jointe n'affichait aucune citation
+  // dans la bulle tant que la conversation n'était pas rechargée.
   const { data: message, error: msgError } = await supabase
     .from("messages")
     .insert({ conversation_id: conversationId, sender_id: me.id, texte: null, reply_to_id: replyToId })
-    .select("*, profiles!messages_sender_id_fkey(username, nom, avatar_url)")
+    .select(MESSAGE_SELECT)
     .single();
   if (msgError) throw msgError;
 
