@@ -3456,6 +3456,12 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
   // Fichier introuvable/corrompu : retombe sur l'image de secours (poster)
   // plutôt qu'un rectangle noir figé qui semble juste ne jamais charger.
   const [videoError, setVideoError] = useState(false);
+  // Un Instant filmé à l'horizontale n'est plus refusé à la publication (voir
+  // ComposeScreen) : détecté ici via les dimensions réelles de la vidéo une
+  // fois chargée, il s'affiche en entier (objectFit "contain") au lieu
+  // d'être recadré façon plein cadre vertical — le fond noir de la slide
+  // forme alors naturellement des bandes en haut et en bas.
+  const [isHorizontal, setIsHorizontal] = useState(false);
 
   useEffect(() => {
     const el = slideRef.current;
@@ -3531,7 +3537,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
   return (
     <div ref={slideRef} style={{ position: "relative", width: "100%", height: "100%", scrollSnapAlign: "start", background: "#000", flexShrink: 0, overflow: "hidden" }}>
       {item.videoUrl && shouldLoad && !videoError ? (
-        <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline preload="metadata" onClick={handleTap} onError={() => setVideoError(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline preload="metadata" onClick={handleTap} onError={() => setVideoError(true)} onLoadedMetadata={(e) => setIsHorizontal(e.target.videoWidth > e.target.videoHeight)} style={{ width: "100%", height: "100%", objectFit: isHorizontal ? "contain" : "cover" }} />
       ) : item.image ? (
         <img src={item.image} alt="" onClick={handleTap} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
@@ -4852,7 +4858,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     e.target.value = "";
     setMediaError("");
     if (!isVideoType && !allowVideoInPublication) { setMediaFiles(files); startCropQueue(files); return; }
-    const maxSeconds = type === "video_courte" ? 60 : 1800;
+    const maxSeconds = type === "video_courte" ? 180 : 1800;
     // "Vidéo" (l'onglet Vidéo - Vidéo) uniquement — ni les Instants, ni une
     // vidéo jointe à une simple Publication de communauté : doit durer entre
     // 3 et 30 minutes, pour rester un vrai contenu long plutôt qu'un clip
@@ -4867,17 +4873,16 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
       // bloque pas la publication pour ça, juste la vérification elle-même.
       if (!meta) { valid.push(f); durations.push(null); continue; }
       if (meta.durationSeconds > maxSeconds) {
-        setMediaError(type === "video_courte" ? "Un Instant ne peut pas dépasser 1 minute." : "Une vidéo ne peut pas dépasser 30 minutes.");
+        setMediaError(type === "video_courte" ? "Un Instant ne peut pas dépasser 3 minutes." : "Une vidéo ne peut pas dépasser 30 minutes.");
         continue;
       }
       if (meta.durationSeconds < minSeconds) {
         setMediaError("Une vidéo doit durer au moins 3 minutes.");
         continue;
       }
-      if (type === "video_courte" && meta.width >= meta.height) {
-        setMediaError("Un Instant doit être filmé à la verticale.");
-        continue;
-      }
+      // Un Instant filmé à l'horizontale n'est plus refusé — il s'affiche en
+      // letterbox (bandes noires en haut/bas) dans le lecteur plutôt que
+      // d'être recadré ou rejeté (voir InstantSlide).
       if (type === "video" && meta.height >= meta.width) {
         setMediaError("Une vidéo doit être filmée à l'horizontale.");
         continue;
@@ -4970,7 +4975,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
                   ? `${mediaFiles.length} fichier${mediaFiles.length > 1 ? "s" : ""} sélectionné${mediaFiles.length > 1 ? "s" : ""}`
                   : type === "publication" ? (allowVideoInPublication ? "Ajouter une photo ou une vidéo (facultatif)" : "Ajouter une photo (facultatif)") : "Choisir une ou plusieurs images/vidéos"}
               </span>
-              {type === "video_courte" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format vertical, 1 minute maximum</span>}
+              {type === "video_courte" && <span style={{ fontSize: 11, color: colors.textFaint }}>3 minutes maximum</span>}
               {type === "video" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format horizontal, entre 3 et 30 minutes</span>}
             </label>
             <input
