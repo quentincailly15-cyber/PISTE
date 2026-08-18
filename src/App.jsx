@@ -5663,6 +5663,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sheet, setSheet] = useState(null); // { type: 'actions'|'report'|'comments', post }
+  const [openPost, setOpenPost] = useState(null);
   // Statistiques réservées au propriétaire : le carnet de chasse est
   // strictement privé (voir huntingLogService), inaccessible même en lecture
   // pour qui consulte la page d'un chien qui n'est pas le sien.
@@ -5732,32 +5733,37 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
           )
         ) : loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
-        ) : filtered.length === 0 ? (
-          <EmptyState title="Aucune publication" subtitle={`Les photos et vidéos où ${dog.nom} est identifié apparaîtront ici.`} icon={Dog} />
         ) : (
-          filtered.map((p) =>
-            p.type === "video" || p.type === "video_courte" ? (
-              <VideoCard key={p.id} video={p} onOpenPlayer={() => onOpenPlayer?.(p)} />
-            ) : (
-              <PostCard
-                key={p.id}
-                post={p}
-                liked={liked.includes(p.id)}
-                saved={saved.includes(p.id)}
-                reposted={reposted.includes(p.id)}
-                commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
-                onLike={() => onLike?.(p.id)}
-                onSave={() => onSave?.(p.id)}
-                onRepost={() => onRepost?.(p.id)}
-                onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments?.(p.id); }}
-                onOpenActions={() => setSheet({ type: "actions", post: p })}
-                onOpenAuthor={() => onOpenProfile?.(p.username)}
-                onOpenProfile={onOpenProfile}
-              />
-            )
-          )
+          // Même DA que Profil - Publications : grille carrée 3 colonnes,
+          // pas une liste de cartes pleine largeur — on parcourt vite, on ne
+          // lit pas en scrollant (voir PublicationsGrid).
+          <div className="px-3">
+            <PublicationsGrid
+              posts={filtered}
+              onOpen={(p) => (p.type === "video" || p.type === "video_courte" ? onOpenPlayer?.(p) : setOpenPost(p))}
+              emptyTitle="Aucune publication"
+              emptySubtitle={`Les photos et vidéos où ${dog.nom} est identifié apparaîtront ici.`}
+            />
+          </div>
         )}
       </div>
+      {openPost && (
+        <SinglePostOverlay
+          post={openPost}
+          onClose={() => setOpenPost(null)}
+          onOpenProfile={onOpenProfile}
+          liked={liked.includes(openPost.id)}
+          saved={saved.includes(openPost.id)}
+          reposted={reposted.includes(openPost.id)}
+          onRepost={() => onRepost?.(openPost.id)}
+          commentCount={commentsByPost[openPost.id] ? commentsByPost[openPost.id].length : (openPost.commentaires || 0)}
+          onLike={() => onLike?.(openPost.id)}
+          onSave={() => onSave?.(openPost.id)}
+          onOpenComments={() => { setSheet({ type: "comments", post: openPost }); onLoadComments?.(openPost.id); }}
+          onOpenActions={() => setSheet({ type: "actions", post: openPost })}
+          onOpenAuthor={() => onOpenProfile?.(openPost.username)}
+        />
+      )}
       {sheet?.type === "actions" && (
         <ContentActionSheet
           isOwn={sheet.post.username === meUsername}
