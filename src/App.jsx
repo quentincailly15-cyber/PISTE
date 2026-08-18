@@ -248,19 +248,21 @@ function PisteGlyph({ type, size = 16, color }) {
     );
   }
   if (type === "gibier") {
-    // Un gibier à plumes vu de dessous, ailes déployées — remplace l'icône
-    // de partage générique (Share2), plus dans l'esprit de l'app. Ailes
-    // levées (pas juste écartées à plat) : la silhouette remplit mieux son
-    // cadre 24x24 en hauteur — à la même taille (size), elle ne paraît plus
-    // plus petite que les icônes lucide voisines (Heart, MessageSquare...),
-    // dont le tracé occupe une bien plus grande part du cadre.
+    // Un gibier à plumes qui s'envole (vu de profil, corps incliné, une
+    // seule grande aile levée en plein battement) plutôt qu'un oiseau vu de
+    // dessous ailes à plat — plus proche d'une vraie scène de chasse
+    // ("gibier qui décolle"). Coordonnées vérifiées visuellement avant
+    // intégration (rendu Pillow), pas dessinées à l'aveugle comme les
+    // versions précédentes de cette icône.
     return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <path d="M12 8c3-2.3 6.5-3 9-2-3 2.5-6 4.5-8 6z" fill={color} />
-        <path d="M12 8c3-2.3 6.5-3 9-2-3 2.5-6 4.5-8 6z" fill={color} transform="translate(24,0) scale(-1,1)" />
-        <path d="M12 17.5 10.3 21 13.7 21z" fill={color} />
-        <ellipse cx="12" cy="13" rx="2.1" ry="4.3" fill={color} />
-        <circle cx="12" cy="5.5" r="1.6" fill={color} />
+      <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+        <polygon points="13.67,9.64 13.74,10.2 13.51,10.81 13.02,11.43 12.31,11.98 11.46,12.42 10.54,12.7 9.64,12.8 8.86,12.69 8.27,12.41 7.93,11.96 7.86,11.4 8.09,10.79 8.58,10.17 9.29,9.62 10.14,9.18 11.06,8.9 11.96,8.8 12.74,8.91 13.33,9.19" />
+        <circle cx="13.75" cy="9.29" r="0.95" />
+        <polygon points="14.32,8.84 15.38,7.98 14.53,9.35" />
+        <polygon points="8.65,11.35 5.29,11.3 6.46,12.34" />
+        <polygon points="8.54,12.14 5.28,13.68 6.71,13.75" />
+        <polygon points="8.99,12.72 6.8,15.33 7.52,14.17" />
+        <polygon points="10.61,9.26 13.3,6 16.6,3.3 18.2,2 21,1.6 18.2,3.6 16,5.6 14.6,8.2 12.7,10.7 9.98,10.91" />
       </svg>
     );
   }
