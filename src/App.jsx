@@ -8,7 +8,7 @@ import {
   Heart, MessageSquare, MoreHorizontal, Camera, Play, BookOpen, Mic,
   Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud,
   RotateCw, Smartphone, AtSign, Feather, Reply,
-  Backpack, Shirt, Truck, Scale, GraduationCap, SquarePen, Crop,
+  Backpack, Shirt, Truck, Scale, GraduationCap, SquarePen, Crop, Send,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as traceService from "./services/traceService.js";
@@ -2739,7 +2739,7 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
         {/* Option repost désactivée à la demande — le reste (service, prop
             onRepost, composant RepostRow...) reste en place pour pouvoir la
             réactiver facilement plus tard, seul ce bouton disparaît. */}
-        <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><PisteGlyph type="gibier" size={17} color={colors.textSecondary} /></button>
+        <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><Send size={17} color={colors.textSecondary} strokeWidth={1.8} /></button>
         <div style={{ flex: 1 }} />
         <button onClick={onSave} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
           <Bookmark size={17} color={saved ? colors.accent : colors.textSecondary} fill={saved ? colors.accent : "none"} strokeWidth={1.8} />
@@ -3327,7 +3327,7 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
             </button>
             {/* Option repost désactivée à la demande — voir PostCard. */}
             <button onClick={() => setSheet("share")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-              <PisteGlyph type="gibier" size={17} color={colors.textSecondary} />
+              <Send size={17} color={colors.textSecondary} strokeWidth={1.8} />
             </button>
             <button onClick={() => setSheet("actions")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
               <MoreHorizontal size={19} color={colors.textSecondary} />
@@ -3608,7 +3608,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
         {/* Option repost désactivée à la demande — voir PostCard. */}
         <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer" }}>
           <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <PisteGlyph type="gibier" size={17} color="#fff" />
+            <Send size={17} color="#fff" strokeWidth={1.8} />
           </div>
         </button>
         <button onClick={onOpenActions} style={{ background: "none", border: "none", cursor: "pointer" }}>
