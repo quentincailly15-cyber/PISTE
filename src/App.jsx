@@ -1838,13 +1838,13 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
               {traceGroup && traceGroup.traces.length > 0 ? (
                 <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
                   <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
-                    <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: `3px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                       {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
                     </div>
                   </div>
                 </button>
               ) : (
-                <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: `4px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: "4px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
                 </div>
               )}
@@ -6470,19 +6470,26 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
       {/* Plus de rectangle de bannière : elle vit désormais en arrière-plan
           de toute la page (AmbientBackground, très floutée). L'avatar est
           donc centré en haut plutôt que collé/débordant sur une bannière
-          qui n'existe plus visuellement ici. */}
+          qui n'existe plus visuellement ici.
+          L'anneau de l'avatar utilisait un bord de la couleur exacte du fond
+          de page pour créer un "espace" propre autour du cercle — un vrai
+          aplat uni avant. Depuis que le fond de page est une photo floutée
+          (pas une couleur unie), ce bord ne se fond plus dans rien de
+          prévisible et peut rendre l'avatar difficile à distinguer selon la
+          photo derrière : un anneau semi-transparent fixe fonctionne quel
+          que soit ce qu'il y a dessous. */}
       <div className="px-4" style={{ marginTop: 18, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
         <div>
           {traceGroup && traceGroup.traces.length > 0 ? (
             <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
               <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
-                <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: `3px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
                 </div>
               </div>
             </button>
           ) : (
-            <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: `4px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: "4px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
             </div>
           )}
