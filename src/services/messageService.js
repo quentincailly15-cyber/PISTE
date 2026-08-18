@@ -64,6 +64,12 @@ export async function fetchConversations() {
       // 016 — même logique que fetchUnreadConversationCount, au niveau d'une
       // seule conversation cette fois pour l'affichage de la liste).
       const unread = !!last && !lastSenderIsMe && (!m.last_read_at || new Date(last.created_at) > new Date(m.last_read_at));
+      // Vrai décompte (pas juste un booléen) — pour la pastille numérotée de
+      // la liste, comme la référence. Calculé sur les messages déjà chargés
+      // ci-dessus, aucune requête supplémentaire par conversation.
+      const unreadCount = recentMessages.filter((msg) => (
+        msg.conversation_id === conv.id && msg.sender_id !== me.id && (!m.last_read_at || new Date(msg.created_at) > new Date(m.last_read_at))
+      )).length;
       return {
         id: conv.id,
         type: conv.type,
@@ -75,6 +81,7 @@ export async function fetchConversations() {
         lastMessageAt: last?.created_at || conv.created_at,
         lastSenderIsMe,
         unread,
+        unreadCount,
       };
     })
     .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));

@@ -352,6 +352,22 @@ export async function fetchComments(postId) {
   return data;
 }
 
+/**
+ * Enregistre une vue réelle (table post_views, voir migration 051) — clé
+ * primaire (post_id, viewer_id) empêche tout comptage en double, le trigger
+ * côté base tient posts.vues à jour tout seul. Appelé à l'ouverture réelle
+ * d'une vidéo, pas juste quand la vignette défile dans une liste.
+ */
+export async function recordPostView(postId) {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user || !postId) return true;
+  const { error } = await supabase
+    .from("post_views")
+    .upsert({ post_id: postId, viewer_id: userData.user.id }, { onConflict: "post_id,viewer_id", ignoreDuplicates: true });
+  if (error) throw error;
+  return true;
+}
+
 /** Renvoie l'ensemble des post_id likés / enregistrés par l'utilisateur connecté
  *  — sert à savoir quel cœur/marque-page doit apparaître "actif" dans l'UI. */
 export async function fetchMyLikes() {

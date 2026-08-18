@@ -4,7 +4,7 @@
 
 import { supabase } from "./supabaseClient.js";
 
-function mapGroupRow(row, myGroupIds) {
+function mapGroupRow(row, myGroupIds, previewsByGroup) {
   return {
     id: row.id,
     nom: row.nom,
@@ -15,12 +15,14 @@ function mapGroupRow(row, myGroupIds) {
     joined: myGroupIds.has(row.id),
     createdBy: row.created_by,
     isPredefined: !!row.is_predefined,
+    memberPreviews: (previewsByGroup.get(row.id) || []).slice(0, 4),
   };
 }
 
 /** Récupère tous les groupes (les 24 prédéfinis + ceux créés par les
- *  utilisateurs), avec le vrai nombre de membres et si l'utilisateur connecté
- *  les a rejoints. */
+ *  utilisateurs), avec le vrai nombre de membres, si l'utilisateur connecté
+ *  les a rejoints, et quelques avatars de membres réels (aperçu empilé dans
+ *  la liste — jamais d'avatar inventé). */
 export async function fetchGroups() {
   const { data, error } = await supabase
     .from("groups")
@@ -38,7 +40,23 @@ export async function fetchGroups() {
     if (memberError) throw memberError;
     myGroupIds = new Set((memberships || []).map((m) => m.group_id));
   }
-  return data.map((row) => mapGroupRow(row, myGroupIds));
+
+  // Un seul aller-retour pour les aperçus d'avatars de TOUS les groupes
+  // (plutôt qu'une requête par groupe) — plafonné large, regroupé côté
+  // client, 4 avatars max gardés par groupe.
+  const { data: previewRows } = await supabase
+    .from("group_members")
+    .select("group_id, joined_at, profiles(avatar_url)")
+    .order("joined_at", { ascending: true })
+    .limit(2000);
+  const previewsByGroup = new Map();
+  for (const r of previewRows || []) {
+    if (!r.profiles?.avatar_url) continue;
+    if (!previewsByGroup.has(r.group_id)) previewsByGroup.set(r.group_id, []);
+    previewsByGroup.get(r.group_id).push(r.profiles.avatar_url);
+  }
+
+  return data.map((row) => mapGroupRow(row, myGroupIds, previewsByGroup));
 }
 
 export async function createGroup({ nom, description, categorie, imageUrl }) {
@@ -55,7 +73,7 @@ export async function createGroup({ nom, description, categorie, imageUrl }) {
 
   // Le créateur rejoint automatiquement son propre groupe.
   await joinGroup(data.id);
-  return mapGroupRow(data, new Set([data.id]));
+  return mapGroupRow(data, new Set([data.id]), new Map());
 }
 
 export async function joinGroup(groupId) {

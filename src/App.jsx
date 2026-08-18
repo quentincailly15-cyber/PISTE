@@ -8,7 +8,7 @@ import {
   Heart, MessageSquare, MoreHorizontal, Camera, Play, BookOpen, Mic,
   Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud,
   RotateCw, Smartphone, AtSign, Feather, Reply,
-  Backpack, Shirt, Truck, Scale, GraduationCap,
+  Backpack, Shirt, Truck, Scale, GraduationCap, SquarePen, Crop,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as traceService from "./services/traceService.js";
@@ -24,6 +24,74 @@ import { supabase } from "./services/supabaseClient.js";
 
 /* ============================================================
    1. TOKENS DE DESIGN — un seul accent (vert kaki)
+   ============================================================
+
+   GRAMMAIRE PISTE — dérivée de piste-da-reference.png, à réutiliser pour
+   toute nouvelle interface même sans équivalent dans la maquette. Une
+   fonctionnalité qui suit ces règles "sonne" PISTE sans effort.
+
+   FORMES
+   - Jamais de coin droit sur un élément interactif. RADIUS.pill pour tout
+     ce qui se presse (boutons, avatars, filtres, badges) ; RADIUS.lg/xl
+     pour les surfaces qui contiennent du contenu (cartes, feuilles, écrans
+     de détail). RADIUS.sm/md réservés aux petites vignettes (miniatures,
+     icônes de communauté).
+   - Pas de bordure sur les cartes de contenu (photo, vidéo) — l'image porte
+     la carte, jamais un cadre autour d'elle. Les bordures fines
+     (colors.border) restent réservées aux séparateurs de liste et aux
+     champs de saisie, jamais aux cartes.
+
+   PROFONDEUR (du plus loin au plus proche)
+   1. colors.background — le fond, jamais interactif.
+   2. colors.surface / surfaceAlt — cartes et zones de contenu, opaques.
+   3. colors.headerBg / navBg (translucide + blur 20-28px) — barres et
+      feuilles flottantes qui survolent du contenu déjà là.
+   4. Overlay plein écran (colors.overlay) — scrim derrière une feuille ou
+      un écran modal.
+   5. Éléments radiaux/flottants (menu de création, HeartBurst) — au-dessus
+      de tout, jamais dans le flux normal des cartes.
+   Plus un élément est "proche", plus son ombre est marquée et son fond
+   translucide/flou — jamais l'inverse.
+
+   MOUVEMENT — un seul catalogue, pas d'animation ad hoc par écran
+   - piste-scrim-in (200ms) : fond d'une feuille/menu qui s'estompe.
+   - piste-sheet-in (280ms, cubic-bezier(0.22,1,0.36,1)) : une feuille du bas
+     qui se dépose avec un léger ressort.
+   - piste-screen-in (300ms, même easing) : un écran plein écran qui pousse
+     depuis la droite — pendant du balayage-retour déjà en place.
+   - piste-pill-pop (260ms) : un filtre/onglet qui devient actif.
+   - piste-radial-pop (staggered) : apparition en éclosion depuis un centre
+     (menu de création) — à réutiliser pour tout menu circulaire/orbital.
+   - piste-heart-burst (700ms) : réaction à un double-tap sur un contenu.
+   - piste-count-pop (260ms) via <AnimatedCount> : tout chiffre qui change
+     (likes, commentaires, membres...) doit bouger, jamais sauter en silence.
+   - piste-crossfade (220ms) : changement de média dans un visionneur
+     séquentiel (Trace, futur carrousel plein écran).
+   Tout est désactivé sous prefers-reduced-motion (géré une fois, globalement).
+
+   TOUCHER
+   - active:scale-90 (boutons ronds/icônes isolés) ou active:scale-[0.98]
+     (lignes de liste, cartes larges) + transition-transform : aucun élément
+     cliquable ne doit rester statique au clic.
+   - Un geste répété deux fois vite (double-tap) réagit différemment d'un
+     geste simple — jamais le même toucher pour deux intentions sans
+     décalage temporel (voir InstantSlide : simple = pause, double = like).
+   - Rester appuyé (long-press) ouvre un menu contextuel discret plutôt que
+     d'exposer une icône poubelle en permanence.
+
+   ICÔNES MAISON (PisteGlyph) — quand un pictogramme générique ne suffit
+   pas (faune, activité, thème chasse), un glyphe dessiné dans le même
+   vocabulaire que le logo (formes pleines + traits arrondis, jamais de
+   détail fin) plutôt qu'une icône de librairie détournée.
+
+   COULEUR — un seul accent (vert sauge), jamais une seconde couleur de
+   marque. Le rouge (colors.error) reste réservé aux actions destructives et
+   aux alertes, jamais décoratif.
+
+   ORGANIQUE AVANT TOUT — avant d'ajouter un écran, se demander s'il peut
+   être une carte flottante/un timeline/un geste plutôt qu'un
+   bouton→rectangle→modal→formulaire par défaut (voir le carnet de chasse,
+   pensé comme une vraie piste chronologique plutôt qu'une liste de fiches).
    ============================================================ */
 const RADIUS = { sm: 10, md: 16, lg: 22, xl: 28, pill: 999 };
 const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
@@ -69,11 +137,19 @@ const THEMES = {
 };
 
 const ThemeContext = createContext(null);
+// URL de la bannière de profil de l'utilisateur connecté — fournie une fois
+// en haut de l'arbre (MainApp), lue par <AmbientBackground/> n'importe où
+// dans une pile d'écrans sans avoir à la refaire descendre prop par prop.
+const AmbientContext = createContext(null);
 function useTheme() {
   return useContext(ThemeContext);
 }
 function ThemeProvider({ children }) {
-  const [mode, setMode] = useState("light"); // 'light' | 'dark' | 'system'
+  // La référence (piste-da-reference.png) est entièrement sombre — c'est
+  // l'identité par défaut de PISTE désormais, pas juste un thème parmi
+  // d'autres. Le mode clair reste disponible (Réglages > Apparence), mais
+  // n'est plus ce qu'un nouvel utilisateur voit en premier.
+  const [mode, setMode] = useState("dark"); // 'light' | 'dark' | 'system'
   const [systemDark, setSystemDark] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
@@ -313,11 +389,15 @@ function IconButton({ icon: Icon, onClick, size = 36, active }) {
     </button>
   );
 }
-function Chip({ label, active, onClick }) {
+// solid=true : pastille pleine (accent saturé, texte clair) pour les
+// bascules de source de contenu ("Pour toi"/"Abonnements") — comme la
+// référence, où ces pilules-là sont bien plus contrastées que les chips de
+// catégorie. solid=false (défaut) : le ton doux habituel des filtres/catégories.
+function Chip({ label, active, onClick, solid = false }) {
   const { colors } = useTheme();
   return (
-    <button onClick={onClick} className="transition-colors active:scale-95" style={{ border: `1.5px solid ${active ? colors.accent : colors.border}`, background: active ? colors.accentSoft : colors.surface, color: active ? colors.accent : colors.textSecondary, borderRadius: RADIUS.pill, padding: "9px 15px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-      {active && <Check size={12} strokeWidth={3} />}
+    <button onClick={onClick} className="transition-colors active:scale-95" style={{ border: `1.5px solid ${active ? colors.accent : colors.border}`, background: active ? (solid ? colors.accent : colors.accentSoft) : colors.surface, color: active ? (solid ? colors.onAccent : colors.accent) : colors.textSecondary, borderRadius: RADIUS.pill, padding: "9px 15px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+      {active && !solid && <Check size={12} strokeWidth={3} />}
       {label}
     </button>
   );
@@ -374,16 +454,21 @@ function SegmentedControl({ options, value, onChange }) {
           style={{
             flex: 1,
             border: "none",
-            background: value === o.key ? colors.surface : "transparent",
-            color: value === o.key ? colors.text : colors.textFaint,
+            // Translucide, pas un aplat plein — la référence garde ce
+            // même verre légèrement teinté même sur ses pilules "actives".
+            background: value === o.key ? `${colors.accent}CC` : "transparent",
+            backdropFilter: value === o.key ? "blur(8px)" : "none",
+            WebkitBackdropFilter: value === o.key ? "blur(8px)" : "none",
+            color: value === o.key ? colors.onAccent : colors.textFaint,
             borderRadius: RADIUS.pill,
             padding: "7px 13px",
             fontSize: 12.5,
             fontWeight: value === o.key ? 700 : 600,
             cursor: "pointer",
             whiteSpace: "nowrap",
-            boxShadow: value === o.key ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
+            boxShadow: value === o.key ? `0 2px 8px ${colors.accent}40` : "none",
             transition: "background 150ms ease, box-shadow 150ms ease",
+            animation: value === o.key ? "piste-pill-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
           }}
         >
           {o.label}
@@ -717,11 +802,42 @@ function formatRelativeDate(iso) {
   const days = Math.floor(hours / 24);
   return `il y a ${days} j`;
 }
+// Regroupe une liste déjà triée (plus récent d'abord) par jour — "Aujourd'hui" /
+// "Hier" / date complète — sans réordonner, juste une frontière visuelle sur
+// des données réelles. getDate(item) doit renvoyer un ISO/timestamp.
+function groupByDay(items, getDate) {
+  const today = new Date();
+  const todayKey = today.toDateString();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = yesterday.toDateString();
+  const groups = [];
+  let currentKey = null;
+  for (const item of items) {
+    const d = new Date(getDate(item));
+    const key = d.toDateString();
+    if (key !== currentKey) {
+      const label = key === todayKey ? "Aujourd'hui" : key === yesterdayKey ? "Hier" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+      groups.push([label, []]);
+      currentKey = key;
+    }
+    groups[groups.length - 1][1].push(item);
+  }
+  return groups;
+}
 function formatVideoDuration(seconds) {
   if (!seconds) return null;
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+// Compte compact (12 400 -> "12,4k") pour les vues — jamais de valeur
+// inventée, juste un format d'affichage sur un vrai chiffre.
+function formatCount(n) {
+  if (!n) return "0";
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10000 ? 1 : 0).replace(".", ",")}k`;
+  return `${(n / 1_000_000).toFixed(1).replace(".", ",")}M`;
 }
 function mapPostRow(row) {
   return {
@@ -733,6 +849,9 @@ function mapPostRow(row) {
     image: row.post_media?.[0]?.type === "video" ? row.post_media?.[0]?.thumbnail_url || null : row.post_media?.[0]?.url || null,
     videoUrl: row.post_media?.[0]?.type === "video" ? row.post_media[0].url : null,
     duree: formatVideoDuration(row.post_media?.[0]?.duration_seconds),
+    // Tous les médias (pas juste le premier) — pour le carrousel d'une
+    // publication à plusieurs photos/vidéos (voir MediaCarousel).
+    media: [...(row.post_media || [])].sort((a, b) => (a.ordre || 0) - (b.ordre || 0)),
     type: row.type,
     animal: row.animal,
     pratique: row.pratique,
@@ -742,6 +861,7 @@ function mapPostRow(row) {
     likes: row.likes_count || 0,
     commentaires: row.comments_count || 0,
     reposts: row.reposts_count || 0,
+    vues: row.vues || 0,
     repostedAt: row.repostedAt || null,
     groupId: row.group_id || null,
     date: formatRelativeDate(row.created_at),
@@ -1456,40 +1576,75 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
             if (it.isCreate) {
               return (
                 <button key={it.key} onClick={onCreate} aria-label="Créer" className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>
-                  <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 3px 10px ${colors.accent}55` }}>
-                    <Plus size={18} color={colors.onAccent} strokeWidth={2.4} />
+                  <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 16px ${colors.accent}70`, marginTop: -6 }}>
+                    <Plus size={21} color={colors.onAccent} strokeWidth={2.4} />
                   </div>
                 </button>
               );
             }
+            // Icônes seules, sans label — la référence n'accroche aucun
+            // texte sous ses icônes de nav, l'état actif (pilule pleine +
+            // icône pleine) suffit à se repérer, plus proche d'un vrai
+            // environnement que d'un menu d'app classique.
             return (
-              <button key={it.key} onClick={() => setActive(it.key)} className="flex flex-col items-center gap-1" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", maxWidth: 64 }}>
+              <button key={it.key} onClick={() => setActive(it.key)} aria-label={it.label} className="active:scale-[0.98] transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>
                 <div
                   style={{
                     position: "relative",
-                    width: 40,
-                    height: 26,
+                    width: 46,
+                    height: 34,
                     borderRadius: RADIUS.pill,
                     background: isActive ? colors.accentSoft : "transparent",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     transition: "background 200ms ease",
+                    animation: isActive ? "piste-pill-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
                   }}
                 >
-                  <Icon size={19} strokeWidth={isActive ? 2.3 : 1.8} color={isActive ? colors.accent : colors.textFaint} />
+                  <Icon size={21} strokeWidth={isActive ? 2.3 : 1.8} color={isActive ? colors.accent : colors.textFaint} />
                   {it.key === "messages" && unreadConversations > 0 && (
                     <span style={{ position: "absolute", top: -2, right: 2, minWidth: 14, height: 14, borderRadius: 7, background: colors.accent, color: colors.onAccent, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
                       {unreadConversations > 9 ? "9+" : unreadConversations}
                     </span>
                   )}
                 </div>
-                <span style={{ fontSize: 9.5, fontWeight: isActive ? 700 : 500, color: isActive ? colors.accent : colors.textFaint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 60 }}>{it.label}</span>
               </button>
             );
           })}
         </div>
       </div>
+    </div>
+  );
+}
+// Fond ambiant — jamais un aplat de couleur, comme la référence : la
+// bannière de profil, très floutée et assombrie, sert de texture de fond
+// derrière TOUTES les pages (fixe, ne bouge pas au scroll ni au changement
+// d'onglet). Sans bannière, un dégradé de secours discret plutôt qu'un plat
+// uni. Toujours 100% opaque (même la version sans image) : peut être posée
+// en premier enfant de n'importe quel écran plein écran pour lui donner la
+// même texture que le reste de l'app, sans jamais laisser transparaître
+// l'écran resté monté en dessous. Lit la bannière du compte connecté via le
+// contexte par défaut — passer `imageUrl` pour l'écraser localement (ex.
+// AuthorProfileSheet montre la bannière de la personne consultée, pas la
+// sienne).
+function AmbientBackground({ imageUrl: imageUrlOverride, muted = false } = {}) {
+  const { colors, resolved } = useTheme();
+  const contextUrl = useContext(AmbientContext);
+  const imageUrl = imageUrlOverride !== undefined ? imageUrlOverride : contextUrl;
+  // Messages : le flou reste, mais beaucoup plus discret pour ne jamais
+  // nuire à la lisibilité des messages échangés dans une conversation.
+  const darken = muted ? (resolved === "dark" ? 0.9 : 0.94) : resolved === "dark" ? 0.72 : 0.82;
+  return (
+    <div aria-hidden="true" style={{ position: "fixed", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none", background: colors.background }}>
+      {imageUrl ? (
+        <>
+          <img src={imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "blur(72px) saturate(1.4)", transform: "scale(1.3)" }} />
+          <div style={{ position: "absolute", inset: 0, background: colors.background, opacity: darken }} />
+        </>
+      ) : (
+        <div style={{ width: "100%", height: "100%", background: `radial-gradient(ellipse 90% 55% at 50% 0%, ${colors.accentSoft}, ${colors.background} 70%)` }} />
+      )}
     </div>
   );
 }
@@ -1500,8 +1655,9 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
 function AppShell({ children, header, active, setActive, onCreate, unreadConversations, chromeMode = "full", refreshKey = 0 }) {
   const { colors } = useTheme();
   return (
-    <div style={{ minHeight: "100dvh", background: colors.background }}>
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100dvh", position: "relative", background: colors.background }}>
+    <div style={{ minHeight: "100dvh", background: colors.background, position: "relative" }}>
+      <AmbientBackground />
+      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100dvh", position: "relative", zIndex: 1 }}>
         {header}
         {/* refreshKey force un vrai remontage (donc un rechargement des données)
             quand on retape sur l'onglet déjà actif, pas seulement un défilement. */}
@@ -1511,6 +1667,14 @@ function AppShell({ children, header, active, setActive, onCreate, unreadConvers
       <style>{`
         @keyframes piste-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes piste-toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+        @keyframes piste-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes piste-sheet-in { from { opacity: 0; transform: translateY(28px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes piste-screen-in { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes piste-heart-burst { 0% { opacity: 0; transform: scale(0.3) rotate(-8deg); } 35% { opacity: 1; transform: scale(1.2) rotate(4deg); } 60% { transform: scale(0.94) rotate(0deg); } 100% { opacity: 0; transform: scale(1.35); } }
+        @keyframes piste-pill-pop { 0% { transform: scale(0.9); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
+        @keyframes piste-radial-pop { 0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; } 65% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+        @keyframes piste-count-pop { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
+        @keyframes piste-crossfade { from { opacity: 0; } to { opacity: 1; } }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
         }
@@ -1535,7 +1699,7 @@ function ContentActionSheet({ isOwn, isAdmin, onClose, onDelete, onEdit, onRepor
   const { colors } = useTheme();
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 62 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div
         style={{
           position: "absolute",
@@ -1548,7 +1712,7 @@ function ContentActionSheet({ isOwn, isAdmin, onClose, onDelete, onEdit, onRepor
           pointerEvents: "none",
         }}
       >
-      <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", padding: "10px 20px 20px", position: "relative", pointerEvents: "auto" }}>
+      <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", padding: "10px 20px 20px", position: "relative", pointerEvents: "auto" }}>
         <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "6px auto 16px" }} />
         <div style={{ position: "absolute", top: 10, right: 12 }}><IconButton icon={X} onClick={onClose} size={30} /></div>
         {isOwn ? (
@@ -1596,7 +1760,8 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
   const [error, setError] = useState("");
   const [sheet, setSheet] = useState(null);
   const [localMode, setLocalMode] = useState("full");
-  const tabs = [["publications", "Publications", Home], ["videos", "Vidéos", Video], ["chiens", "Chiens", Dog], ["reposts", "Reposts", Repeat2]];
+  const [openPost, setOpenPost] = useState(null);
+  const tabs = [["publications", "Publications"], ["videos", "Vidéos"], ["chiens", "Chiens"], ["reposts", "Repost"]];
   const lastScrollTopRef = useRef(0);
   const handleScroll = (e) => {
     const el = e.currentTarget;
@@ -1639,7 +1804,8 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 64, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 64, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground imageUrl={profile?.imageCouverture} />
       {loading ? (
         <>
           <ScreenHeader title="Profil" onBack={onClose} />
@@ -1653,45 +1819,48 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
       ) : (
         <div onScroll={handleScroll} style={{ flex: 1, overflowY: "auto" }}>
           <ScreenHeader title={`@${profile.username}`} onBack={onClose} chromeMode={localMode} />
-          <div style={{ width: "100%", height: 124, marginTop: 10, background: profile.imageCouverture ? `url(${profile.imageCouverture}) center/cover` : `linear-gradient(135deg, ${colors.accentSoft}, ${colors.surfaceAlt})`, borderRadius: RADIUS.xl }} />
-          <div className="px-4">
-            <div style={{ marginTop: -40 }}>
+          {/* Plus de rectangle de bannière : elle vit désormais en arrière-plan
+              de toute la page (AmbientBackground, très floutée). L'avatar est
+              donc centré en haut plutôt que collé/débordant sur une bannière
+              qui n'existe plus visuellement ici. */}
+          <div className="px-4" style={{ marginTop: 18, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+            <div>
               {traceGroup && traceGroup.traces.length > 0 ? (
                 <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
-                  <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
-                    <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: `3px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.16)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                      {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={32} color={colors.textFaint} strokeWidth={1.6} />}
+                  <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
+                    <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: `3px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
                     </div>
                   </div>
                 </button>
               ) : (
-                <div style={{ width: 80, height: 80, borderRadius: RADIUS.pill, background: colors.surface, border: `4px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.16)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={32} color={colors.textFaint} strokeWidth={1.6} />}
+                <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: `4px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
                 </div>
               )}
             </div>
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{profile.nom}</div>
               <div style={{ fontSize: 13, color: colors.textFaint }}>@{profile.username}</div>
-              <BadgeRow badges={profile.badges} />
+              <div className="flex justify-center"><BadgeRow badges={profile.badges} /></div>
               {profile.localisation && (
-                <div className="flex items-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px" }}>
+                <div className="flex items-center justify-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px" }}>
                   <MapPin size={12} color={colors.textFaint} /><span style={{ fontSize: 12, color: colors.textSecondary }}>{profile.localisation}</span>
                 </div>
               )}
-              {profile.bio && <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 10, lineHeight: 1.5, background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "10px 12px" }}>{profile.bio}</div>}
+              {profile.bio && <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 10, lineHeight: 1.5, maxWidth: 300 }}>{profile.bio}</div>}
             </div>
-            <div style={{ marginTop: 16, background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.lg, padding: "12px 4px", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }} className="flex">
-              {[["Abonnés", profile.stats.abonnes, "followers"], ["Abonnements", profile.stats.abonnements, "following"], ["Publications", profile.stats.publications, null]].map(([label, val, statMode]) => {
+            <div style={{ marginTop: 20, padding: "0 4px", width: "100%" }} className="flex">
+              {[["Publications", profile.stats.publications, null], ["Abonnés", profile.stats.abonnes, "followers"], ["Abonnements", profile.stats.abonnements, "following"]].map(([label, val, statMode]) => {
                 const mode = profile.isPrivate && !isSelf && !isFollowing ? null : statMode;
                 return mode ? (
-                  <button key={label} onClick={() => setFollowSheet(mode)} style={{ flex: 1, textAlign: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
+                  <button className="active:scale-[0.98] transition-transform" key={label} onClick={() => setFollowSheet(mode)} style={{ flex: 1, textAlign: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{formatCount(val)}</div>
                     <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
                   </button>
                 ) : (
                   <div key={label} style={{ flex: 1, textAlign: "center" }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{formatCount(val)}</div>
                     <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
                   </div>
                 );
@@ -1700,7 +1869,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
             {isSelf ? (
               <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: colors.textFaint }}>C'est vous.</div>
             ) : (
-              <div className="flex items-center gap-2" style={{ marginTop: 14 }}>
+              <div className="flex items-center justify-center gap-2" style={{ marginTop: 14, width: "100%" }}>
                 {profile.isPrivate && !isFollowing ? (
                   <Button full={false} variant={isPending ? "secondary" : "primary"} onClick={onRequestFollow}>{isPending ? "Demande envoyée" : "Demander à s'abonner"}</Button>
                 ) : (
@@ -1723,80 +1892,43 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
             <EmptyState title="Ce compte est privé" subtitle={`Demandez à vous abonner pour voir les publications, vidéos, chiens et reposts de @${profile.username}.`} icon={Lock} />
           ) : (
             <>
-              <div className="px-4 mt-5">
-                <div className="flex" style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, gap: 2, boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
-                  {tabs.map(([key, label, Icon]) => (
-                    <button
-                      key={key}
-                      onClick={() => setTab(key)}
-                      className="flex items-center justify-center gap-1.5"
-                      style={{ flex: 1, padding: "7px 6px", background: tab === key ? colors.surface : "transparent", border: "none", borderRadius: RADIUS.pill, cursor: "pointer", boxShadow: tab === key ? "0 1px 4px rgba(0,0,0,0.10)" : "none", transition: "background 150ms ease, box-shadow 150ms ease" }}
-                    >
-                      <Icon size={14} color={tab === key ? colors.text : colors.textFaint} strokeWidth={1.8} />
-                      <span style={{ fontSize: 10.5, fontWeight: tab === key ? 700 : 600, color: tab === key ? colors.text : colors.textFaint, whiteSpace: "nowrap" }}>{label}</span>
-                    </button>
-                  ))}
-                </div>
+              <div style={{ marginTop: 16 }}>
+                <ProfileTabBar tabs={tabs} tab={tab} setTab={setTab} />
               </div>
               {tab === "publications" && (
-                posts.filter((p) => p.type !== "video" && p.type !== "video_courte").length === 0 ? (
-                  <EmptyState title="Aucune publication" subtitle="Les publications de ce compte apparaîtront ici." icon={Feather} />
-                ) : (
-                  <div style={{ paddingTop: 10 }}>
-                    {posts.filter((p) => p.type !== "video" && p.type !== "video_courte").map((p) => (
-                      <PostCard
-                        onOpenProfile={onOpenProfile}
-                        key={p.id}
-                        post={p}
-                        liked={liked.includes(p.id)}
-                        saved={saved.includes(p.id)}
-                        reposted={reposted.includes(p.id)}
-                        onRepost={() => onRepost(p.id)}
-                        commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
-                        onLike={() => onLike(p.id)}
-                        onSave={() => onSave(p.id)}
-                        onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
-                        onOpenActions={() => setSheet({ type: "actions", post: p })}
-                        onOpenAuthor={() => onOpenProfile(p.username)}
-                      />
-                    ))}
-                  </div>
-                )
+                <div className="px-4" style={{ paddingTop: 6 }}>
+                  <PublicationsGrid
+                    posts={posts.filter((p) => p.type !== "video" && p.type !== "video_courte")}
+                    onOpen={setOpenPost}
+                    emptyTitle="Aucune publication"
+                    emptySubtitle="Les publications de ce compte apparaîtront ici."
+                  />
+                </div>
               )}
               {tab === "videos" && (
-                posts.filter((p) => p.type === "video" || p.type === "video_courte").length === 0 ? (
-                  <EmptyState title="Aucune vidéo" subtitle="Les vidéos de ce compte apparaîtront ici." icon={Film} />
-                ) : (
-                  <div style={{ paddingTop: 6 }}>
-                    {posts.filter((p) => p.type === "video" || p.type === "video_courte").map((v) => (
-                      <VideoCard
-                        key={v.id}
-                        video={v}
-                        liked={liked.includes(v.id)}
-                        reposted={reposted.includes(v.id)}
-                        commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
-                        onLike={() => onLike(v.id)}
-                        onRepost={v.type === "video" ? undefined : () => onRepost(v.id)}
-                        onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
-                        onOpenActions={() => setSheet({ type: "actions", post: v })}
-                        onOpenAuthor={() => onOpenProfile(v.username)}
-                        onOpenPlayer={() => onOpenPlayer && onOpenPlayer(v)}
-                      />
-                    ))}
-                  </div>
-                )
+                <div className="px-4" style={{ paddingTop: 6 }}>
+                  <VideoThumbGrid
+                    videos={posts.filter((p) => p.type === "video" || p.type === "video_courte")}
+                    onOpen={(v) => onOpenPlayer && onOpenPlayer(v)}
+                    emptyTitle="Aucune vidéo"
+                    emptySubtitle="Les vidéos de ce compte apparaîtront ici."
+                  />
+                </div>
               )}
               {tab === "chiens" && (
                 dogs.length === 0 ? (
                   <EmptyState title="Aucun chien enregistré" subtitle="Les chiens de ce compte apparaîtront ici." icon={Dog} />
                 ) : (
-                  <div className="px-4 pt-4 flex flex-col gap-2">
+                  <div className="px-4 pt-2 flex flex-col">
                     {dogs.map((d) => (
-                      <button key={d.id} onClick={() => setOpenDog(d)} className="flex items-center gap-3" style={{ border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: 12, background: colors.surface, cursor: "pointer", textAlign: "left" }}>
-                        <div style={{ width: 40, height: 40, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                      <button key={d.id} onClick={() => setOpenDog(d)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ border: "none", padding: "9px 0", background: "transparent", cursor: "pointer", textAlign: "left" }}>
+                        <div style={{ width: 46, height: 46, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                           {d.photo_url ? <img src={d.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={18} color={colors.textFaint} />}
                         </div>
-                        <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>{d.nom}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text }}>{d.nom}</div>
+                          <div style={{ fontSize: 11.5, color: colors.textFaint }}>{[d.race, ageFromBirthDate(d.birth_date) !== null && `${ageFromBirthDate(d.birth_date)} ans`].filter(Boolean).join(" · ")}</div>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -1806,27 +1938,9 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                 repostedPosts.length === 0 ? (
                   <EmptyState title="Aucun repost" subtitle="Les publications repartagées par ce compte apparaîtront ici." icon={Repeat2} />
                 ) : (
-                  <div style={{ paddingTop: 10 }}>
+                  <div className="flex flex-col" style={{ paddingTop: 8 }}>
                     {repostedPosts.map((p) => (
-                      p.type === "video_courte" ? (
-                        <RepostedInstantCard key={p.id} item={p} onOpen={setViewingInstant} />
-                      ) : (
-                        <PostCard
-                          onOpenProfile={onOpenProfile}
-                          key={p.id}
-                          post={p}
-                          liked={liked.includes(p.id)}
-                          saved={saved.includes(p.id)}
-                          reposted={true}
-                          onRepost={() => onRepost(p.id)}
-                          commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
-                          onLike={() => onLike(p.id)}
-                          onSave={() => onSave(p.id)}
-                          onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
-                          onOpenActions={() => setSheet({ type: "actions", post: p })}
-                          onOpenAuthor={() => onOpenProfile(p.username)}
-                        />
-                      )
+                      <RepostRow key={p.id} post={p} onOpen={(post) => (post.type === "video_courte" ? setViewingInstant(post) : setOpenPost(post))} />
                     ))}
                   </div>
                 )
@@ -1834,6 +1948,23 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
             </>
           )}
         </div>
+      )}
+      {openPost && (
+        <SinglePostOverlay
+          post={openPost}
+          onClose={() => setOpenPost(null)}
+          onOpenProfile={onOpenProfile}
+          liked={liked.includes(openPost.id)}
+          saved={saved.includes(openPost.id)}
+          reposted={reposted.includes(openPost.id)}
+          onRepost={() => onRepost(openPost.id)}
+          commentCount={commentsByPost[openPost.id] ? commentsByPost[openPost.id].length : (openPost.commentaires || 0)}
+          onLike={() => onLike(openPost.id)}
+          onSave={() => onSave(openPost.id)}
+          onOpenComments={() => { setSheet({ type: "comments", post: openPost }); onLoadComments(openPost.id); }}
+          onOpenActions={() => setSheet({ type: "actions", post: openPost })}
+          onOpenAuthor={() => onOpenProfile(openPost.username)}
+        />
       )}
       {openDog && (
         <DogPage
@@ -1902,7 +2033,7 @@ function ReportSheet({ onClose, onSubmit }) {
   const [sent, setSent] = useState(false);
   const Sheet = ({ children }) => (
     <div style={{ position: "fixed", inset: 0, zIndex: 63 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div
         style={{
           position: "absolute",
@@ -1924,7 +2055,7 @@ function ReportSheet({ onClose, onSubmit }) {
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
           borderRadius: RADIUS.xl,
-          boxShadow: "0 12px 40px rgba(0,0,0,0.22)",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)",
           display: "flex",
           flexDirection: "column",
           pointerEvents: "auto",
@@ -1957,7 +2088,7 @@ function ReportSheet({ onClose, onSubmit }) {
         <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 14 }}>Pourquoi signalez-vous ce contenu ?</div>
         <div className="flex flex-col gap-2">
           {REPORT_REASONS.map((r) => (
-            <button key={r} onClick={() => setReason(r)} className="flex items-center justify-between" style={{ border: `1.5px solid ${reason === r ? colors.accent : colors.border}`, background: reason === r ? colors.accentSoft : colors.surface, borderRadius: RADIUS.sm, padding: "12px 14px", cursor: "pointer" }}>
+            <button key={r} onClick={() => setReason(r)} className="flex items-center justify-between active:scale-[0.98] transition-transform" style={{ border: `1.5px solid ${reason === r ? colors.accent : colors.border}`, background: reason === r ? colors.accentSoft : colors.surface, borderRadius: RADIUS.sm, padding: "12px 14px", cursor: "pointer" }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: reason === r ? colors.accent : colors.text }}>{r}</span>
               {reason === r && <Check size={15} color={colors.accent} />}
             </button>
@@ -2018,9 +2149,9 @@ function MentionPickerButton({ onSelect }) {
       </button>
       {open && (
         <div style={{ position: "fixed", inset: 0, zIndex: 95 }}>
-          <div onClick={() => setOpen(false)} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+          <div onClick={() => setOpen(false)} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
           <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-            <div style={{ width: "100%", maxWidth: 460, maxHeight: "60vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+            <div style={{ width: "100%", maxWidth: 460, maxHeight: "60vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
               <div className="flex items-center justify-between" style={{ padding: "6px 16px 8px" }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>Identifier quelqu'un</span>
@@ -2038,7 +2169,7 @@ function MentionPickerButton({ onSelect }) {
                   <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Aucun résultat.</div>
                 ) : (
                   results.map((u) => (
-                    <button key={u.id} onClick={() => { onSelect(u); setOpen(false); setQuery(""); }} className="flex items-center gap-2" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
+                    <button key={u.id} onClick={() => { onSelect(u); setOpen(false); setQuery(""); }} className="flex items-center gap-2 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
                       <div style={{ width: 28, height: 28, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={13} color={colors.textFaint} />}
                       </div>
@@ -2071,7 +2202,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
   };
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 61 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div
         style={{
           position: "absolute",
@@ -2093,7 +2224,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
           borderRadius: RADIUS.xl,
-          boxShadow: "0 12px 40px rgba(0,0,0,0.22)",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)",
           display: "flex",
           flexDirection: "column",
           pointerEvents: "auto",
@@ -2184,6 +2315,23 @@ function SensitiveGate({ rating, children }) {
       </div>
     </div>
   );
+}
+// Double-tap sur une photo/vidéo pour liker (façon Instagram) — le cœur qui
+// s'anime EST le retour, sans lui un double-tap ne "se sent" pas différent
+// d'un tap perdu. `show` se remet à false tout seul après l'animation.
+function HeartBurst({ show }) {
+  if (!show) return null;
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", zIndex: 4 }}>
+      <Heart size={84} color="#fff" fill="#fff" style={{ animation: "piste-heart-burst 700ms ease-out forwards", filter: "drop-shadow(0 4px 14px rgba(0,0,0,0.35))" }} />
+    </div>
+  );
+}
+// Un chiffre (like/commentaire/repost) qui bouge doit se sentir bouger — un
+// changement de `key` remonte le <span>, qui rejoue son animation à chaque
+// nouvelle valeur, sans suivre l'ancienne à la main.
+function AnimatedCount({ value, style }) {
+  return <span key={value} style={{ ...style, display: "inline-block", animation: "piste-count-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" }}>{value}</span>;
 }
 // Sondage réel (voir migration 036) — options et votes chargés à l'ouverture
 // du post, pas préchargés dans le fil (même principe que les commentaires).
@@ -2316,7 +2464,7 @@ function SharePostSheet({ item, onClose }) {
   // plutôt que couvrir vraiment toute la page.
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 92, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 16px calc(28px + env(safe-area-inset-bottom, 0px))" }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ width: "100%", maxWidth: 420, maxHeight: "100%", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 16px 48px rgba(0,0,0,0.28)", display: "flex", flexDirection: "column", position: "relative" }}>
           <div className="flex items-center justify-between" style={{ padding: "16px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Envoyer à...</span>
@@ -2355,7 +2503,7 @@ function SharePostSheet({ item, onClose }) {
                     results.map((u) => {
                       const active = selected.some((x) => x.key === `u:${u.id}`);
                       return (
-                        <button key={u.id} onClick={() => toggleUser(u)} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
+                        <button key={u.id} onClick={() => toggleUser(u)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
                           <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                             {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
                           </div>
@@ -2378,7 +2526,7 @@ function SharePostSheet({ item, onClose }) {
                   conversations.map((c) => {
                     const active = selected.some((x) => x.key === `c:${c.id}`);
                     return (
-                      <button key={c.id} onClick={() => toggleConv(c)} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
+                      <button key={c.id} onClick={() => toggleConv(c)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
                         <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : c.type === "group" ? <Users size={16} color={colors.textFaint} /> : <User size={16} color={colors.textFaint} />}
                         </div>
@@ -2403,59 +2551,143 @@ function SharePostSheet({ item, onClose }) {
     document.body
   );
 }
+/** Carrousel horizontal (scroll-snap) pour une publication à plusieurs
+ *  photos/vidéos — badge "n/N" façon story en haut à droite, comme la
+ *  référence. Une seule vraie source (post_media), aucune pagination
+ *  inventée : le badge ne s'affiche que si plus d'un média existe. */
+function MediaCarousel({ media, colors }) {
+  const [index, setIndex] = useState(0);
+  const onScroll = (e) => {
+    const el = e.currentTarget;
+    const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+    if (i !== index) setIndex(i);
+  };
+  return (
+    <div style={{ position: "relative" }}>
+      <div
+        onScroll={onScroll}
+        className="flex"
+        style={{ overflowX: "auto", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}
+      >
+        {media.map((m, i) => (
+          <div key={i} style={{ flex: "0 0 100%", scrollSnapAlign: "start", minWidth: 0 }}>
+            {m.type === "video" ? (
+              <div style={{ width: "100%", aspectRatio: "4/5", background: "#000" }}>
+                <video src={m.url} poster={m.thumbnail_url || undefined} controls playsInline style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }} />
+              </div>
+            ) : (
+              <div style={{ width: "100%", aspectRatio: "4/5", background: colors.surfaceAlt }}>
+                <img src={m.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {media.length > 1 && (
+        <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(0,0,0,0.5)", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: RADIUS.pill, padding: "3px 9px", zIndex: 2 }}>
+          {index + 1}/{media.length}
+        </div>
+      )}
+    </div>
+  );
+}
 function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, onRepost, onOpenComments, onOpenActions, onOpenAuthor, onOpenProfile }) {
   const { colors } = useTheme();
   const [showShare, setShowShare] = useState(false);
+  const [burst, setBurst] = useState(false);
+  const lastTapRef = useRef(0);
+  const handleMediaTap = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      if (!liked) onLike();
+      setBurst(true);
+      window.setTimeout(() => setBurst(false), 700);
+    }
+    lastTapRef.current = now;
+  };
+  const hasMedia = !!(post.videoUrl || post.image);
+  // L'auteur se lit en overlay sur la photo/vidéo plutôt que dans une ligne
+  // séparée au-dessus — l'image porte le contenu, l'UI n'est qu'un halo
+  // dessus (voir l'analyse de refonte) ; repli en ligne normale pour une
+  // publication texte seul, qui n'a rien à survoler.
+  // En overlay, aucun chrome derrière les icônes (pas d'anneau sur l'avatar,
+  // pas de pastille derrière "...") — juste l'ombre portée du texte/icône
+  // pour la lisibilité, comme la référence : les icônes flottent nues sur
+  // le dégradé, rien ne les encadre.
+  const authorRow = (overlay) => (
+    <div className="flex items-center justify-between" style={overlay ? { position: "absolute", top: 0, left: 0, right: 0, padding: "12px 14px", background: "linear-gradient(to bottom, rgba(0,0,0,0.58), rgba(0,0,0,0))", zIndex: 2 } : { padding: "0 16px 10px" }}>
+      <button onClick={onOpenAuthor} className="flex items-center gap-2.5" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+        <div style={{ width: 32, height: 32, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
+          {post.avatar ? <img src={post.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={15} color={colors.textFaint} />}
+        </div>
+        <div style={{ textAlign: "left" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: overlay ? "#fff" : colors.text, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none" }}>{post.nom}</div>
+          <div style={{ fontSize: 11, color: overlay ? "rgba(255,255,255,0.8)" : colors.textFaint, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none" }}>{post.date}</div>
+        </div>
+      </button>
+      {overlay ? (
+        <button onClick={onOpenActions} style={{ background: "none", border: "none", padding: 6, display: "flex", cursor: "pointer", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }}>
+          <MoreHorizontal size={18} color="#fff" />
+        </button>
+      ) : (
+        <IconButton icon={MoreHorizontal} onClick={onOpenActions} size={30} />
+      )}
+    </div>
+  );
   return (
-    <div style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${colors.border}`, borderRadius: RADIUS.xl, margin: "0 12px 12px", overflow: "hidden", paddingTop: 14, paddingBottom: 14 }}>
+    // Plus de marge latérale — l'image s'étend jusqu'au bord gauche et droit
+    // de l'écran, comme la référence (une carte "de contenu", pas une carte
+    // "dans une marge").
+    <div style={{ background: colors.surface, borderRadius: RADIUS.xl, margin: "0 0 12px", overflow: "hidden", paddingBottom: 14 }}>
       {post.repostedAt && (
-        <div className="flex items-center gap-1.5" style={{ padding: "0 16px 6px", fontSize: 11.5, color: colors.textFaint, fontWeight: 600 }}>
+        <div className="flex items-center gap-1.5" style={{ padding: "14px 16px 6px", fontSize: 11.5, color: colors.textFaint, fontWeight: 600 }}>
           <Repeat2 size={13} /> Reposté
         </div>
       )}
-      <div className="flex items-center justify-between" style={{ padding: "0 16px 10px" }}>
-        <button onClick={onOpenAuthor} className="flex items-center gap-2.5" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            {post.avatar ? <img src={post.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+      {hasMedia ? (
+        <div style={{ position: "relative" }}>
+          {authorRow(true)}
+          {/* Double-tap pour liker, réservé aux photos — sur une vidéo, les
+              taps servent déjà aux contrôles natifs (lecture/pause). */}
+          <div onClick={post.videoUrl || (post.media && post.media.length > 0) ? undefined : handleMediaTap}>
+            <SensitiveGate rating={post.contentRating}>
+              {post.media && post.media.length > 0 ? (
+                <MediaCarousel media={post.media} colors={colors} />
+              ) : post.videoUrl ? (
+                <div style={{ aspectRatio: "4/3", background: "#000" }}>
+                  <video src={post.videoUrl} poster={post.image || undefined} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+              ) : (
+                // Toujours pleine largeur, jusqu'au bord de la publication —
+                // le recadrage se fait à la publication (voir PhotoCropScreen),
+                // donc l'image affichée ici correspond déjà exactement à ce
+                // que l'auteur a choisi, sans lettrboxing ni bandes latérales.
+                <div style={{ width: "100%", aspectRatio: "4/5", background: colors.surfaceAlt }}>
+                  <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                </div>
+              )}
+            </SensitiveGate>
           </div>
-          <div style={{ textAlign: "left" }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{post.nom}</div>
-            <div style={{ fontSize: 11, color: colors.textFaint }}>{post.date}</div>
-          </div>
-        </button>
-        <IconButton icon={MoreHorizontal} onClick={onOpenActions} size={30} />
-      </div>
-      {post.texte && <div style={{ padding: "0 16px 12px", fontSize: 13.5, color: colors.text, lineHeight: 1.5 }}>{renderTextWithMentions(post.texte, colors, onOpenProfile)}</div>}
-      {post.type === "sondage" && <PollCard postId={post.id} />}
-      {post.videoUrl ? (
-        <SensitiveGate rating={post.contentRating}>
-          <div style={{ margin: "0 16px", aspectRatio: "4/3", borderRadius: RADIUS.lg, overflow: "hidden", background: "#000" }}>
-            <video src={post.videoUrl} poster={post.image || undefined} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          </div>
-        </SensitiveGate>
-      ) : post.image && (
-        <SensitiveGate rating={post.contentRating}>
-          {/* Toutes tailles/orientations acceptées — plus de recadrage forcé
-              en 4/3 : la photo garde ses proportions, juste plafonnée en
-              hauteur pour ne pas déséquilibrer le fil. */}
-          <div style={{ margin: "0 16px", maxHeight: 520, borderRadius: RADIUS.lg, overflow: "hidden", background: colors.surfaceAlt, display: "flex", justifyContent: "center" }}>
-            <img src={post.image} alt="" style={{ maxWidth: "100%", maxHeight: 520, width: "auto", height: "auto", display: "block" }} />
-          </div>
-        </SensitiveGate>
+          <HeartBurst show={burst} />
+        </div>
+      ) : (
+        authorRow(false)
       )}
+      {post.texte && <div style={{ padding: hasMedia ? "12px 16px 0" : "0 16px", fontSize: 13.5, color: colors.text, lineHeight: 1.5 }}>{renderTextWithMentions(post.texte, colors, onOpenProfile)}</div>}
+      {post.type === "sondage" && <PollCard postId={post.id} />}
       <div className="flex items-center gap-4" style={{ padding: "10px 16px 0" }}>
         <button onClick={onLike} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
           <Heart size={17} color={liked ? colors.accent : colors.textSecondary} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
-          <span style={{ fontSize: 12, color: liked ? colors.accent : colors.textSecondary, fontWeight: liked ? 700 : 400 }}>{post.likes || 0}</span>
+          <AnimatedCount value={post.likes || 0} style={{ fontSize: 12, color: liked ? colors.accent : colors.textSecondary, fontWeight: liked ? 700 : 400 }} />
         </button>
         <button onClick={onOpenComments} className="flex items-center gap-1.5" style={{ background: "none", border: "none", cursor: "pointer" }}>
           <MessageSquare size={17} color={colors.textSecondary} strokeWidth={1.8} />
-          <span style={{ fontSize: 12, color: colors.textSecondary }}>{commentCount}</span>
+          <AnimatedCount value={commentCount} style={{ fontSize: 12, color: colors.textSecondary }} />
         </button>
         {onRepost && (
           <button onClick={onRepost} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
             <Repeat2 size={17} color={reposted ? colors.accent : colors.textSecondary} strokeWidth={1.8} />
-            <span style={{ fontSize: 12, color: reposted ? colors.accent : colors.textSecondary, fontWeight: reposted ? 700 : 400 }}>{post.reposts || 0}</span>
+            <AnimatedCount value={post.reposts || 0} style={{ fontSize: 12, color: reposted ? colors.accent : colors.textSecondary, fontWeight: reposted ? 700 : 400 }} />
           </button>
         )}
         <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><PisteGlyph type="gibier" size={17} color={colors.textSecondary} /></button>
@@ -2580,10 +2812,29 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
   const holdTimerRef = useRef(null);
   const heldRef = useRef(false);
   const viewedRef = useRef(new Set());
+  // Répondre à une Trace = démarrer/continuer une vraie conversation privée
+  // avec son auteur — comme la maquette (barre "Envoyer un message..." + un
+  // cœur pour une réaction rapide), jamais un commentaire public.
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [replySent, setReplySent] = useState(false);
 
   const group = groups[groupIndex];
   const trace = group?.traces?.[traceIndex];
   const isMine = !!trace && trace.username === meUsername;
+
+  const sendReply = async (texte) => {
+    if (!texte.trim() || !group?.authorId || sendingReply) return;
+    setSendingReply(true);
+    try {
+      const conversationId = await messageService.startDirectConversation(group.authorId);
+      await messageService.sendMessage(conversationId, texte.trim());
+      setReplyText("");
+      setReplySent(true);
+      window.setTimeout(() => setReplySent(false), 1600);
+    } catch (e) { /* pas grave : le champ garde le texte, on peut réessayer */ }
+    finally { setSendingReply(false); }
+  };
 
   const goNext = () => {
     setConfirmDelete(false);
@@ -2670,10 +2921,10 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
             playsInline
             onTimeUpdate={(e) => { const v = e.currentTarget; if (v.duration) setProgress(v.currentTime / v.duration); }}
             onEnded={goNext}
-            style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+            style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000", animation: "piste-crossfade 220ms ease" }}
           />
         ) : (
-          <img src={trace.mediaUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+          <img key={trace.id} src={trace.mediaUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", animation: "piste-crossfade 220ms ease" }} />
         )}
 
         {/* Zones de tap (précédent / suivant) + maintien pour mettre en pause */}
@@ -2712,7 +2963,7 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
 
         {/* Légende */}
         {trace.texte && (
-          <div style={{ position: "absolute", left: 16, right: 16, bottom: `calc(${isMine ? 64 : 24}px + env(safe-area-inset-bottom, 0px))`, zIndex: 3, fontSize: 13.5, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.5)", textAlign: "center" }}>
+          <div style={{ position: "absolute", left: 16, right: 16, bottom: `calc(${isMine ? 64 : 78}px + env(safe-area-inset-bottom, 0px))`, zIndex: 3, fontSize: 13.5, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.5)", textAlign: "center" }}>
             {trace.texte}
           </div>
         )}
@@ -2741,6 +2992,32 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
                 <Button variant="primary" onClick={() => { onDelete(trace); goNext(); }}>Supprimer</Button>
               </div>
             </div>
+          </div>
+        )}
+
+        {!isMine && (
+          <div
+            className="flex items-center gap-2.5"
+            style={{ position: "absolute", left: 12, right: 12, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 4 }}
+          >
+            <input
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              onFocus={() => setPaused(true)}
+              onBlur={() => setPaused(false)}
+              onKeyDown={(e) => { if (e.key === "Enter") sendReply(replyText); }}
+              placeholder={replySent ? "Envoyé ✓" : "Envoyer un message..."}
+              style={{ flex: 1, minWidth: 0, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(20,20,20,0.35)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13, color: "#fff", outline: "none" }}
+            />
+            <button
+              onClick={() => sendReply("❤️")}
+              disabled={sendingReply}
+              aria-label="Réagir avec un cœur"
+              className="active:scale-90 transition-transform"
+              style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.35)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+            >
+              <Heart size={18} color="#fff" />
+            </button>
           </div>
         )}
       </div>
@@ -2808,7 +3085,11 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
           pointerEvents: chromeMode === "hidden" ? "none" : "auto",
         }}
       >
-        <SegmentedControl options={options} value={tab} onChange={setTab} />
+        <div className="flex gap-2">
+          {options.map((o) => (
+            <Chip key={o.key} label={o.label} active={tab === o.key} onClick={() => setTab(o.key)} solid />
+          ))}
+        </div>
       </div>
       <div style={{ marginTop: 14 }}><TraceBar groups={traceGroups} onOpenGroup={onOpenTraceGroup} onCreateOwn={onCreateOwnTrace} /></div>
       {visible.length === 0 ? (
@@ -2859,9 +3140,13 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
 /* ============================================================
    7. VIDÉO — VideoCard
    ============================================================ */
-function FullScreenVideoPlayer({ video, onClose }) {
+function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = [], reposted = [], commentsByPost = {}, onLike, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenProfile, onOpenSharedPost }) {
   const videoRef = useRef(null);
+  const [sheet, setSheet] = useState(null); // 'comments' | 'actions' | 'report' | 'share' | null
   if (!video) return null;
+  const isLiked = liked.includes(video.id);
+  const isReposted = reposted.includes(video.id);
+  const commentCount = commentsByPost[video.id] ? commentsByPost[video.id].length : (video.commentaires || 0);
 
   // "Retourner" la vidéo façon YouTube : plein écran natif du <video> lui-même
   // (webkitEnterFullscreen sur iOS Safari, requestFullscreen ailleurs), qui
@@ -2902,12 +3187,66 @@ function FullScreenVideoPlayer({ video, onClose }) {
         x-webkit-airplay="deny"
         autoPlay
         playsInline
-        style={{ width: "100%", height: "100%", objectFit: "contain", margin: "auto" }}
+        style={{ width: "100%", flex: 1, minHeight: 0, objectFit: "contain" }}
       />
+      {/* Actions retirées de la liste Vidéos (voir VideoCard) — elles vivent
+          ici, une fois la vidéo réellement ouverte, plutôt que nulle part. */}
+      <div className="flex items-center gap-5" style={{ padding: "10px 18px calc(12px + env(safe-area-inset-bottom, 0px))", background: "#000" }}>
+        <button onClick={() => onLike?.(video.id)} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
+          <Heart size={19} color={isLiked ? "#E4634A" : "#fff"} fill={isLiked ? "#E4634A" : "none"} strokeWidth={1.8} />
+          <AnimatedCount value={video.likes || 0} style={{ fontSize: 12.5, color: "#fff", fontWeight: 600 }} />
+        </button>
+        <button onClick={() => { setSheet("comments"); onLoadComments?.(video.id); }} className="flex items-center gap-1.5" style={{ background: "none", border: "none", cursor: "pointer" }}>
+          <MessageSquare size={19} color="#fff" strokeWidth={1.8} />
+          <AnimatedCount value={commentCount} style={{ fontSize: 12.5, color: "#fff", fontWeight: 600 }} />
+        </button>
+        {video.type !== "video" && onRepost && (
+          <button onClick={() => onRepost(video.id)} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <Repeat2 size={19} color={isReposted ? "#94A66C" : "#fff"} strokeWidth={1.8} />
+            <AnimatedCount value={video.reposts || 0} style={{ fontSize: 12.5, color: "#fff", fontWeight: 600 }} />
+          </button>
+        )}
+        <button onClick={() => setSheet("share")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+          <PisteGlyph type="gibier" size={19} color="#fff" />
+        </button>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setSheet("actions")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+          <MoreHorizontal size={20} color="#fff" />
+        </button>
+      </div>
+      {sheet === "actions" && (
+        <ContentActionSheet
+          isOwn={video.username === meUsername}
+          isAdmin={isAdmin}
+          onClose={() => setSheet(null)}
+          onEdit={() => { setSheet(null); onEditRequest?.(video); }}
+          onDelete={() => { onDelete?.(video.id); setSheet(null); onClose(); }}
+          onReport={() => setSheet("report")}
+          onHide={() => { onHide?.(video.id); setSheet(null); onClose(); }}
+          onBlock={() => { onBlock?.(video.username); setSheet(null); onClose(); }}
+        />
+      )}
+      {sheet === "report" && (
+        <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => { onReport?.({ targetId: video.id, targetType: "post", reason }); setSheet(null); }} />
+      )}
+      {sheet === "comments" && (
+        <CommentsSheet
+          comments={commentsByPost[video.id] || []}
+          onClose={() => setSheet(null)}
+          onAdd={(texte, parentId) => onAddComment?.(video.id, texte, parentId)}
+          onDelete={onDeleteComment ? (commentId) => onDeleteComment(video.id, commentId) : undefined}
+          meUsername={meUsername}
+          onOpenProfile={onOpenProfile}
+        />
+      )}
+      {sheet === "share" && <SharePostSheet item={video} onClose={() => setSheet(null)} />}
     </div>
   );
 }
-function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onOpenComments, onOpenActions, onOpenAuthor, onOpenPlayer }) {
+// Liste épurée façon référence : vignette + titre + auteur·vues·date, sans
+// pilule d'actions inline — like/commentaire/repost/partage/plus vivent
+// désormais dans FullScreenVideoPlayer, une fois la vidéo réellement ouverte.
+function VideoCard({ video, onOpenPlayer }) {
   const { colors } = useTheme();
   const canPlay = !!video.videoUrl;
   // Contenu sensible : miniature floutée + avertissement tant que non révélée
@@ -2915,89 +3254,53 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
   // miniature, un second lance la lecture, comme n'importe quelle vignette.
   const [revealed, setRevealed] = useState(false);
   const gated = video.contentRating === "sensitive" && !revealed;
-  const [showShare, setShowShare] = useState(false);
-  const [descExpanded, setDescExpanded] = useState(false);
+  // Pleine largeur, toutes les infos (titre/auteur/vues/date/durée) en
+  // overlay translucide sur la vidéo elle-même — pas une ligne de liste
+  // avec vignette à gauche et texte à droite : l'image porte tout, comme
+  // le Fil (voir authorRow de PostCard, même philosophie).
   return (
-    <div style={{ padding: "10px 16px 16px" }}>
-      <div className="flex gap-3" style={{ alignItems: "stretch" }}>
-        {/* Vidéo en grand */}
-        <button
-          onClick={gated ? () => setRevealed(true) : (canPlay ? onOpenPlayer : undefined)}
-          disabled={!gated && !canPlay}
-          style={{ flex: 1, minWidth: 0, aspectRatio: "16/9", borderRadius: RADIUS.md, background: colors.surfaceAlt, position: "relative", overflow: "hidden", border: "none", padding: 0, cursor: gated || canPlay ? "pointer" : "default" }}
-        >
-          {/* Vraie miniature (image capturée à l'envoi) en priorité — un <video>
-              reste souvent noir tant qu'on n'a pas cliqué dessus, selon l'appareil. */}
-          {video.image ? (
-            <img src={video.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: gated ? "blur(16px)" : "none" }} />
-          ) : video.videoUrl ? (
-            <video src={video.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none", filter: gated ? "blur(16px)" : "none" }} />
-          ) : null}
-          {gated ? (
-            <div style={{ position: "absolute", inset: 0, background: "rgba(20,18,16,0.55)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 10, textAlign: "center", gap: 5 }}>
-              <AlertTriangle size={17} color="#fff" strokeWidth={1.8} />
-              <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 700 }}>Contenu sensible</span>
-              <span style={{ fontSize: 9.5, color: "rgba(255,255,255,0.85)" }}>Toucher pour afficher</span>
-            </div>
-          ) : (
+    <div style={{ margin: "0 16px 14px" }}>
+      <button
+        onClick={gated ? () => setRevealed(true) : (canPlay ? onOpenPlayer : undefined)}
+        disabled={!gated && !canPlay}
+        style={{ width: "100%", aspectRatio: "16/9", background: colors.surfaceAlt, position: "relative", overflow: "hidden", borderRadius: RADIUS.xl, border: "none", padding: 0, cursor: gated || canPlay ? "pointer" : "default" }}
+      >
+        {/* Vraie miniature (image capturée à l'envoi) en priorité — un <video>
+            reste souvent noir tant qu'on n'a pas cliqué dessus, selon l'appareil. */}
+        {video.image ? (
+          <img src={video.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: gated ? "blur(16px)" : "none" }} />
+        ) : video.videoUrl ? (
+          <video src={video.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none", filter: gated ? "blur(16px)" : "none" }} />
+        ) : null}
+        {gated ? (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(20,18,16,0.55)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 10, textAlign: "center", gap: 5 }}>
+            <AlertTriangle size={18} color="#fff" strokeWidth={1.8} />
+            <span style={{ fontSize: 11, color: "#fff", fontWeight: 700 }}>Contenu sensible</span>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.85)" }}>Toucher pour afficher</span>
+          </div>
+        ) : (
+          <>
             <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Play size={19} color="white" fill="white" />
+              <div style={{ width: 46, height: 46, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Play size={20} color="white" fill="white" />
               </div>
             </div>
-          )}
-          {video.duree && !gated && <span style={{ position: "absolute", right: 6, bottom: 6, fontSize: 10, color: "white", background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "1px 5px" }}>{video.duree}</span>}
-        </button>
-        {/* Pilule verticale d'actions — like/commentaire/repost/partage/plus
-            regroupées, jamais collée au bord droit de la carte. */}
-        <div className="flex flex-col items-center justify-center gap-3" style={{ flexShrink: 0, width: 40, background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: "12px 0", boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}>
-          <button onClick={onLike} className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <Heart size={17} color={liked ? colors.accent : colors.textFaint} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
-            <span style={{ fontSize: 9.5, color: liked ? colors.accent : colors.textFaint, fontWeight: 600 }}>{video.likes || 0}</span>
-          </button>
-          <button onClick={onOpenComments} className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <MessageSquare size={17} color={colors.textFaint} strokeWidth={1.8} />
-            <span style={{ fontSize: 9.5, color: colors.textFaint, fontWeight: 600 }}>{commentCount}</span>
-          </button>
-          {onRepost && (
-            <button onClick={onRepost} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-              <Repeat2 size={17} color={reposted ? colors.accent : colors.textFaint} strokeWidth={1.8} />
-            </button>
-          )}
-          <button onClick={() => setShowShare(true)} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-            <PisteGlyph type="gibier" size={16} color={colors.textFaint} />
-          </button>
-          <button onClick={onOpenActions} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-            <MoreHorizontal size={16} color={colors.textFaint} />
-          </button>
-        </div>
-      </div>
-      {video.titre && (
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, marginTop: 10, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{video.titre}</div>
-      )}
-      {video.texte && video.texte !== video.titre && (
-        <div
-          onClick={() => setDescExpanded((v) => !v)}
-          style={{
-            fontSize: 12.5, color: colors.textSecondary, marginTop: 4, lineHeight: 1.4, cursor: "pointer",
-            display: descExpanded ? "block" : "-webkit-box",
-            WebkitLineClamp: descExpanded ? "unset" : 2,
-            WebkitBoxOrient: "vertical",
-            overflow: descExpanded ? "visible" : "hidden",
-          }}
-        >
-          {video.texte}
-        </div>
-      )}
-      {/* Sous la vidéo — auteur uniquement, les actions sont déjà dans la pilule */}
-      <button onClick={onOpenAuthor} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0, marginTop: 8 }}>
-        <div style={{ width: 26, height: 26, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-          {video.avatar ? <img src={video.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={12} color={colors.textFaint} />}
-        </div>
-        <span style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{video.nom}</span>
-        {video.duree && <span style={{ fontSize: 11, color: colors.textFaint, flexShrink: 0 }}>· {video.duree}</span>}
+            {video.duree && (
+              <span style={{ position: "absolute", right: 10, top: 10, fontSize: 10.5, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", borderRadius: RADIUS.pill, padding: "3px 8px" }}>{video.duree}</span>
+            )}
+            <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "24px 14px 12px", background: "linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0))" }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#fff", lineHeight: 1.3, textShadow: "0 1px 3px rgba(0,0,0,0.4)", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>{video.titre || video.texte}</div>
+              <div className="flex items-center gap-1.5" style={{ marginTop: 4, fontSize: 11, color: "rgba(255,255,255,0.85)", textShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+                <span style={{ fontWeight: 600 }}>{video.nom}</span>
+                <span>·</span>
+                <Eye size={11} />
+                <span>{formatCount(video.vues)} vues</span>
+                <span>· {video.date}</span>
+              </div>
+            </div>
+          </>
+        )}
       </button>
-      {showShare && <SharePostSheet item={video} onClose={() => setShowShare(false)} />}
     </div>
   );
 }
@@ -3077,12 +3380,32 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
     else { vid.pause(); setPlaying(false); }
   };
 
+  // Un seul tap = pause/lecture, deux taps rapprochés = liker (façon
+  // Reels/Instagram) — le simple tap attend un court instant avant d'agir,
+  // pour laisser la chance à un second tap d'arriver.
+  const [burst, setBurst] = useState(false);
+  const tapTimerRef = useRef(null);
+  const lastTapAtRef = useRef(0);
+  const handleTap = () => {
+    const now = Date.now();
+    const isDouble = now - lastTapAtRef.current < 300;
+    lastTapAtRef.current = now;
+    if (isDouble) {
+      if (tapTimerRef.current) { window.clearTimeout(tapTimerRef.current); tapTimerRef.current = null; }
+      if (!liked) onLike();
+      setBurst(true);
+      window.setTimeout(() => setBurst(false), 700);
+    } else {
+      tapTimerRef.current = window.setTimeout(() => { togglePlay(); tapTimerRef.current = null; }, 250);
+    }
+  };
+
   return (
     <div ref={slideRef} style={{ position: "relative", width: "100%", height: "100%", scrollSnapAlign: "start", background: "#000", flexShrink: 0, overflow: "hidden" }}>
       {item.videoUrl && shouldLoad ? (
-        <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline preload="metadata" onClick={togglePlay} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline preload="metadata" onClick={handleTap} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : item.image ? (
-        <img src={item.image} alt="" onClick={togglePlay} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <img src={item.image} alt="" onClick={handleTap} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Film size={36} color="rgba(255,255,255,0.3)" /></div>
       )}
@@ -3091,6 +3414,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
           <div style={{ width: 56, height: 56, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={26} color="#fff" fill="#fff" /></div>
         </div>
       )}
+      <HeartBurst show={burst} />
       <button onClick={() => setMuted((m) => !m)} style={{ position: "absolute", top: "calc(18px + env(safe-area-inset-top, 0px))", right: 14, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
         {muted ? <VolumeX size={16} color="#fff" /> : <Volume2 size={16} color="#fff" />}
       </button>
@@ -3121,20 +3445,20 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
           <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Heart size={18} color={liked ? colors.accent : "#fff"} fill={liked ? colors.accent : "none"} strokeWidth={2} />
           </div>
-          <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.likes || 0}</span>
+          <AnimatedCount value={item.likes || 0} style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }} />
         </button>
         <button onClick={onOpenComments} className="flex flex-col items-center gap-1" style={{ background: "none", border: "none", cursor: "pointer" }}>
           <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <MessageSquare size={18} color="#fff" strokeWidth={2} />
           </div>
-          <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{commentCount}</span>
+          <AnimatedCount value={commentCount} style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }} />
         </button>
         {onRepost && (
           <button onClick={onRepost} className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
             <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Repeat2 size={18} color={reposted ? colors.accent : "#fff"} strokeWidth={2} />
             </div>
-            <span style={{ fontSize: 10.5, color: reposted ? colors.accent : "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.reposts || 0}</span>
+            <AnimatedCount value={item.reposts || 0} style={{ fontSize: 10.5, color: reposted ? colors.accent : "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }} />
           </button>
         )}
         <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer" }}>
@@ -3145,6 +3469,14 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
         <button onClick={onOpenActions} style={{ background: "none", border: "none", cursor: "pointer" }}>
           <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <MoreHorizontal size={17} color="#fff" />
+          </div>
+        </button>
+        {/* Raccourci profil en bas de la pile d'actions — présent dans la
+            référence, distinct du nom en overlay (accès rapide au pouce
+            plutôt qu'un aller-retour vers le texte en bas à gauche). */}
+        <button onClick={onOpenAuthor} style={{ background: "none", border: "none", cursor: "pointer" }}>
+          <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "1.5px solid rgba(255,255,255,0.6)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            {item.avatar ? <img src={item.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={13} color={colors.textFaint} />}
           </div>
         </button>
       </div>
@@ -3164,28 +3496,29 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
  *  distingue clairement d'une publication classique (badge "Instant") et
  *  ouvre l'Instant d'origine en plein écran au lieu de l'écraser dans une
  *  carte façon publication. */
-function RepostedInstantCard({ item, onOpen }) {
+// Ligne plate, sans carte — comme les onglets Messages/Chiens désormais.
+// Un seul composant gère les publications et les Instants repostés, la
+// navigation (setOpenPost vs setViewingInstant) est décidée à l'appel.
+function RepostRow({ post, onOpen }) {
   const { colors } = useTheme();
+  const isInstant = post.type === "video_courte";
   return (
-    <button onClick={() => onOpen(item)} className="flex items-center gap-3" style={{ width: "100%", background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "none", borderRadius: RADIUS.xl, padding: "10px 14px", margin: "0 12px 10px", cursor: "pointer", textAlign: "left", boxShadow: "0 1px 8px rgba(0,0,0,0.05)" }}>
-      <div style={{ position: "relative", width: 52, height: 70, borderRadius: RADIUS.lg, overflow: "hidden", background: "#000", flexShrink: 0 }}>
-        {item.image ? (
-          <img src={item.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: item.contentRating === "sensitive" ? "blur(10px)" : "none" }} />
-        ) : item.videoUrl ? (
-          <video src={item.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", filter: item.contentRating === "sensitive" ? "blur(10px)" : "none" }} />
-        ) : null}
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Play size={14} color="#fff" fill="#fff" />
-        </div>
+    <button onClick={() => onOpen(post)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "transparent", border: "none", padding: "9px 16px", cursor: "pointer", textAlign: "left" }}>
+      <div style={{ position: "relative", width: 44, height: 44, borderRadius: RADIUS.sm, overflow: "hidden", background: colors.surfaceAlt, flexShrink: 0 }}>
+        {post.image ? (
+          <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: post.contentRating === "sensitive" ? "blur(8px)" : "none" }} />
+        ) : post.videoUrl ? (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={14} color={colors.textFaint} /></div>
+        ) : (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><Repeat2 size={14} color={colors.textFaint} /></div>
+        )}
+        {isInstant && <Footprints size={11} color="#fff" style={{ position: "absolute", right: 3, bottom: 3, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }} />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <span className="flex items-center gap-1" style={{ display: "inline-flex", fontSize: 10, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "2px 8px 2px 6px", marginBottom: 5 }}>
-          <Footprints size={10} /> Instant
-        </span>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: colors.text }}>{item.nom}</div>
-        {item.texte && <div style={{ fontSize: 11.5, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.texte}</div>}
+        <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{post.nom}</div>
+        <div style={{ fontSize: 12, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.titre || post.texte || "Publication"}</div>
       </div>
-      <ChevronRight size={16} color={colors.textFaint} />
+      <ChevronRight size={15} color={colors.textFaint} />
     </button>
   );
 }
@@ -3321,7 +3654,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
   const darkTabSwitcher = (
     <div className="flex gap-1.5" style={{ background: "rgba(0,0,0,0.35)", borderRadius: RADIUS.pill, padding: 3, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
       {options.map((o) => (
-        <button key={o.key} onClick={() => setTab(o.key)} style={{ border: "none", background: tab === o.key ? "rgba(255,255,255,0.95)" : "transparent", color: tab === o.key ? "#14170D" : "#fff", borderRadius: RADIUS.pill, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+        <button className="active:scale-[0.98] transition-transform" key={o.key} onClick={() => setTab(o.key)} style={{ border: "none", background: tab === o.key ? "rgba(255,255,255,0.95)" : "transparent", color: tab === o.key ? "#14170D" : "#fff", borderRadius: RADIUS.pill, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
           {o.label}
         </button>
       ))}
@@ -3342,13 +3675,19 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
             pointerEvents: chromeMode === "hidden" ? "none" : "auto",
           }}
         >
-          <SegmentedControl options={options} value={tab} onChange={setTab} />
+          <div className="flex gap-2">
+            {options.map((o) => (
+              <Chip key={o.key} label={o.label} active={tab === o.key} onClick={() => setTab(o.key)} solid />
+            ))}
+          </div>
         </div>
       )}
       {tab === "videos" && (
         <div className="flex items-center gap-2 px-4" style={{ paddingTop: 10, paddingBottom: 10 }}>
-          <div style={{ flex: 1 }}>
-            <SegmentedControl options={[{ key: "nouveautes", label: "Nouveautés" }, { key: "abonnements", label: "Abonnements" }]} value={videoSubTab} onChange={setVideoSubTab} />
+          <div className="flex gap-2" style={{ flex: 1 }}>
+            {[{ key: "nouveautes", label: "Nouveautés" }, { key: "abonnements", label: "Abonnements" }].map((o) => (
+              <Chip key={o.key} label={o.label} active={videoSubTab === o.key} onClick={() => setVideoSubTab(o.key)} solid />
+            ))}
           </div>
           <button onClick={() => setShowFollowing(true)} aria-label="Mes abonnements" style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
             <Users size={16} color={colors.textFaint} />
@@ -3522,26 +3861,33 @@ function GroupImageArea({ group, height = 92, iconSize = 20 }) {
     </div>
   );
 }
+// Ligne horizontale plutôt qu'une tuile en grille — miniature carrée, nom +
+// nombre de membres au centre, avatars des membres empilés à droite (jamais
+// inventés : voir groupService.fetchGroups, aperçu réel plafonné à 4).
 function GroupCategoryTile({ group, onOpen }) {
   const { colors } = useTheme();
+  const previews = group.memberPreviews || [];
   return (
-    <button onClick={() => onOpen(group)} className="active:scale-[0.97] transition-transform" style={{ textAlign: "left", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column", padding: 0 }}>
-      <div style={{ position: "relative" }}>
-        <GroupImageArea group={group} />
-        {group.imageUrl && (
-          <div style={{ position: "absolute", left: 10, right: 10, bottom: 8 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#fff", lineHeight: 1.2, textShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>{group.nom}</div>
-          </div>
-        )}
+    <button onClick={() => onOpen(group)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", textAlign: "left", background: colors.surface, borderRadius: RADIUS.lg, padding: "10px 12px", cursor: "pointer" }}>
+      <div style={{ width: 52, height: 52, borderRadius: RADIUS.md, overflow: "hidden", flexShrink: 0 }}>
+        <GroupImageArea group={group} height={52} iconSize={20} />
       </div>
-      <div style={{ padding: "10px 12px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-        {!group.imageUrl && <div style={{ fontSize: 13, fontWeight: 700, color: colors.text, lineHeight: 1.25 }}>{group.nom}</div>}
-        <div style={{ fontSize: 11, color: colors.textSecondary, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{group.description}</div>
-        <div className="flex items-center justify-between" style={{ marginTop: 2 }}>
-          <span style={{ fontSize: 10.5, color: colors.textFaint, fontWeight: 600 }}>{group.nombreMembres ?? 0} membre{(group.nombreMembres ?? 0) !== 1 ? "s" : ""}</span>
-          {group.joined && <Check size={13} color={colors.accent} strokeWidth={3} />}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="flex items-center gap-1.5">
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.nom}</span>
+          {group.joined && <Check size={13} color={colors.accent} strokeWidth={3} style={{ flexShrink: 0 }} />}
         </div>
+        <div style={{ fontSize: 11.5, color: colors.textFaint, marginTop: 1 }}>{group.nombreMembres ?? 0} membre{(group.nombreMembres ?? 0) !== 1 ? "s" : ""}</div>
       </div>
+      {previews.length > 0 && (
+        <div className="flex items-center" style={{ flexShrink: 0 }}>
+          {previews.map((url, i) => (
+            <div key={i} style={{ width: 26, height: 26, borderRadius: RADIUS.pill, overflow: "hidden", border: `2px solid ${colors.surface}`, marginLeft: i === 0 ? 0 : -8, boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }}>
+              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+          ))}
+        </div>
+      )}
     </button>
   );
 }
@@ -3641,17 +3987,40 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
   const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: "transparent", display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground />
       <div onScroll={handleScroll} style={{ flex: 1, overflowY: "auto" }}>
         <ScreenHeader title={group.nom} onBack={onClose} chromeMode={localMode} />
-        <div style={{ position: "relative", marginTop: 10, borderRadius: RADIUS.xl, overflow: "hidden" }}>
-          <GroupImageArea group={group} height={150} iconSize={26} />
+        <div style={{ position: "relative", margin: "10px 16px 0" }}>
+          {/* Halo ambiant : une copie floutée et agrandie de la photo de la
+              communauté déborde derrière la carte — la couleur de l'image
+              "s'étend" dans la page plutôt que de s'arrêter net à son bord,
+              comme sur la référence. */}
           {group.imageUrl && (
-            <div style={{ position: "absolute", left: 16, right: 16, bottom: 12 }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{group.nom}</div>
-            </div>
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: -28, right: -28, top: -28, bottom: -28,
+                backgroundImage: `url(${group.imageUrl})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                filter: "blur(34px) saturate(1.5)",
+                opacity: 0.55,
+                transform: "scale(1.08)",
+                zIndex: 0,
+                pointerEvents: "none",
+              }}
+            />
           )}
-          {canEditImage && (
+          <div style={{ position: "relative", zIndex: 1, borderRadius: RADIUS.xl, overflow: "hidden" }}>
+            <GroupImageArea group={group} height={150} iconSize={26} />
+            {group.imageUrl && (
+              <div style={{ position: "absolute", left: 16, right: 16, bottom: 12 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", textShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{group.nom}</div>
+              </div>
+            )}
+            {canEditImage && (
             <>
               <input ref={groupImageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickGroupImage} style={{ display: "none" }} />
               <button
@@ -3664,6 +4033,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
               </button>
             </>
           )}
+          </div>
         </div>
         {imageError && <div style={{ margin: "10px 16px 0", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "10px 14px", fontSize: 12, color: colors.error }}>{imageError}</div>}
         <div style={{ padding: "14px 16px" }}>
@@ -3722,8 +4092,8 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           ) : (
             <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
               {members.map((m) => (
-                <button key={m.id} onClick={() => onOpenProfile(m.username)} className="flex items-center gap-3" style={{ padding: "8px 4px", background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer" }}>
-                  <div style={{ width: 38, height: 38, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                <button key={m.id} onClick={() => onOpenProfile(m.username)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ padding: "8px 4px", background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                     {m.avatar ? <img src={m.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -3745,7 +4115,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           ) : (
             <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
               {discussions.map((d) => (
-                <button key={d.id} onClick={() => setOpenDiscussion(d)} className="flex items-center gap-3" style={{ width: "100%", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, padding: "12px 14px", cursor: "pointer", textAlign: "left" }}>
+                <button key={d.id} onClick={() => setOpenDiscussion(d)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, padding: "12px 14px", cursor: "pointer", textAlign: "left" }}>
                   <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <MessageSquare size={16} color={colors.accent} />
                   </div>
@@ -3861,7 +4231,8 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 71, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 71, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground muted />
       <ScreenHeader title={discussion.titre} onBack={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
@@ -3982,7 +4353,7 @@ function CreateGroupForm({ onClose, onCreated }) {
   };
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 46, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 46, background: colors.background, display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <ScreenHeader title="Créer une communauté" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickImage} style={{ display: "none" }} />
@@ -4014,8 +4385,10 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
   const [openGroup, setOpenGroup] = useState(null);
   const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("Toutes");
   const joined = groups.filter((g) => g.joined);
-  const filtered = query.trim() ? groups.filter((g) => g.nom.toLowerCase().includes(query.trim().toLowerCase())) : groups;
+  const searched = query.trim() ? groups.filter((g) => g.nom.toLowerCase().includes(query.trim().toLowerCase())) : groups;
+  const filtered = categoryFilter === "Toutes" ? searched : searched.filter((g) => g.categorie === categoryFilter);
   // La sélection ouverte doit refléter l'état à jour (ex. après un "Rejoindre").
   const currentOpen = openGroup ? groups.find((g) => g.id === openGroup.id) : null;
   return (
@@ -4041,10 +4414,15 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
           <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Communautés</span>
           <button onClick={() => setCreating(true)} style={{ border: `1px solid ${colors.accent}`, color: colors.accent, background: "transparent", borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>+ Créer</button>
         </div>
-        <div className="px-4 pb-4"><div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
+        <div className="px-4 pb-3"><div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
           <Search size={17} color={colors.textFaint} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une communauté" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
         </div></div>
+        <div className="flex gap-2 px-4 pb-4" style={{ overflowX: "auto" }}>
+          {["Toutes", ...Object.keys(CATEGORY_GRADIENTS)].map((c) => (
+            <Chip key={c} label={c} active={categoryFilter === c} onClick={() => setCategoryFilter(c)} />
+          ))}
+        </div>
       </div>
 
       {joined.length > 0 && (
@@ -4052,12 +4430,12 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
           <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>COMMUNAUTÉS REJOINTES</div>
         </div>
       )}
-      {joined.length > 0 && <div className="grid grid-cols-2 gap-3 px-4 pb-4">{joined.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>}
+      {joined.length > 0 && <div className="flex flex-col gap-2 px-4 pb-4">{joined.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>}
 
       {filtered.length === 0 ? (
         <EmptyState title="Aucune communauté trouvée" subtitle="Essayez un autre mot-clé ou créez votre propre communauté." ctaLabel="Créer une communauté" onCta={() => setCreating(true)} icon={Users} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 px-4 pb-4" style={{ paddingTop: joined.length > 0 ? 12 : 22 }}>{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
+        <div className="flex flex-col gap-2 px-4 pb-4" style={{ paddingTop: joined.length > 0 ? 12 : 22 }}>{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
       )}
 
       {currentOpen && (
@@ -4114,6 +4492,143 @@ const GROUP_CREATE_OPTIONS = [
   { key: "publication", label: "Publication", icon: Feather },
   { key: "group_discussion", label: "Discussion", icon: MessageSquare },
 ];
+// Recadrage d'une photo avant publication — cadre fixe 4/5 (même ratio que
+// l'affichage dans le fil, voir PostCard/MediaCarousel), on peut déplacer
+// l'image (glisser) et zoomer (curseur). "Valider" dessine la zone visible
+// sur un canvas et exporte un vrai blob recadré, pas juste un style CSS —
+// l'image publiée correspond exactement à ce qui a été montré ici.
+const CROP_OUT_W = 1080;
+const CROP_OUT_H = 1350; // 4/5
+function PhotoCropScreen({ file, onCancel, onDone }) {
+  const { colors } = useTheme();
+  const frameRef = useRef(null);
+  const imgRef = useRef(null);
+  const [frameW, setFrameW] = useState(320);
+  const [natural, setNatural] = useState(null); // { w, h }
+  const [zoom, setZoom] = useState(1); // multiplicateur au-dessus du "cover" de base
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const dragRef = useRef(null);
+  const [objectUrl, setObjectUrl] = useState(null);
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setObjectUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  useEffect(() => {
+    const measure = () => { if (frameRef.current) setFrameW(frameRef.current.getBoundingClientRect().width); };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  const frameH = frameW * (CROP_OUT_H / CROP_OUT_W);
+  const baseScale = natural ? Math.max(frameW / natural.w, frameH / natural.h) : 1;
+  const displayScale = baseScale * zoom;
+  const displayW = natural ? natural.w * displayScale : frameW;
+  const displayH = natural ? natural.h * displayScale : frameH;
+
+  const clampOffset = (o, dw, dh) => ({
+    x: Math.min(0, Math.max(frameW - dw, o.x)),
+    y: Math.min(0, Math.max(frameH - dh, o.y)),
+  });
+
+  const onImgLoad = () => {
+    const img = imgRef.current;
+    const w = img.naturalWidth, h = img.naturalHeight;
+    setNatural({ w, h });
+    const bs = Math.max(frameW / w, frameH / h);
+    const dw = w * bs, dh = h * bs;
+    setOffset({ x: (frameW - dw) / 2, y: (frameH - dh) / 2 });
+  };
+
+  const onZoomChange = (z) => {
+    if (!natural) { setZoom(z); return; }
+    // Recentre autour du centre du cadre pour que le zoom ne "saute" pas.
+    const oldDW = natural.w * baseScale * zoom, oldDH = natural.h * baseScale * zoom;
+    const cx = offset.x - frameW / 2, cy = offset.y - frameH / 2; // centre relatif, en unités "avant zoom"
+    const newDW = natural.w * baseScale * z, newDH = natural.h * baseScale * z;
+    const ratioW = newDW / oldDW, ratioH = newDH / oldDH;
+    const next = { x: cx * ratioW + frameW / 2, y: cy * ratioH + frameH / 2 };
+    setZoom(z);
+    setOffset(clampOffset(next, newDW, newDH));
+  };
+
+  const onPointerDown = (e) => {
+    const p = e.touches ? e.touches[0] : e;
+    dragRef.current = { startX: p.clientX, startY: p.clientY, startOffset: offset };
+  };
+  const onPointerMove = (e) => {
+    if (!dragRef.current) return;
+    const p = e.touches ? e.touches[0] : e;
+    const dx = p.clientX - dragRef.current.startX;
+    const dy = p.clientY - dragRef.current.startY;
+    const next = { x: dragRef.current.startOffset.x + dx, y: dragRef.current.startOffset.y + dy };
+    setOffset(clampOffset(next, displayW, displayH));
+  };
+  const onPointerUp = () => { dragRef.current = null; };
+
+  const [exporting, setExporting] = useState(false);
+  const confirm = () => {
+    if (!natural) return;
+    setExporting(true);
+    const canvas = document.createElement("canvas");
+    canvas.width = CROP_OUT_W;
+    canvas.height = CROP_OUT_H;
+    const ctx = canvas.getContext("2d");
+    const f = CROP_OUT_W / frameW; // frameW/frameH ont le même ratio que CROP_OUT_W/H
+    ctx.drawImage(imgRef.current, offset.x * f, offset.y * f, displayW * f, displayH * f);
+    canvas.toBlob((blob) => {
+      setExporting(false);
+      if (blob) onDone(new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }));
+      else onCancel();
+    }, "image/jpeg", 0.9);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 80, background: "#0A0A08", display: "flex", flexDirection: "column" }}>
+      <div className="flex items-center justify-between" style={{ padding: "14px 16px", paddingTop: "calc(14px + env(safe-area-inset-top, 0px))" }}>
+        <button onClick={onCancel} style={{ background: "none", border: "none", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>Annuler</button>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Recadrer la photo</span>
+        <button onClick={confirm} disabled={exporting} style={{ background: "none", border: "none", color: colors.accent, fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>{exporting ? "..." : "Valider"}</button>
+      </div>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 16px" }}>
+        <div
+          ref={frameRef}
+          onMouseDown={onPointerDown}
+          onMouseMove={onPointerMove}
+          onMouseUp={onPointerUp}
+          onMouseLeave={onPointerUp}
+          onTouchStart={onPointerDown}
+          onTouchMove={onPointerMove}
+          onTouchEnd={onPointerUp}
+          style={{ width: "100%", maxWidth: 360, aspectRatio: `${CROP_OUT_W} / ${CROP_OUT_H}`, position: "relative", overflow: "hidden", background: "#000", borderRadius: RADIUS.md, touchAction: "none", cursor: "grab" }}
+        >
+          <img
+            ref={imgRef}
+            src={objectUrl}
+            alt=""
+            onLoad={onImgLoad}
+            draggable={false}
+            style={{ position: "absolute", left: offset.x, top: offset.y, width: displayW, height: displayH, maxWidth: "none", pointerEvents: "none", userSelect: "none" }}
+          />
+        </div>
+      </div>
+      <div style={{ padding: "10px 28px calc(24px + env(safe-area-inset-bottom, 0px))" }}>
+        <input
+          type="range"
+          min={1}
+          max={3}
+          step={0.01}
+          value={zoom}
+          onChange={(e) => onZoomChange(parseFloat(e.target.value))}
+          style={{ width: "100%", accentColor: colors.accent }}
+        />
+      </div>
+    </div>
+  );
+}
 function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPost, groupId }) {
   const { colors } = useTheme();
   const label = editingPost ? "Modifier" : CREATE_OPTIONS.find((o) => o.key === type)?.label || "Publication";
@@ -4126,6 +4641,16 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const [mediaFiles, setMediaFiles] = useState([]);
   const [mediaDurations, setMediaDurations] = useState([]);
   const [mediaError, setMediaError] = useState("");
+  // File d'attente de recadrage : les index (dans mediaFiles) des photos
+  // fraîchement sélectionnées, traitées une par une via PhotoCropScreen.
+  const [cropQueue, setCropQueue] = useState([]);
+  const [cropIndex, setCropIndex] = useState(0);
+  const [mediaPreviewUrls, setMediaPreviewUrls] = useState([]);
+  useEffect(() => {
+    const urls = mediaFiles.map((f) => URL.createObjectURL(f));
+    setMediaPreviewUrls(urls);
+    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [mediaFiles]);
   const [titre, setTitre] = useState(editingPost?.titre || "");
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
@@ -4171,11 +4696,28 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     v.onerror = () => { clearTimeout(timer); URL.revokeObjectURL(v.src); resolve(null); };
   });
 
+  // Après sélection, on propose de recadrer chaque photo (pas les vidéos)
+  // une par une — voir PhotoCropScreen. L'utilisateur peut annuler un
+  // recadrage donné : la photo reste alors telle quelle, jamais bloquant.
+  const startCropQueue = (fileList) => {
+    const indices = fileList.map((f, i) => (f.type.startsWith("image") ? i : null)).filter((i) => i !== null);
+    if (indices.length > 0) { setCropQueue(indices); setCropIndex(0); }
+  };
+  const onCropDone = (croppedFile) => {
+    const idx = cropQueue[cropIndex];
+    setMediaFiles((prev) => prev.map((f, i) => (i === idx ? croppedFile : f)));
+    advanceCrop();
+  };
+  const advanceCrop = () => {
+    if (cropIndex + 1 < cropQueue.length) setCropIndex((i) => i + 1);
+    else { setCropQueue([]); setCropIndex(0); }
+  };
+
   const pickMedia = async (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = "";
     setMediaError("");
-    if (!isVideoType && !allowVideoInPublication) { setMediaFiles(files); return; }
+    if (!isVideoType && !allowVideoInPublication) { setMediaFiles(files); startCropQueue(files); return; }
     const maxSeconds = type === "video_courte" ? 60 : 1800;
     const valid = [];
     const durations = [];
@@ -4202,6 +4744,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     }
     setMediaFiles(valid);
     setMediaDurations(durations);
+    startCropQueue(valid);
   };
 
   const pickThumbnail = (e) => {
@@ -4247,6 +4790,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             texte: saved.texte,
             image: saved.media?.[0]?.type === "video" ? saved.media?.[0]?.thumbnail_url || null : saved.media?.[0]?.url || null,
             videoUrl: saved.media?.[0]?.type === "video" ? saved.media[0].url : null,
+            media: saved.media || [],
             type: saved.type, animal: saved.animal, pratique: saved.pratique,
             contentRating: saved.content_rating, hashtags: saved.hashtags || [], mentions: saved.mentions || [],
             likes: 0, commentaires: 0, date: "à l'instant", createdAt: Date.now(), titre: saved.titre || saved.texte,
@@ -4262,7 +4806,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <ScreenHeader title={label} onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <TextField label={captionLabel} value={text} onChange={setText} placeholder="Ajouter une description... (#hashtag, @mention)" textarea rows={isPoll ? 2 : 4} />
@@ -4298,11 +4842,33 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             {mediaFiles.length > 0 && (
               <div className="flex flex-wrap gap-2" style={{ marginTop: 10 }}>
                 {mediaFiles.map((f, i) => (
-                  <span key={i} style={{ fontSize: 11, color: colors.textSecondary, background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px" }}>{f.name}</span>
+                  <div key={i} style={{ position: "relative", width: 64, height: 64, borderRadius: RADIUS.sm, overflow: "hidden", background: colors.surfaceAlt }}>
+                    {f.type.startsWith("image") ? (
+                      <img src={mediaPreviewUrls[i]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Video size={18} color={colors.textFaint} /></div>
+                    )}
+                    {f.type.startsWith("image") && (
+                      <button
+                        onClick={() => { setCropQueue([i]); setCropIndex(0); }}
+                        aria-label="Recadrer cette photo"
+                        style={{ position: "absolute", right: 3, bottom: 3, width: 22, height: 22, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.55)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                      >
+                        <Crop size={11} color="#fff" />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
           </div>
+        )}
+        {cropQueue.length > 0 && mediaFiles[cropQueue[cropIndex]] && (
+          <PhotoCropScreen
+            file={mediaFiles[cropQueue[cropIndex]]}
+            onCancel={advanceCrop}
+            onDone={onCropDone}
+          />
         )}
 
         {type === "video" && !editingPost && mediaFiles.length > 0 && (
@@ -4428,7 +4994,7 @@ function TraceComposeScreen({ onClose, onPublished }) {
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <ScreenHeader title="Nouvelle Trace" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={inputRef} type="file" accept="image/*,video/*" onChange={pick} style={{ display: "none" }} />
@@ -4487,7 +5053,7 @@ function GroupDiscussionComposeScreen({ groupId, onClose, onPublished }) {
   };
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <ScreenHeader title="Nouvelle discussion" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <TextField label="Titre de la discussion" value={titre} onChange={setTitre} placeholder="ex : Retours sur l'ouverture de la battue" />
@@ -4511,6 +5077,59 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, onDiscus
     if (initialType && !editingPost) { setType(initialType); setStep("compose"); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialType]);
+  // Tous les hooks du menu radial vivent ici, AVANT tout retour conditionnel
+  // (règle des Hooks : ce composant reste monté en permanence — piloté par
+  // "open", pas par un montage/démontage — donc le nombre de hooks appelés
+  // doit être identique à chaque rendu, que "open" soit vrai ou faux, ou que
+  // l'étape soit "pick" ou "compose". Les avoir déclarés plus bas, après les
+  // "return" de "compose", provoquait un plantage total (page blanche) dès
+  // qu'on ouvrait le "+", car React recevait alors plus de hooks que lors du
+  // rendu précédent.
+  const radialOptions = groupId ? GROUP_CREATE_OPTIONS : CREATE_OPTIONS;
+  const R = 108;
+  const angleFor = (i) => -90 + i * (360 / radialOptions.length);
+  const [dragKey, setDragKey] = useState(null);
+  const wheelRef = useRef(null);
+  const draggingRef = useRef(false);
+
+  const keyAtPoint = (clientX, clientY) => {
+    const el = wheelRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 30) return null; // trop près du centre : pas encore d'intention claire
+    let angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+    let best = null;
+    let bestDiff = Infinity;
+    radialOptions.forEach((o, i) => {
+      const a = angleFor(i);
+      const diff = Math.abs(((angleDeg - a + 540) % 360) - 180);
+      if (diff < bestDiff) { bestDiff = diff; best = o.key; }
+    });
+    return bestDiff < 45 ? best : null;
+  };
+
+  const onWheelTouchStart = (e) => {
+    draggingRef.current = true;
+    const t = e.touches[0];
+    setDragKey(keyAtPoint(t.clientX, t.clientY));
+  };
+  const onWheelTouchMove = (e) => {
+    if (!draggingRef.current) return;
+    const t = e.touches[0];
+    setDragKey(keyAtPoint(t.clientX, t.clientY));
+  };
+  const onWheelTouchEnd = () => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    if (dragKey) { setType(dragKey); setStep("compose"); }
+    setDragKey(null);
+  };
+
   if (!open) return null;
   const close = () => { setStep("pick"); setType(null); onClose(); };
   if (step === "compose" && type === "trace") {
@@ -4532,23 +5151,91 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, onDiscus
       />
     );
   }
-  // Pilule unique à 4 choix (au lieu d'une grille 2x4 avec Photo/Discussion/
-  // Sondage/Sortie séparés) — "simplifier" demandé explicitement : Photo et
-  // Sondage vivent maintenant dans "Publication" (voir ComposeScreen).
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
-      <div onClick={close} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
-      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div className="flex" style={{ width: "100%", maxWidth: 400, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.pill, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", padding: 6, gap: 2, pointerEvents: "auto" }}>
-          {(groupId ? GROUP_CREATE_OPTIONS : CREATE_OPTIONS).map((o) => {
+      <div onClick={close} style={{ position: "absolute", inset: 0, background: "rgba(8,9,6,0.78)" }} />
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div
+          ref={wheelRef}
+          onTouchStart={onWheelTouchStart}
+          onTouchMove={onWheelTouchMove}
+          onTouchEnd={onWheelTouchEnd}
+          onTouchCancel={() => { draggingRef.current = false; setDragKey(null); }}
+          style={{ position: "relative", width: R * 2 + 60, height: R * 2 + 60, touchAction: "none" }}
+        >
+          {radialOptions.map((o, i) => {
             const Icon = o.icon;
+            const angleDeg = angleFor(i);
+            const angleRad = (angleDeg * Math.PI) / 180;
+            const x = Math.cos(angleRad) * R;
+            const y = Math.sin(angleRad) * R;
+            const isDragHover = dragKey === o.key;
             return (
-              <button key={o.key} onClick={() => { setType(o.key); setStep("compose"); }} className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform" style={{ flex: 1, border: "none", borderRadius: RADIUS.pill, padding: "10px 4px 8px", background: "transparent", cursor: "pointer" }}>
-                <div style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon size={17} color={colors.accent} strokeWidth={1.8} /></div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: colors.text }}>{o.label}</span>
-              </button>
+              <React.Fragment key={o.key}>
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: "50%",
+                    width: R - 34,
+                    height: 0,
+                    borderTop: `1.5px dashed rgba(255,255,255,${isDragHover ? 0.7 : 0.28})`,
+                    transformOrigin: "0 0",
+                    transform: `rotate(${angleDeg}deg)`,
+                    transition: "border-color 120ms ease",
+                  }}
+                />
+                <button
+                  onClick={() => { setType(o.key); setStep("compose"); }}
+                  className="flex flex-col items-center gap-2 active:scale-90 transition-transform"
+                  style={{
+                    position: "absolute", left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`, width: 68, border: "none", background: "transparent", cursor: "pointer", padding: 0,
+                    animation: `piste-radial-pop 380ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 40}ms both`,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: isDragHover ? 62 : 54,
+                      height: isDragHover ? 62 : 54,
+                      borderRadius: RADIUS.pill,
+                      background: isDragHover ? colors.accent : "rgba(255,255,255,0.1)",
+                      backdropFilter: "blur(16px)",
+                      WebkitBackdropFilter: "blur(16px)",
+                      border: `1px solid ${isDragHover ? colors.accent : "rgba(255,255,255,0.22)"}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: isDragHover ? `0 8px 26px ${colors.accent}80` : "0 8px 22px rgba(0,0,0,0.35)",
+                      transition: "width 140ms ease, height 140ms ease, background 140ms ease, box-shadow 140ms ease",
+                    }}
+                  >
+                    <Icon size={21} color={isDragHover ? colors.onAccent : "#fff"} strokeWidth={1.7} />
+                  </div>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{o.label}</span>
+                </button>
+              </React.Fragment>
             );
           })}
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              width: 66,
+              height: 66,
+              borderRadius: RADIUS.pill,
+              background: colors.accent,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: `0 8px 26px ${colors.accent}80`,
+              animation: "piste-radial-pop 340ms cubic-bezier(0.22, 1, 0.36, 1) both",
+              pointerEvents: "none",
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <Plus size={26} color={colors.onAccent} strokeWidth={2.4} />
+          </div>
         </div>
       </div>
     </div>
@@ -4611,16 +5298,28 @@ function ProfileEditor({ profile, onClose, onSave }) {
   const toggleInterest = (i) => setForm({ ...form, interets: form.interets.includes(i) ? form.interets.filter((x) => x !== i) : [...form.interets, i] });
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <ScreenHeader title="Modifier le profil" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <input ref={bannerInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickBanner} style={{ display: "none" }} />
+        {/* Cette photo n'est plus affichée comme un simple rectangle sur le
+            profil : très floutée, elle sert de fond ambiant derrière toutes
+            les pages de l'app (voir AmbientBackground). */}
         <button
           onClick={() => bannerInputRef.current?.click()}
-          style={{ width: "100%", height: 100, background: bannerPreview ? `url(${bannerPreview}) center/cover` : colors.surfaceAlt, position: "relative", border: "none", padding: 0, cursor: "pointer", display: "block" }}
+          className="active:scale-[0.99] transition-transform"
+          style={{ width: "100%", height: 120, background: bannerPreview ? `url(${bannerPreview}) center/cover` : colors.surfaceAlt, position: "relative", border: "none", padding: 0, cursor: "pointer", display: "block" }}
         >
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: bannerPreview ? "rgba(0,0,0,0.25)" : "transparent" }}><Camera size={20} color={bannerPreview ? "#fff" : colors.textFaint} /></div>
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, background: bannerPreview ? "rgba(0,0,0,0.32)" : "transparent" }}>
+            <Camera size={20} color={bannerPreview ? "#fff" : colors.textFaint} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: bannerPreview ? "#fff" : colors.textFaint, textShadow: bannerPreview ? "0 1px 3px rgba(0,0,0,0.4)" : "none" }}>
+              {bannerPreview ? "Changer la bannière" : "Ajouter une bannière"}
+            </span>
+          </div>
         </button>
+        <div style={{ padding: "6px 20px 0" }}>
+          <span style={{ fontSize: 11, color: colors.textFaint, lineHeight: 1.5 }}>Cette photo devient le fond, très flouté, de toutes vos pages PISTE.</span>
+        </div>
         <div style={{ padding: "0 20px" }}>
           <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickAvatar} style={{ display: "none" }} />
           <button
@@ -4680,7 +5379,7 @@ function DogFormScreen({ onClose, onSaved }) {
   };
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <ScreenHeader title="Ajouter un chien" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickPhoto} style={{ display: "none" }} />
@@ -4761,7 +5460,8 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: "transparent", display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground />
       <ScreenHeader title={dog.nom} onBack={onClose} />
       <div className="px-5 pt-4">
         <div style={{ width: 64, height: 64, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden" }}>
@@ -4857,7 +5557,8 @@ function SinglePostViewer({ post, autoOpenComments, onClose, onOpenProfile, meUs
   }, []);
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 91, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 91, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground />
       <ScreenHeader title="Publication" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", paddingTop: 8 }}>
         <PostCard
@@ -4982,7 +5683,7 @@ function UserPickerField({ label, selected, onChange, placeholder }) {
               <div style={{ padding: 12, fontSize: 12, color: colors.textFaint, textAlign: "center" }}>Aucun résultat.</div>
             ) : (
               results.map((u) => (
-                <button key={u.id} onClick={() => add(u)} className="flex items-center gap-2" style={{ width: "100%", background: "none", border: "none", padding: "9px 12px", cursor: "pointer", textAlign: "left" }}>
+                <button key={u.id} onClick={() => add(u)} className="flex items-center gap-2 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 12px", cursor: "pointer", textAlign: "left" }}>
                   <div style={{ width: 26, height: 26, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={12} color={colors.textFaint} />}
                   </div>
@@ -5073,7 +5774,7 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <ScreenHeader title={isEdit ? "Modifier la sortie" : "Nouvelle sortie"} onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <TextField label="Date" value={date} onChange={setDate} type="date" />
@@ -5215,9 +5916,9 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "82vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "82vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{formatRelativeDate(log.date)}</span>
@@ -5248,7 +5949,7 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
                 <div style={{ fontSize: 11, fontWeight: 700, color: colors.textFaint, marginBottom: 6 }}>AVEC</div>
                 <div className="flex flex-wrap gap-1.5">
                   {log.companions.map((c) => (
-                    <button key={c.id} onClick={() => onOpenProfile?.(c.username)} className="flex items-center gap-1.5" style={{ background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.pill, padding: "4px 10px 4px 4px", cursor: onOpenProfile ? "pointer" : "default" }}>
+                    <button key={c.id} onClick={() => onOpenProfile?.(c.username)} className="flex items-center gap-1.5 active:scale-[0.98] transition-transform" style={{ background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.pill, padding: "4px 10px 4px 4px", cursor: onOpenProfile ? "pointer" : "default" }}>
                       <div style={{ width: 20, height: 20, borderRadius: RADIUS.pill, background: colors.accentSoft, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={10} color={colors.accent} />}
                       </div>
@@ -5473,7 +6174,8 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
   const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 65, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 65, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground />
       <ScreenHeader title="Carnet de chasse" onBack={onClose} />
       <div className="flex items-center gap-1.5" style={{ padding: "10px 16px 0", fontSize: 11, color: colors.textFaint }}>
         <Lock size={11} /><span>Strictement privé — visible par vous et les personnes que vous identifiez sur une sortie.</span>
@@ -5515,30 +6217,40 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
             {filtered.length === 0 ? (
               <EmptyState title={logs.length === 0 ? "Aucune sortie enregistrée" : "Aucun résultat"} subtitle={logs.length === 0 ? "Ajoutez votre première sortie pour commencer votre carnet." : "Essayez d'autres filtres."} ctaLabel={logs.length === 0 ? "Ajouter une sortie" : undefined} onCta={logs.length === 0 ? () => setShowForm(true) : undefined} icon={Footprints} />
             ) : (
-              <div className="flex flex-col gap-2" style={{ padding: "4px 16px 90px" }}>
-                {filtered.map((l) => (
-                  <button key={l.id} onClick={() => setDetailLog(l)} className="flex items-center gap-3" style={{ width: "100%", background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.xl, padding: "12px 14px", cursor: "pointer", textAlign: "left" }}>
-                    {l.photos.length > 0 ? (
-                      <img src={l.photos[0].url} alt="" style={{ width: 48, height: 48, borderRadius: RADIUS.lg, objectFit: "cover", flexShrink: 0 }} />
-                    ) : (
-                      <div style={{ width: 48, height: 48, borderRadius: RADIUS.lg, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <Footprints size={20} color={colors.accent} />
-                      </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="flex items-center gap-2">
-                        <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{l.lieuNom || HUNTING_TYPE_LABEL[l.typeSortie]}</span>
-                        {l.avecChien && <Dog size={12} color={colors.textFaint} />}
-                        {!l.isOwner && (
-                          <span style={{ fontSize: 9.5, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "2px 7px", flexShrink: 0 }}>{l.owner?.nom || "Compagnon"}</span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 11.5, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {new Date(l.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })} · {HUNTING_TYPE_LABEL[l.typeSortie]}{l.espece ? ` · ${l.espece}` : ""}
-                      </div>
+              // Le carnet est une PISTE, pas une liste de fiches : chaque
+              // sortie est un point sur un fil chronologique continu, comme
+              // des empreintes reliées entre elles — pas de card générique
+              // "bouton → rectangle" pour l'objet le plus identitaire de l'app.
+              <div style={{ padding: "4px 16px 90px" }}>
+                {filtered.map((l, i) => (
+                  <div key={l.id} className="flex items-stretch gap-3">
+                    <div className="flex flex-col items-center" style={{ width: 14, flexShrink: 0 }}>
+                      <div style={{ width: 11, height: 11, borderRadius: RADIUS.pill, background: colors.accent, boxShadow: `0 0 0 4px ${colors.accentSoft}`, flexShrink: 0, marginTop: 20 }} />
+                      {i < filtered.length - 1 && <div style={{ width: 1.5, flex: 1, background: colors.border, marginTop: 5, marginBottom: -10 }} />}
                     </div>
-                    <ChevronRight size={16} color={colors.textFaint} />
-                  </button>
+                    <button onClick={() => setDetailLog(l)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ flex: 1, minWidth: 0, background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.xl, padding: "12px 14px", marginBottom: 14, cursor: "pointer", textAlign: "left" }}>
+                      {l.photos.length > 0 ? (
+                        <img src={l.photos[0].url} alt="" style={{ width: 48, height: 48, borderRadius: RADIUS.lg, objectFit: "cover", flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 48, height: 48, borderRadius: RADIUS.lg, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <Footprints size={20} color={colors.accent} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="flex items-center gap-2">
+                          <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{l.lieuNom || HUNTING_TYPE_LABEL[l.typeSortie]}</span>
+                          {l.avecChien && <Dog size={12} color={colors.textFaint} />}
+                          {!l.isOwner && (
+                            <span style={{ fontSize: 9.5, fontWeight: 700, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "2px 7px", flexShrink: 0 }}>{l.owner?.nom || "Compagnon"}</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {new Date(l.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })} · {HUNTING_TYPE_LABEL[l.typeSortie]}{l.espece ? ` · ${l.espece}` : ""}
+                        </div>
+                      </div>
+                      <ChevronRight size={16} color={colors.textFaint} />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -5578,9 +6290,88 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
     </div>
   );
 }
+// Barre d'onglets texte plat + soulignement — comme la référence (pas de
+// pilule segmentée) : réutilisée par le profil personnel et celui des
+// autres utilisateurs pour rester cohérent.
+function ProfileTabBar({ tabs, tab, setTab }) {
+  const { colors } = useTheme();
+  return (
+    <div className="flex" style={{ borderBottom: `1px solid ${colors.border}` }}>
+      {tabs.map(([key, label]) => (
+        <button
+          key={key}
+          onClick={() => setTab(key)}
+          className="flex-1 active:scale-[0.98] transition-transform"
+          style={{ textAlign: "center", padding: "11px 4px", background: "none", border: "none", cursor: "pointer", borderBottom: `2px solid ${tab === key ? colors.accent : "transparent"}`, marginBottom: -1 }}
+        >
+          <span style={{ fontSize: 12.5, fontWeight: tab === key ? 700 : 600, color: tab === key ? colors.text : colors.textFaint }}>{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+// Grille carrée 3 colonnes des publications — comme la référence, plutôt
+// qu'une liste verticale de cartes complètes. Une pastille signale les
+// publications à plusieurs médias, l'icône lecture les vidéos.
+function PublicationsGrid({ posts, onOpen, emptyTitle, emptySubtitle, onAdd }) {
+  const { colors } = useTheme();
+  if (posts.length === 0) return <EmptyState title={emptyTitle} subtitle={emptySubtitle} onAdd={onAdd} icon={Feather} />;
+  return (
+    <div className="grid grid-cols-3 gap-2.5">
+      {posts.map((p) => (
+        <button key={p.id} onClick={() => onOpen(p)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
+          {p.image ? (
+            <img src={p.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
+              <span style={{ fontSize: 10.5, color: colors.textFaint, textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}>{p.texte || p.titre}</span>
+            </div>
+          )}
+          {p.media?.length > 1 && (
+            <span style={{ position: "absolute", top: 5, right: 5, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.5)", borderRadius: RADIUS.pill, padding: "1.5px 5px" }}>{p.media.length}</span>
+          )}
+          {p.videoUrl && <Play size={14} color="#fff" fill="#fff" style={{ position: "absolute", top: 6, right: 6, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }} />}
+        </button>
+      ))}
+    </div>
+  );
+}
+// Grille carrée 3 colonnes des vidéos du profil — comme le panneau "Vidéos"
+// de la référence (miniature + durée), plutôt que la carte pleine largeur
+// du fil Vidéos général : ici on parcourt vite, on ne lit pas en scrollant.
+function VideoThumbGrid({ videos, onOpen, emptyTitle, emptySubtitle }) {
+  const { colors } = useTheme();
+  if (videos.length === 0) return <EmptyState title={emptyTitle} subtitle={emptySubtitle} icon={Film} />;
+  return (
+    <div className="grid grid-cols-3 gap-2.5">
+      {videos.map((v) => (
+        <button key={v.id} onClick={() => onOpen(v)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
+          {v.image ? <img src={v.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Film size={18} color={colors.textFaint} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)" }} />}
+          <Play size={13} color="#fff" fill="#fff" style={{ position: "absolute", top: 6, right: 6, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }} />
+          {v.duree && <span style={{ position: "absolute", left: 5, bottom: 5, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "1.5px 5px" }}>{v.duree}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+// Ouvre une publication de la grille en plein écran — la grille ne montre
+// que des vignettes, toutes les interactions (like, commentaires, actions)
+// vivent ici comme sur n'importe quelle publication du fil.
+function SinglePostOverlay({ post, onClose, ...postCardProps }) {
+  const { colors } = useTheme();
+  const swipeBack = useSwipeBack(onClose);
+  return (
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 66, background: "transparent", display: "flex", flexDirection: "column", animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground />
+      <ScreenHeader title="Publication" onBack={onClose} />
+      <div style={{ flex: 1, overflowY: "auto", paddingTop: 6 }}>
+        <PostCard post={post} {...postCardProps} />
+      </div>
+    </div>
+  );
+}
 function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile, chromeMode = "full", incomingRequestsCount = 0, onApproveRequest, onRejectRequest, traceGroup, onOpenTrace, onOpenFollowers, onCreatePost }) {
   const { colors } = useTheme();
-  const [tab, setTab] = useState("publications");
   const [editing, setEditing] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
   const [showCarnet, setShowCarnet] = useState(false);
@@ -5591,8 +6382,10 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
   const [sheet, setSheet] = useState(null);
   const [repostedPosts, setRepostedPosts] = useState([]);
   const [repostsLoading, setRepostsLoading] = useState(true);
-  const tabs = [["publications", "Publications", Home], ["videos", "Vidéos", Video], ["chiens", "Chiens", Dog], ["reposts", "Reposts", Repeat2]];
+  const [tab, setTab] = useState("publications");
+  const [openPost, setOpenPost] = useState(null);
   const stats = profile.statistiques || { abonnes: 0, abonnements: 0, publications: posts.length };
+  const profileTabs = [["publications", "Publications"], ["videos", "Vidéos"], ["chiens", "Chiens"], ["reposts", "Repost"]];
   const meName = profile.nom || "Vous";
 
   useEffect(() => {
@@ -5606,61 +6399,64 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
 
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ width: "100%", height: 124, marginTop: 10, background: profile.imageCouverture ? `url(${profile.imageCouverture}) center/cover` : `linear-gradient(135deg, ${colors.accentSoft}, ${colors.surfaceAlt})`, borderRadius: RADIUS.xl }} />
-      <div className="px-4">
-        <div style={{ marginTop: -40 }}>
+      {/* Plus de rectangle de bannière : elle vit désormais en arrière-plan
+          de toute la page (AmbientBackground, très floutée). L'avatar est
+          donc centré en haut plutôt que collé/débordant sur une bannière
+          qui n'existe plus visuellement ici. */}
+      <div className="px-4" style={{ marginTop: 18, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+        <div>
           {traceGroup && traceGroup.traces.length > 0 ? (
             <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
-              <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
-                <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: `3px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.16)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={32} color={colors.textFaint} strokeWidth={1.6} />}
+              <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
+                <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: `3px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
                 </div>
               </div>
             </button>
           ) : (
-            <div style={{ width: 80, height: 80, borderRadius: RADIUS.pill, background: colors.surface, border: `4px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.16)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={32} color={colors.textFaint} strokeWidth={1.6} />}
+            <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: `4px solid ${colors.background}`, boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
             </div>
           )}
         </div>
-        <div style={{ marginTop: 10 }}>
-          <div className="flex items-start justify-between" style={{ gap: 10 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{profile.nom || "Votre nom"}</div>
-              <div style={{ fontSize: 13, color: colors.textFaint }}>@{profile.username || "handle"}</div>
-            </div>
-            <button onClick={() => setEditing(true)} style={{ flexShrink: 0, border: "none", background: colors.surfaceAlt, color: colors.text, borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Modifier</button>
-          </div>
-          <BadgeRow badges={profile.badges} />
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{profile.nom || "Votre nom"}</div>
+          <div style={{ fontSize: 13, color: colors.textFaint }}>@{profile.username || "handle"}</div>
+          <div className="flex justify-center"><BadgeRow badges={profile.badges} /></div>
           {profile.localisation && (
-            <div className="flex items-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px" }}>
+            <div className="flex items-center justify-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px" }}>
               <MapPin size={12} color={colors.textFaint} /><span style={{ fontSize: 12, color: colors.textSecondary }}>{profile.localisation}</span>
             </div>
           )}
-          <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 10, lineHeight: 1.5, background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "10px 12px" }}>{profile.bio || "Aucune biographie renseignée pour le moment."}</div>
+          {/* Bio et statistiques en texte nu, sans pilule de fond — la
+              référence n'encadre jamais une information purement textuelle,
+              seul ce qui se touche/se filtre mérite un fond translucide. */}
+          <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 10, lineHeight: 1.5, maxWidth: 300 }}>{profile.bio || "Aucune biographie renseignée pour le moment."}</div>
         </div>
-        <div style={{ marginTop: 14, background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.lg, padding: "12px 4px", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }} className="flex">
-          {[["Abonnés", stats.abonnes, "followers"], ["Abonnements", stats.abonnements, "following"], ["Publications", posts.length, null]].map(([label, val, mode]) => (
+        <button onClick={() => setEditing(true)} className="active:scale-[0.98] transition-transform" style={{ marginTop: 14, border: `1.5px solid ${colors.border}`, background: "transparent", color: colors.text, borderRadius: RADIUS.pill, padding: "8px 20px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Modifier le profil</button>
+        <div style={{ marginTop: 18, padding: "0 4px", width: "100%" }} className="flex">
+          {[["Publications", posts.length, null], ["Abonnés", stats.abonnes, "followers"], ["Abonnements", stats.abonnements, "following"]].map(([label, val, mode]) => (
             mode ? (
-              <button key={label} onClick={() => { setFollowSheet(mode); if (mode === "followers") onOpenFollowers?.(); }} style={{ flex: 1, textAlign: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
+              <button className="active:scale-[0.98] transition-transform" key={label} onClick={() => { setFollowSheet(mode); if (mode === "followers") onOpenFollowers?.(); }} style={{ flex: 1, textAlign: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{formatCount(val)}</div>
                 <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
               </button>
             ) : (
               <div key={label} style={{ flex: 1, textAlign: "center" }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{val}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: colors.text }}>{formatCount(val)}</div>
                 <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
               </div>
             )
           ))}
         </div>
-        <button onClick={() => setShowCarnet(true)} className="flex items-center justify-between" style={{ width: "100%", marginTop: 10, background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", cursor: "pointer" }}>
-          <div className="flex items-center gap-2.5">
-            <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Footprints size={15} color={colors.accent} /></div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>Carnet de chasse</span>
-            <Lock size={11} color={colors.textFaint} />
-          </div>
-          <ChevronRight size={15} color={colors.textFaint} />
+        {/* CTA pilule proéminente en contour, pas en accent plein — dans la
+            référence le vert reste réservé à la nav active, au "+" et aux
+            filtres ; un bouton plein ici crierait plus fort que ce qu'il
+            mérite. Le contour + les icônes suffisent à le distinguer. */}
+        <button onClick={() => setShowCarnet(true)} className="flex items-center justify-center gap-2 active:scale-[0.98] transition-transform" style={{ width: "100%", marginTop: 16, background: "transparent", border: `1.5px solid ${colors.border}`, borderRadius: RADIUS.pill, padding: "13px 14px", cursor: "pointer" }}>
+          <BookOpen size={15} color={colors.text} strokeWidth={1.8} />
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text, letterSpacing: 0.6 }}>CARNET DE CHASSE</span>
+          <Lock size={11} color={colors.textFaint} />
         </button>
         {profile.isPrivate && incomingRequestsCount > 0 && (
           <button onClick={() => setShowRequests(true)} className="flex items-center justify-between" style={{ width: "100%", marginTop: 8, background: colors.accentSoft, border: "none", borderRadius: RADIUS.lg, padding: "11px 14px", cursor: "pointer" }}>
@@ -5669,137 +6465,78 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
           </button>
         )}
       </div>
-      {showRequests && <FollowRequestsSheet onClose={() => setShowRequests(false)} onApprove={onApproveRequest} onReject={onRejectRequest} />}
+      {showRequests && <FollowRequestsSheet onClose={() => setShowRequests(false)} onApprove={onApproveRequest} onReject={onRejectRequest} onOpenProfile={onOpenProfile} />}
       {showCarnet && <HuntingLogScreen onClose={() => setShowCarnet(false)} dogs={dogs} onOpenProfile={onOpenProfile} />}
-      <div
-        className="px-4"
-        style={{
-          position: "sticky",
-          top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
-          zIndex: 5,
-          marginTop: 20,
-          paddingBottom: 4,
-          opacity: chromeMode === "hidden" ? 0 : 1,
-          transform: chromeMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
-          transition: "opacity 220ms ease, transform 220ms ease, top 260ms ease",
-          pointerEvents: chromeMode === "hidden" ? "none" : "auto",
-        }}
-      >
-        <div className="flex" style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, gap: 2, boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
-          {tabs.map(([key, label, Icon]) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className="flex items-center justify-center gap-1.5"
-              style={{
-                flex: 1,
-                padding: "7px 6px",
-                background: tab === key ? colors.surface : "transparent",
-                border: "none",
-                borderRadius: RADIUS.pill,
-                cursor: "pointer",
-                boxShadow: tab === key ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
-                transition: "background 150ms ease, box-shadow 150ms ease",
-              }}
-            >
-              <Icon size={14} color={tab === key ? colors.text : colors.textFaint} strokeWidth={1.8} />
-              <span style={{ fontSize: 10.5, fontWeight: tab === key ? 700 : 600, color: tab === key ? colors.text : colors.textFaint, whiteSpace: "nowrap" }}>{label}</span>
-            </button>
-          ))}
-        </div>
+
+      {/* Vrais onglets — texte + soulignement — comme la référence, plutôt
+          que des panneaux compacts empilés. */}
+      <div style={{ marginTop: 20 }}>
+        <ProfileTabBar tabs={profileTabs} tab={tab} setTab={setTab} />
       </div>
 
       {tab === "publications" && (
-        posts.length === 0 ? <EmptyState title="Aucune publication" subtitle="Vos publications apparaîtront ici." onAdd={onCreatePost} icon={Feather} /> : (
-          <div style={{ paddingTop: 10 }}>
-            {posts.map((p) => (
-              <PostCard
-                onOpenProfile={onOpenProfile}
-                key={p.id}
-                post={p}
-                liked={liked.includes(p.id)}
-                saved={saved.includes(p.id)}
-                reposted={reposted.includes(p.id)}
-                onRepost={() => onRepost(p.id)}
-                commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
-                onLike={() => onLike(p.id)}
-                onSave={() => onSave(p.id)}
-                onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
-                onOpenActions={() => setSheet({ type: "actions", post: p })}
-                onOpenAuthor={() => onOpenProfile(p.username)}
-              />
-            ))}
-          </div>
-        )
+        <div className="px-4" style={{ paddingTop: 6 }}>
+          <PublicationsGrid posts={posts} onOpen={setOpenPost} emptyTitle="Aucune publication" emptySubtitle="Vos publications apparaîtront ici." onAdd={onCreatePost} />
+        </div>
       )}
+
       {tab === "videos" && (
-        videos.length === 0 ? <EmptyState title="Aucune vidéo" subtitle="Vos vidéos apparaîtront ici." icon={Film} /> : (
-          <div style={{ paddingTop: 6 }}>
-            {videos.map((v) => (
-              <VideoCard
-                key={v.id}
-                video={v}
-                liked={liked.includes(v.id)}
-                reposted={reposted.includes(v.id)}
-                commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
-                onLike={() => onLike(v.id)}
-                onRepost={v.type === "video" ? undefined : () => onRepost(v.id)}
-                onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
-                onOpenActions={() => setSheet({ type: "actions", post: v })}
-                onOpenAuthor={() => onOpenProfile(v.username)}
-                onOpenPlayer={() => onOpenPlayer && onOpenPlayer(v)}
-              />
-            ))}
-          </div>
-        )
+        <div className="px-4" style={{ paddingTop: 6 }}>
+          <VideoThumbGrid videos={videos} onOpen={(v) => onOpenPlayer && onOpenPlayer(v)} emptyTitle="Aucune vidéo" emptySubtitle="Vos vidéos apparaîtront ici." />
+        </div>
       )}
+
+      {tab === "chiens" && (
+        <div className="px-4 pt-2 flex flex-col">
+          {dogs.length === 0 ? (
+            <div style={{ fontSize: 12, color: colors.textFaint, padding: "8px 0" }}>Vos chiens apparaîtront ici.</div>
+          ) : (
+            dogs.map((d) => (
+              <button key={d.id} onClick={() => setOpenDog(d)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ border: "none", padding: "9px 0", background: "transparent", cursor: "pointer", textAlign: "left" }}>
+                <div style={{ width: 46, height: 46, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                  {d.photo_url ? <img src={d.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={18} color={colors.textFaint} />}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text }}>{d.nom}</div>
+                  <div style={{ fontSize: 11.5, color: colors.textFaint }}>{[d.race, ageFromBirthDate(d.birth_date) !== null && `${ageFromBirthDate(d.birth_date)} ans`].filter(Boolean).join(" · ")}</div>
+                </div>
+              </button>
+            ))
+          )}
+          <button onClick={() => setDogForm(true)} style={{ marginTop: 4, border: `1px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: 12, background: "transparent", color: colors.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Ajouter un chien</button>
+        </div>
+      )}
+
       {tab === "reposts" && (
         repostsLoading ? (
-          <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
+          <div style={{ fontSize: 12, color: colors.textFaint, padding: "10px 16px 0" }}>Chargement...</div>
         ) : repostedPosts.length === 0 ? (
           <EmptyState title="Aucun repost" subtitle="Les publications que vous repartagez apparaîtront ici." icon={Repeat2} />
         ) : (
-          <div style={{ paddingTop: 10 }}>
+          <div className="flex flex-col" style={{ paddingTop: 8 }}>
             {repostedPosts.map((p) => (
-              p.type === "video_courte" ? (
-                <RepostedInstantCard key={p.id} item={p} onOpen={setViewingInstant} />
-              ) : (
-                <PostCard
-                  onOpenProfile={onOpenProfile}
-                  key={p.id}
-                  post={p}
-                  liked={liked.includes(p.id)}
-                  saved={saved.includes(p.id)}
-                  reposted={true}
-                  onRepost={() => onRepost(p.id)}
-                  commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
-                  onLike={() => onLike(p.id)}
-                  onSave={() => onSave(p.id)}
-                  onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
-                  onOpenActions={() => setSheet({ type: "actions", post: p })}
-                  onOpenAuthor={() => onOpenProfile(p.username)}
-                />
-              )
+              <RepostRow key={p.id} post={p} onOpen={(post) => (post.type === "video_courte" ? setViewingInstant(post) : setOpenPost(post))} />
             ))}
           </div>
         )
       )}
-      {tab === "chiens" && (
-        dogs.length === 0 ? (
-          <EmptyState title="Aucun chien enregistré" subtitle="Créez le profil de votre chien pour partager ses sorties et ses publications." ctaLabel="Ajouter un chien" onCta={() => setDogForm(true)} icon={Dog} />
-        ) : (
-          <div className="px-4 pt-4 flex flex-col gap-2">
-            {dogs.map((d) => (
-              <button key={d.id} onClick={() => setOpenDog(d)} className="flex items-center gap-3" style={{ border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: 12, background: colors.surface, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ width: 40, height: 40, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                  {d.photo_url ? <img src={d.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={18} color={colors.textFaint} />}
-                </div>
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>{d.nom}</span>
-              </button>
-            ))}
-            <button onClick={() => setDogForm(true)} style={{ marginTop: 4, border: `1px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: 12, background: "transparent", color: colors.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Ajouter un chien</button>
-          </div>
-        )
+
+      {openPost && (
+        <SinglePostOverlay
+          post={openPost}
+          onClose={() => setOpenPost(null)}
+          onOpenProfile={onOpenProfile}
+          liked={liked.includes(openPost.id)}
+          saved={saved.includes(openPost.id)}
+          reposted={reposted.includes(openPost.id)}
+          onRepost={() => onRepost(openPost.id)}
+          commentCount={commentsByPost[openPost.id] ? commentsByPost[openPost.id].length : (openPost.commentaires || 0)}
+          onLike={() => onLike(openPost.id)}
+          onSave={() => onSave(openPost.id)}
+          onOpenComments={() => { setSheet({ type: "comments", post: openPost }); onLoadComments(openPost.id); }}
+          onOpenActions={() => setSheet({ type: "actions", post: openPost })}
+          onOpenAuthor={() => onOpenProfile(openPost.username)}
+        />
       )}
 
       {sheet?.type === "actions" && (
@@ -5971,9 +6708,9 @@ function DirectConversationOptionsSheet({ conversationId, otherUser, onClose, on
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", pointerEvents: "auto", position: "relative" }}>
+        <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", pointerEvents: "auto", position: "relative" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div style={{ position: "absolute", top: 10, right: 12 }}><IconButton icon={X} onClick={onClose} size={30} /></div>
           <div style={{ padding: "10px 20px 20px" }}>
@@ -6058,9 +6795,9 @@ function GroupConversationSettingsSheet({ conversationId, title, image, onClose,
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "80vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "80vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Infos du groupe</span>
@@ -6087,7 +6824,7 @@ function GroupConversationSettingsSheet({ conversationId, title, image, onClose,
             ) : (
               <div className="flex flex-col gap-1">
                 {members.map((m) => (
-                  <button key={m.id} onClick={() => { onClose(); onOpenProfile(m.username); }} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "8px 4px", cursor: "pointer", textAlign: "left" }}>
+                  <button key={m.id} onClick={() => { onClose(); onOpenProfile(m.username); }} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "8px 4px", cursor: "pointer", textAlign: "left" }}>
                     <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                       {m.avatar ? <img src={m.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color={colors.textFaint} />}
                     </div>
@@ -6357,7 +7094,8 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground muted />
       <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
       {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
       <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -6566,9 +7304,9 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
       )}
       {msgMenu && (
         <div style={{ position: "fixed", inset: 0, zIndex: 75 }}>
-          <div onClick={() => setMsgMenu(null)} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+          <div onClick={() => setMsgMenu(null)} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
           <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-            <div style={{ width: "100%", maxWidth: 400, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", padding: "10px 8px", pointerEvents: "auto" }}>
+            <div style={{ width: "100%", maxWidth: 400, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", padding: "10px 8px", pointerEvents: "auto" }}>
               <button
                 onClick={() => {
                   const isMine = msgMenu.sender_id === meId;
@@ -6622,7 +7360,8 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground />
       <ScreenHeader title="Rechercher" onCloseX={onClose} />
       <div style={{ padding: "14px 16px 10px" }}>
         <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
@@ -6643,7 +7382,7 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
               className="flex items-center gap-3"
               style={{ width: "100%", background: "none", border: "none", padding: "10px 2px", cursor: "pointer", textAlign: "left" }}
             >
-              <div style={{ width: 38, height: 38, borderRadius: RADIUS.sm, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+              <div style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                 {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -6722,7 +7461,8 @@ function NewConversationSheet({ onClose, onStarted }) {
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground />
       <ScreenHeader title={groupMode ? "Nouveau groupe" : "Nouveau message"} onCloseX={onClose} />
       <div style={{ padding: "14px 16px 10px" }}>
         <SegmentedControl
@@ -6802,6 +7542,14 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
   const [loading, setLoading] = useState(true);
   const [openConv, setOpenConv] = useState(null); // { id, title }
   const [showNew, setShowNew] = useState(false);
+  const [query, setQuery] = useState("");
+  const filteredConversations = query.trim()
+    ? conversations.filter((c) => c.nom.toLowerCase().includes(query.trim().toLowerCase()))
+    : conversations;
+  // Accès rapide façon story-bar — les personnes (pas les groupes) avec qui
+  // on discute déjà, jamais un contact inventé.
+  const quickContacts = conversations.filter((c) => c.type === "direct").slice(0, 10);
+  const openConversation = (c) => setOpenConv({ id: c.id, title: c.nom, type: c.type, image: c.avatar, otherUser: c.type === "direct" ? c.members?.[0] || null : null });
 
   const refresh = () => {
     messageService.fetchConversations().then(setConversations).catch(() => {});
@@ -6846,33 +7594,59 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Messages</span>
-          <button onClick={() => setShowNew(true)} style={{ border: `1px solid ${colors.accent}`, color: colors.accent, background: "transparent", borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>+ Nouveau</button>
+          <button onClick={() => setShowNew(true)} aria-label="Nouvelle conversation" className="active:scale-90 transition-transform" style={{ width: 34, height: 34, border: "none", color: colors.text, background: colors.surfaceAlt, borderRadius: RADIUS.pill, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <SquarePen size={16} strokeWidth={1.8} />
+          </button>
         </div>
+        <div className="px-4 pb-3"><div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
+          <Search size={16} color={colors.textFaint} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
+        </div></div>
       </div>
+      {!loading && quickContacts.length > 0 && !query.trim() && (
+        <div className="flex gap-3" style={{ padding: "14px 16px 4px", overflowX: "auto" }}>
+          {quickContacts.map((c) => (
+            <button key={c.id} onClick={() => openConversation(c)} className="flex flex-col items-center gap-1 active:scale-95 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, width: 58 }}>
+              <div style={{ width: 50, height: 50, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", boxShadow: c.unread ? `0 0 0 2px ${colors.accent}` : "none" }}>
+                {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={20} color={colors.textFaint} />}
+              </div>
+              <span style={{ fontSize: 10.5, color: colors.textSecondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 56 }}>{c.nom}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {loading ? (
         <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
       ) : conversations.length === 0 ? (
         <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." ctaLabel="Démarrer une conversation" onCta={() => setShowNew(true)} icon={MessageCircle} />
+      ) : filteredConversations.length === 0 ? (
+        <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Aucune conversation ne correspond à « {query} ».</div>
       ) : (
-        <div className="flex flex-col gap-1.5" style={{ padding: "16px 12px 4px" }}>
-          {conversations.map((c) => (
-            <button key={c.id} onClick={() => setOpenConv({ id: c.id, title: c.nom, type: c.type, image: c.avatar, otherUser: c.type === "direct" ? c.members?.[0] || null : null })} className="flex items-center gap-3" style={{ width: "100%", background: c.unread ? colors.accentSoft : colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "none", padding: "10px 12px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.xl, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" }}>
-              <div style={{ width: 46, height: 46, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+        <div className="flex flex-col" style={{ padding: "12px 16px 4px" }}>
+          {filteredConversations.map((c) => (
+            <button key={c.id} onClick={() => openConversation(c)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 0", cursor: "pointer", textAlign: "left" }}>
+              <div style={{ width: 48, height: 48, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                 {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : c.type === "group" ? <Users size={18} color={colors.textFaint} /> : <User size={18} color={colors.textFaint} />}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text }}>{c.nom}</div>
-                <div style={{ fontSize: 12, color: c.unread ? colors.text : colors.textFaint, fontWeight: c.unread ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {c.lastMessage
-                    ? `${c.lastSenderIsMe ? "Vous : " : ""}${c.lastMessage}`
-                    : c.hasLastMessage
-                    ? (c.lastSenderIsMe ? "Vous : nouveau message" : "Nouveau message")
-                    : "Aucun message"}
+                <div className="flex items-center justify-between" style={{ gap: 8 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nom}</span>
+                  <span style={{ fontSize: 11, color: colors.textFaint, flexShrink: 0 }}>{formatRelativeDate(c.lastMessageAt)}</span>
                 </div>
-              </div>
-              <div className="flex flex-col items-end gap-1" style={{ flexShrink: 0 }}>
-                <div style={{ fontSize: 10.5, color: colors.textFaint }}>{formatRelativeDate(c.lastMessageAt)}</div>
-                {c.unread && <div style={{ width: 8, height: 8, borderRadius: 4, background: colors.accent }} />}
+                <div className="flex items-center justify-between" style={{ gap: 8, marginTop: 2 }}>
+                  <span style={{ fontSize: 12, color: c.unread ? colors.textSecondary : colors.textFaint, fontWeight: c.unread ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+                    {c.lastMessage
+                      ? `${c.lastSenderIsMe ? "Vous : " : ""}${c.lastMessage}`
+                      : c.hasLastMessage
+                      ? (c.lastSenderIsMe ? "Vous : nouveau message" : "Nouveau message")
+                      : "Aucun message"}
+                  </span>
+                  {c.unread && c.unreadCount > 0 && (
+                    <span style={{ flexShrink: 0, minWidth: 17, height: 17, borderRadius: RADIUS.pill, background: colors.accent, color: colors.onAccent, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>
+                      {c.unreadCount > 99 ? "99+" : c.unreadCount}
+                    </span>
+                  )}
+                </div>
               </div>
             </button>
           ))}
@@ -6936,9 +7710,9 @@ function FollowListSheet({ userId, mode, onClose, onOpenProfile }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 65 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, height: "72vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, height: "72vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{title}</span>
@@ -6951,7 +7725,7 @@ function FollowListSheet({ userId, mode, onClose, onOpenProfile }) {
               <EmptyState title={title} subtitle={emptyText} icon={Users} />
             ) : (
               items.map((u) => (
-                <button key={u.username} onClick={() => { onClose(); onOpenProfile(u.username); }} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left" }}>
+                <button key={u.username} onClick={() => { onClose(); onOpenProfile(u.username); }} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left" }}>
                   <div style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                     {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
                   </div>
@@ -6968,7 +7742,7 @@ function FollowListSheet({ userId, mode, onClose, onOpenProfile }) {
     </div>
   );
 }
-function FollowRequestsSheet({ onClose, onApprove, onReject }) {
+function FollowRequestsSheet({ onClose, onApprove, onReject, onOpenProfile }) {
   const { colors } = useTheme();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -6984,9 +7758,9 @@ function FollowRequestsSheet({ onClose, onApprove, onReject }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 61 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "78vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "78vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Demandes d'abonnement</span>
@@ -7000,13 +7774,19 @@ function FollowRequestsSheet({ onClose, onApprove, onReject }) {
             ) : (
               items.map((r) => (
                 <div key={r.id} className="flex items-center gap-3" style={{ padding: "10px 8px" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                    {r.avatar ? <img src={r.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{r.nom || r.username}</div>
-                    <div style={{ fontSize: 11.5, color: colors.textFaint }}>@{r.username}</div>
-                  </div>
+                  <button
+                    onClick={() => onOpenProfile?.(r.username)}
+                    className="flex items-center gap-3 active:scale-[0.98] transition-transform"
+                    style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: onOpenProfile ? "pointer" : "default", textAlign: "left" }}
+                  >
+                    <div style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                      {r.avatar ? <img src={r.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{r.nom || r.username}</div>
+                      <div style={{ fontSize: 11.5, color: colors.textFaint }}>@{r.username}</div>
+                    </div>
+                  </button>
                   <button onClick={() => handle(r.id, "reject")} style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                     <X size={15} color={colors.textFaint} />
                   </button>
@@ -7062,7 +7842,8 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 50, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 50, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <AmbientBackground />
       <ScreenHeader title="Notifications" onBack={onClose} />
       {items.some((n) => !n.lu) && (
         <div style={{ padding: "0 16px 8px", textAlign: "right" }}>
@@ -7075,23 +7856,28 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
         ) : items.length === 0 ? (
           <EmptyState title="Aucune notification pour le moment" subtitle="Vous serez averti ici des interactions et des nouveautés qui vous concernent." icon={Bell} />
         ) : (
-          items.map((n) => {
-            const Icon = NOTIF_ICON[n.type] || Bell;
-            const nom = n.actor?.nom || n.actor?.username || "Quelqu'un";
-            const text = NOTIF_TEXT[n.type] ? NOTIF_TEXT[n.type](nom) : "Nouvelle notification.";
-            return (
-              <button key={n.id} onClick={() => open(n)} className="flex items-center gap-3" style={{ width: "100%", background: n.lu ? colors.surface : colors.accentSoft, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left", boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}>
-                <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
-                  {n.actor?.avatar ? <img src={n.actor.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon size={16} color={colors.textFaint} />}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{text}</div>
-                  <div style={{ fontSize: 11, color: colors.textFaint, marginTop: 2 }}>{formatRelativeDate(n.createdAt)}</div>
-                </div>
-                {!n.lu && <div style={{ width: 8, height: 8, borderRadius: 4, background: colors.accent, flexShrink: 0 }} />}
-              </button>
-            );
-          })
+          groupByDay(items, (n) => n.createdAt).map(([label, group]) => (
+            <div key={label}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, padding: "10px 6px 6px" }}>{label.toUpperCase()}</div>
+              {group.map((n) => {
+                const Icon = NOTIF_ICON[n.type] || Bell;
+                const nom = n.actor?.nom || n.actor?.username || "Quelqu'un";
+                const text = NOTIF_TEXT[n.type] ? NOTIF_TEXT[n.type](nom) : "Nouvelle notification.";
+                return (
+                  <button key={n.id} onClick={() => open(n)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: n.lu ? colors.surface : colors.accentSoft, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left", boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}>
+                    <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                      {n.actor?.avatar ? <img src={n.actor.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon size={16} color={colors.textFaint} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{text}</div>
+                      <div style={{ fontSize: 11, color: colors.textFaint, marginTop: 2 }}>{formatRelativeDate(n.createdAt)}</div>
+                    </div>
+                    {!n.lu && <div style={{ width: 8, height: 8, borderRadius: 4, background: colors.accent, flexShrink: 0, animation: "piste-count-pop 320ms cubic-bezier(0.22, 1, 0.36, 1)" }} />}
+                  </button>
+                );
+              })}
+            </div>
+          ))
         )}
       </div>
     </div>
@@ -7193,7 +7979,7 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
     <div style={{ flex: 1, overflowY: "auto", position: "relative" }}>
       <div style={{ padding: "8px 18px" }}>
         {rows.map((r) => (
-          <button key={r.key} onClick={() => setSection(r.key)} className="flex items-center justify-between" style={{ width: "100%", background: "none", border: "none", borderBottom: `1px solid ${colors.border}`, padding: "14px 2px", cursor: "pointer" }}>
+          <button key={r.key} onClick={() => setSection(r.key)} className="flex items-center justify-between active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", borderBottom: `1px solid ${colors.border}`, padding: "14px 2px", cursor: "pointer" }}>
             <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>{r.label}</span>
             <ChevronRight size={15} color={colors.textFaint} />
           </button>
@@ -7470,11 +8256,23 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
           <ScreenHeader title={sub.label} onBack={() => setSub(null)} />
           {sub.appearance ? (
             <div style={{ padding: 20 }}>
+              {/* Seul le mode sombre est disponible pour le moment — c'est
+                  l'identité par défaut et unique de PISTE (voir ThemeProvider).
+                  Clair/Système restent visibles pour ne pas surprendre, mais
+                  désactivés avec un badge explicite plutôt que masqués. */}
               <div className="flex flex-col gap-2">
-                {[["light", "Clair", Sun], ["dark", "Sombre", Moon], ["system", "Système", Monitor]].map(([m, l, Icon]) => (
-                  <button key={m} onClick={() => setMode(m)} className="flex items-center justify-between" style={{ border: `1.5px solid ${mode === m ? colors.accent : colors.border}`, background: mode === m ? colors.accentSoft : colors.surface, borderRadius: RADIUS.sm, padding: "12px 14px", cursor: "pointer" }}>
+                {[["light", "Clair", Sun, true], ["dark", "Sombre", Moon, false], ["system", "Système", Monitor, true]].map(([m, l, Icon, disabled]) => (
+                  <button
+                    key={m}
+                    onClick={disabled ? undefined : () => setMode(m)}
+                    disabled={disabled}
+                    className={disabled ? "flex items-center justify-between" : "flex items-center justify-between active:scale-[0.98] transition-transform"}
+                    style={{ border: `1.5px solid ${mode === m ? colors.accent : colors.border}`, background: mode === m ? colors.accentSoft : colors.surface, borderRadius: RADIUS.sm, padding: "12px 14px", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.55 : 1 }}
+                  >
                     <div className="flex items-center gap-2.5"><Icon size={16} color={mode === m ? colors.accent : colors.text} /><span style={{ fontSize: 13.5, fontWeight: 600, color: mode === m ? colors.accent : colors.text }}>{l}</span></div>
-                    {mode === m && <Check size={16} color={colors.accent} />}
+                    {disabled ? (
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: colors.textFaint, background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "3px 9px" }}>Bientôt disponible</span>
+                    ) : mode === m && <Check size={16} color={colors.accent} />}
                   </button>
                 ))}
               </div>
@@ -7656,6 +8454,15 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const [privacy, setPrivacy] = useState({ compte: "public", commentaires: "tout_le_monde", messages: "tout_le_monde" });
   const [toast, setToast] = useState(null);
   const [playingVideo, setPlayingVideo] = useState(null);
+  // Une vue ne compte que quand la vidéo s'ouvre vraiment en plein écran —
+  // pas juste quand sa vignette défile dans une liste (voir migration 051).
+  // Pas de compteur local optimiste : la clé primaire (post_id, viewer_id)
+  // dédoublonne déjà côté base, un +1 local à chaque réouverture afficherait
+  // un chiffre faux qui dérive au fil de la session.
+  const openVideoPlayer = (video) => {
+    setPlayingVideo(video);
+    if (video?.id) postService.recordPostView(video.id).catch(() => {});
+  };
   // Cible réelle d'une notification like/commentaire/repost/mention/nouvelle
   // publication (voir openNotificationPost) — avant ça, ces notifications
   // ouvraient à tort le profil de la personne qui avait agi.
@@ -7668,7 +8475,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
     try {
       const row = await postService.fetchPostById(postId);
       const mapped = mapPostRow(row);
-      if (mapped.type === "video") setPlayingVideo(mapped);
+      if (mapped.type === "video") openVideoPlayer(mapped);
       else if (mapped.type === "video_courte") setNotifInstant(mapped);
       else setNotifPost({ post: mapped, autoOpenComments: notifType === "comment" || notifType === "mention" });
     } catch (e) {
@@ -8081,7 +8888,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onHide={hidePost}
         onBlock={blockAuthor}
         onLoadComments={loadComments}
-        onOpenPlayer={setPlayingVideo}
+        onOpenPlayer={openVideoPlayer}
         onChromeMode={setChromeMode}
         chromeMode={chromeMode}
       />
@@ -8122,7 +8929,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         addDog={(d) => setDogs((ds) => [d, ...ds])}
         posts={posts.filter((p) => p.username === profile.username)}
         videos={videos.filter((v) => v.username === profile.username)}
-        onOpenPlayer={setPlayingVideo}
+        onOpenPlayer={openVideoPlayer}
         onOpenProfile={setOpenProfileUsername}
         liked={likedIds}
         saved={savedPostIds}
@@ -8160,6 +8967,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
   }
 
   return (
+    <AmbientContext.Provider value={profile?.imageCouverture || null}>
     <AppShell header={<Header onBell={() => setNotif(true)} onMenu={() => setPlusOpen(true)} onSearch={() => setShowUserSearch(true)} unreadCount={unreadCount} chromeMode={chromeMode} />} active={active} setActive={handleTabPress} onCreate={() => setCreateOpen(true)} unreadConversations={unreadConversations} chromeMode={chromeMode} refreshKey={refreshKey}>
       {screens[active]}
       {notif && (
@@ -8186,7 +8994,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
           onRequestFollow={() => requestFollow(openProfileUsername)}
           onToggleBell={() => toggleBell(openProfileUsername)}
           onOpenProfile={setOpenProfileUsername}
-          onOpenPlayer={setPlayingVideo}
+          onOpenPlayer={openVideoPlayer}
           onMessage={async (userId) => {
             try {
               const conversationId = await messageService.startDirectConversation(userId);
@@ -8259,7 +9067,26 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onLogout={handleLogout}
       />
       <Toast message={toast} />
-      <FullScreenVideoPlayer video={playingVideo} onClose={() => setPlayingVideo(null)} />
+      <FullScreenVideoPlayer
+        video={playingVideo}
+        onClose={() => setPlayingVideo(null)}
+        meUsername={profile.username}
+        isAdmin={profile.role === "admin"}
+        liked={likedIds}
+        reposted={repostedIds}
+        commentsByPost={commentsByPost}
+        onLike={toggleLike}
+        onRepost={toggleRepost}
+        onAddComment={addComment}
+        onDelete={deleteContent}
+        onDeleteComment={deleteComment}
+        onEditRequest={setEditingPost}
+        onReport={reportContent}
+        onHide={hidePost}
+        onBlock={blockAuthor}
+        onLoadComments={loadComments}
+        onOpenProfile={setOpenProfileUsername}
+      />
       {notifPost && (
         <SinglePostViewer
           post={notifPost.post}
@@ -8325,6 +9152,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         />
       )}
     </AppShell>
+    </AmbientContext.Provider>
   );
 }
 
