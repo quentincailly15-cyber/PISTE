@@ -13,6 +13,10 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#B85A28" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- Version standard (non préfixée) du même réglage — iOS ne lit que la
+         version "apple-", mais l'inclure prépare le terrain pour les
+         navigateurs qui la reconnaissent déjà (Chrome/Edge Android). -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <!-- "black-translucent" est le seul réglage qui laisse vraiment le contenu
          s'étendre sous la barre de statut/l'encoche en PWA plein écran — avec
          "default", iOS réserve une bande opaque en haut et l'app n'utilise

@@ -1068,9 +1068,25 @@ function AuthBackdrop({ children }) {
 // Mini-guide "ajouter PISTE sur l'écran d'accueil iPhone" — même carte réutilisée
 // en bas de la connexion/inscription (repliée, compacte) et tout en haut de la
 // liste dans Aide (voir AideScreen). Repliable pour ne jamais prendre trop de place.
+// Vrai quand PISTE tourne déjà "installée" (ajoutée à l'écran d'accueil),
+// pas dans un onglet Safari classique — deux signaux complémentaires : la
+// media query standard (display-mode: standalone) fonctionne partout ;
+// navigator.standalone est l'ancienne propriété spécifique à iOS Safari,
+// gardée en repli au cas où la media query ne serait pas encore reconnue.
+// Ne change pas en cours de session (on ne "désinstalle" pas en direct) —
+// une simple fonction suffit, pas besoin d'un state/effect réactif.
+function isStandaloneDisplay() {
+  if (typeof window === "undefined") return false;
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+}
 function AddToHomeScreenTip({ defaultOpen = false }) {
   const { colors } = useTheme();
   const [open, setOpen] = useState(defaultOpen);
+  // Ce conseil explique comment ajouter PISTE à l'écran d'accueil — sans
+  // objet une fois qu'on y est déjà : "Ouvrez le lien PISTE dans Safari"
+  // n'a aucun sens depuis l'app déjà installée, en plus de laisser une
+  // carte vide/incohérente affichée sur l'écran de connexion.
+  if (isStandaloneDisplay()) return null;
   const steps = [
     <>Ouvrez le lien PISTE dans Safari</>,
     <>Appuyez sur les <strong>trois petits points</strong> ou l'icône <strong>Partager</strong></>,
@@ -1120,7 +1136,7 @@ function StepSplash({ onStart, onLogin }) {
             <span style={{ fontSize: 12.5, color: colors.textFaint }}>Déjà un compte ? </span>
             <button onClick={onLogin} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Se connecter</button>
           </div>
-          <div style={{ marginTop: 22 }}><AddToHomeScreenTip /></div>
+          {!isStandaloneDisplay() && <div style={{ marginTop: 22 }}><AddToHomeScreenTip /></div>}
         </div>
       </div>
     </AuthBackdrop>
@@ -1465,7 +1481,7 @@ function LoginScreen({ onBack, onSignup }) {
             <span style={{ fontSize: 12.5, color: colors.textFaint }}>Pas encore de compte ? </span>
             <button onClick={onSignup} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Créer un compte</button>
           </div>
-          <div style={{ marginTop: 22 }}><AddToHomeScreenTip /></div>
+          {!isStandaloneDisplay() && <div style={{ marginTop: 22 }}><AddToHomeScreenTip /></div>}
         </div>
       </div>
     </AuthBackdrop>
