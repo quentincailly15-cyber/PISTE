@@ -112,14 +112,18 @@ export async function checkUsernameAvailable(username) {
 }
 
 /**
- * Suppression de compte. Nécessite un rôle "service_role" (clé secrète, jamais
- * exposée au frontend) — doit passer par une Edge Function Supabase, pas un
- * appel direct depuis le client. Cette fonction appelle une Edge Function
- * nommée "delete-account" que vous devez déployer (voir README) ; elle n'est
- * pas fonctionnelle tant que cette fonction n'existe pas côté Supabase.
+ * Suppression de compte — via la fonction SQL "delete_own_account()"
+ * (migration 053), pas une Edge Function : plus simple à mettre en place
+ * (un script SQL à coller, comme toutes les autres migrations) qu'à
+ * déployer et gérer une fonction serveur séparée. La fonction, exécutée
+ * avec des droits élevés côté base mais restreinte à auth.uid() dans son
+ * propre corps, supprime la ligne auth.users — profiles.id la référence en
+ * "on delete cascade" (001_init.sql), donc le profil et tout ce qui en
+ * dépend (publications, messages, commentaires, chiens, carnet...)
+ * disparaît réellement avec.
  */
 export async function deleteAccount() {
-  const { data, error } = await supabase.functions.invoke("delete-account");
+  const { error } = await supabase.rpc("delete_own_account");
   if (error) throw error;
-  return data;
+  await supabase.auth.signOut();
 }

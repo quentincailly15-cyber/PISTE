@@ -68,3 +68,41 @@ export async function fetchUserDogs(userId) {
   if (error) throw error;
   return data;
 }
+
+/** Modifie un chien déjà créé — une erreur de saisie (nom, race, date de
+ *  naissance...) ne devait jusqu'ici jamais pouvoir être corrigée. La photo
+ *  n'est remplacée que si une nouvelle est fournie ; RLS ("owner manages own
+ *  dogs", 001_init.sql, déjà "for all") autorise déjà cette mise à jour, pas
+ *  de migration nécessaire. */
+export async function updateDog(dogId, { nom, race, birthDate, sexe, specialite, description, photoFile }) {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error("Non authentifié");
+
+  const update = { nom, race, birth_date: birthDate || null, sexe, specialite, description };
+  if (photoFile) {
+    const path = `${userData.user.id}/${Date.now()}-${photoFile.name}`;
+    const { error: uploadError } = await supabase.storage.from("dogs").upload(path, photoFile, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+    if (uploadError) throw uploadError;
+    const { data: publicUrl } = supabase.storage.from("dogs").getPublicUrl(path);
+    update.photo_url = publicUrl.publicUrl;
+  }
+
+  const { data, error } = await supabase.from("dogs").update(update).eq("id", dogId).select().single();
+  if (error) throw error;
+  return data;
+}
+
+/** Supprime un chien — RLS restreint déjà à son propriétaire. Les
+ *  publications qui l'identifiaient (table post_dogs) ne sont pas supprimées
+ *  elles-mêmes, seul le lien disparaît (post_dogs.dog_id references dogs(id)
+ *  on delete cascade, 001_init.sql) : la publication reste, juste plus liée
+ *  à ce chien. */
+export async function deleteDog(dogId) {
+  const { error } = await supabase.from("dogs").delete().eq("id", dogId);
+  if (error) throw error;
+  return true;
+}

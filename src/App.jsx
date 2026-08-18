@@ -567,11 +567,16 @@ function ScreenHeader({ title, onBack, onCloseX, rightAction, chromeMode = "full
         transition: "transform 260ms ease, top 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
       }}
     >
-      <div className="flex items-center gap-3">
-        {onBack && <IconButton icon={ArrowLeft} onClick={onBack} />}
-        <span style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>{title}</span>
+      <div className="flex items-center gap-3" style={{ minWidth: 0, flex: 1 }}>
+        {onBack && <div style={{ flexShrink: 0 }}><IconButton icon={ArrowLeft} onClick={onBack} /></div>}
+        {/* Un nom de groupe/conversation/utilisateur long ne doit jamais
+            pousser le bouton de droite hors de la pilule flottante — coupé
+            proprement avec "…" plutôt que de casser la forme du header. */}
+        <span style={{ fontSize: 15, fontWeight: 700, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{title}</span>
       </div>
-      {rightAction || (onCloseX && <IconButton icon={X} onClick={onCloseX} />)}
+      {(rightAction || onCloseX) && (
+        <div style={{ flexShrink: 0, marginLeft: 8 }}>{rightAction || <IconButton icon={X} onClick={onCloseX} />}</div>
+      )}
     </div>
   );
 }
@@ -2568,6 +2573,10 @@ function SharePostSheet({ item, onClose }) {
  *  inventée : le badge ne s'affiche que si plus d'un média existe. */
 function MediaCarousel({ media, colors }) {
   const [index, setIndex] = useState(0);
+  // Un média cassé par diapo (pas toute la galerie) : les autres photos/
+  // vidéos de la même publication restent consultables normalement.
+  const [failed, setFailed] = useState(() => new Set());
+  const markFailed = (i) => setFailed((prev) => new Set(prev).add(i));
   const onScroll = (e) => {
     const el = e.currentTarget;
     const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
@@ -2582,13 +2591,18 @@ function MediaCarousel({ media, colors }) {
       >
         {media.map((m, i) => (
           <div key={i} style={{ flex: "0 0 100%", scrollSnapAlign: "start", minWidth: 0 }}>
-            {m.type === "video" ? (
+            {failed.has(i) ? (
+              <div style={{ width: "100%", aspectRatio: "4/5", background: colors.surfaceAlt, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <AlertTriangle size={24} color={colors.textFaint} strokeWidth={1.6} />
+                <span style={{ fontSize: 12, color: colors.textFaint }}>Média indisponible</span>
+              </div>
+            ) : m.type === "video" ? (
               <div style={{ width: "100%", aspectRatio: "4/5", background: "#000" }}>
-                <video src={m.url} poster={m.thumbnail_url || undefined} controls playsInline style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }} />
+                <video src={m.url} poster={m.thumbnail_url || undefined} controls playsInline onError={() => markFailed(i)} style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }} />
               </div>
             ) : (
               <div style={{ width: "100%", aspectRatio: "4/5", background: colors.surfaceAlt }}>
-                <img src={m.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                <img src={m.url} alt="" onError={() => markFailed(i)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               </div>
             )}
           </div>
@@ -2606,6 +2620,7 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
   const { colors } = useTheme();
   const [showShare, setShowShare] = useState(false);
   const [burst, setBurst] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const lastTapRef = useRef(0);
   const handleMediaTap = () => {
     const now = Date.now();
@@ -2666,7 +2681,14 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
                 <MediaCarousel media={post.media} colors={colors} />
               ) : post.videoUrl ? (
                 <div style={{ aspectRatio: "4/3", background: "#000" }}>
-                  <video src={post.videoUrl} poster={post.image || undefined} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  {videoError ? (
+                    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                      <AlertTriangle size={22} color="rgba(255,255,255,0.5)" strokeWidth={1.6} />
+                      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>Vidéo indisponible</span>
+                    </div>
+                  ) : (
+                    <video src={post.videoUrl} poster={post.image || undefined} controls playsInline onError={() => setVideoError(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  )}
                 </div>
               ) : (
                 // Toujours pleine largeur, jusqu'au bord de la publication —
@@ -2829,6 +2851,7 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
   const [replyText, setReplyText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
   const [replySent, setReplySent] = useState(false);
+  const replyInputRef = useRef(null);
 
   const group = groups[groupIndex];
   const trace = group?.traces?.[traceIndex];
@@ -2843,6 +2866,11 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
       setReplyText("");
       setReplySent(true);
       window.setTimeout(() => setReplySent(false), 1600);
+      // Le champ garde le focus après "Entrée" (contrairement à un clic
+      // ailleurs, qui déclenche déjà onBlur) — sans ça la Trace restait en
+      // pause indéfiniment après l'envoi, jusqu'à ce qu'on touche autre chose.
+      replyInputRef.current?.blur();
+      setPaused(false);
     } catch (e) { /* pas grave : le champ garde le texte, on peut réessayer */ }
     finally { setSendingReply(false); }
   };
@@ -2932,10 +2960,14 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
             playsInline
             onTimeUpdate={(e) => { const v = e.currentTarget; if (v.duration) setProgress(v.currentTime / v.duration); }}
             onEnded={goNext}
+            // Média cassé/introuvable : passer à la Trace suivante plutôt que
+            // de rester bloqué sur une image noire figée — comme la fin
+            // normale d'une Trace, juste anticipée.
+            onError={goNext}
             style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000", animation: "piste-crossfade 220ms ease" }}
           />
         ) : (
-          <img key={trace.id} src={trace.mediaUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", animation: "piste-crossfade 220ms ease" }} />
+          <img key={trace.id} src={trace.mediaUrl} alt="" onError={goNext} style={{ width: "100%", height: "100%", objectFit: "contain", animation: "piste-crossfade 220ms ease" }} />
         )}
 
         {/* Zones de tap (précédent / suivant) + maintien pour mettre en pause */}
@@ -3012,6 +3044,7 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
             style={{ position: "absolute", left: 12, right: 12, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 4 }}
           >
             <input
+              ref={replyInputRef}
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               onFocus={() => setPaused(true)}
@@ -3046,7 +3079,6 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
     abonnements: "Vous ne suivez encore personne. Les publications des membres suivis apparaîtront ici.",
     decouvrir: "Le contenu populaire de la communauté PISTE apparaîtra ici.",
   };
-  const meName = profile.nom || "Vous";
   // Pipeline centralisé (voir buildFeed) — même logique de sécurité/âge partout, seule la
   // pondération change selon l'onglet.
   //
@@ -3096,7 +3128,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
           pointerEvents: chromeMode === "hidden" ? "none" : "auto",
         }}
       >
-        <div className="flex gap-2">
+        <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
           {options.map((o) => (
             <Chip key={o.key} label={o.label} active={tab === o.key} onClick={() => setTab(o.key)} solid />
           ))}
@@ -3128,7 +3160,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
       )}
       {sheet?.type === "actions" && (
         <ContentActionSheet
-          isOwn={sheet.post.nom === meName}
+          isOwn={sheet.post.username === profile?.username}
           isAdmin={profile.role === "admin"}
           onClose={() => setSheet(null)}
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
@@ -3154,6 +3186,10 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
 function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = [], reposted = [], commentsByPost = {}, onLike, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenProfile }) {
   const videoRef = useRef(null);
   const [sheet, setSheet] = useState(null); // 'comments' | 'actions' | 'report' | 'share' | null
+  // Fichier introuvable/corrompu/codec non supporté : sans ça, l'utilisateur
+  // ne voit qu'un rectangle noir figé, sans savoir si ça charge encore ou si
+  // c'est cassé.
+  const [videoError, setVideoError] = useState(false);
   if (!video) return null;
   const isLiked = liked.includes(video.id);
   const isReposted = reposted.includes(video.id);
@@ -3194,17 +3230,25 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
           <X size={18} color="#fff" />
         </button>
       </div>
-      <video
-        ref={videoRef}
-        src={video.videoUrl}
-        controls
-        controlsList="noremoteplayback"
-        disableRemotePlayback
-        x-webkit-airplay="deny"
-        autoPlay
-        playsInline
-        style={{ width: "100%", flex: 1, minHeight: 0, objectFit: "contain" }}
-      />
+      {videoError ? (
+        <div style={{ width: "100%", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, textAlign: "center" }}>
+          <AlertTriangle size={28} color="rgba(255,255,255,0.6)" strokeWidth={1.6} />
+          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.75)" }}>Cette vidéo n'est pas disponible pour le moment.</span>
+        </div>
+      ) : (
+        <video
+          ref={videoRef}
+          src={video.videoUrl}
+          controls
+          controlsList="noremoteplayback"
+          disableRemotePlayback
+          x-webkit-airplay="deny"
+          autoPlay
+          playsInline
+          onError={() => setVideoError(true)}
+          style={{ width: "100%", flex: 1, minHeight: 0, objectFit: "contain" }}
+        />
+      )}
       {/* Actions retirées de la liste Vidéos (voir VideoCard) — elles vivent
           ici, une fois la vidéo réellement ouverte, plutôt que nulle part.
           Séparées visuellement de la vidéo (léger filet) pour qu'on ne
@@ -3346,6 +3390,9 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
   // rechargement/scintillement en remontant dans le fil).
   const [shouldLoad, setShouldLoad] = useState(false);
   const shouldLoadRef = useRef(false);
+  // Fichier introuvable/corrompu : retombe sur l'image de secours (poster)
+  // plutôt qu'un rectangle noir figé qui semble juste ne jamais charger.
+  const [videoError, setVideoError] = useState(false);
 
   useEffect(() => {
     const el = slideRef.current;
@@ -3420,14 +3467,20 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
 
   return (
     <div ref={slideRef} style={{ position: "relative", width: "100%", height: "100%", scrollSnapAlign: "start", background: "#000", flexShrink: 0, overflow: "hidden" }}>
-      {item.videoUrl && shouldLoad ? (
-        <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline preload="metadata" onClick={handleTap} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      {item.videoUrl && shouldLoad && !videoError ? (
+        <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline preload="metadata" onClick={handleTap} onError={() => setVideoError(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : item.image ? (
         <img src={item.image} alt="" onClick={handleTap} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Film size={36} color="rgba(255,255,255,0.3)" /></div>
       )}
-      {!playing && (
+      {videoError && !item.image && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, textAlign: "center", pointerEvents: "none" }}>
+          <AlertTriangle size={26} color="rgba(255,255,255,0.5)" strokeWidth={1.6} />
+          <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.7)" }}>Cet Instant n'est pas disponible.</span>
+        </div>
+      )}
+      {!playing && !videoError && (
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
           <div style={{ width: 56, height: 56, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={26} color="#fff" fill="#fff" /></div>
         </div>
@@ -3640,7 +3693,6 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
   const [sheet, setSheet] = useState(null);
   const [query, setQuery] = useState("");
   const options = [{ key: "instants", label: "Instants" }, { key: "videos", label: "Vidéos" }, { key: "recherche", label: "Recherche" }];
-  const meName = profile.nom || "Vous";
   // "Nouveautés" = strictement chronologique (voir buildChronologicalFeed) :
   // une vidéo qui vient d'être publiée doit toujours prendre la première
   // place, jamais être devancée par une vidéo plus ancienne mieux notée.
@@ -3697,7 +3749,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
             pointerEvents: chromeMode === "hidden" ? "none" : "auto",
           }}
         >
-          <div className="flex gap-2">
+          <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
             {options.map((o) => (
               <Chip key={o.key} label={o.label} active={tab === o.key} onClick={() => setTab(o.key)} solid />
             ))}
@@ -3706,7 +3758,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
       )}
       {tab === "videos" && (
         <div className="flex items-center gap-2 px-4" style={{ paddingTop: 10, paddingBottom: 10 }}>
-          <div className="flex gap-2" style={{ flex: 1 }}>
+          <div className="flex gap-2" style={{ flex: 1, flexWrap: "wrap" }}>
             {[{ key: "nouveautes", label: "Nouveautés" }, { key: "abonnements", label: "Abonnements" }].map((o) => (
               <Chip key={o.key} label={o.label} active={videoSubTab === o.key} onClick={() => setVideoSubTab(o.key)} solid />
             ))}
@@ -3772,7 +3824,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
       {showFollowing && <FollowListSheet userId={profile.id} mode="following" onClose={() => setShowFollowing(false)} onOpenProfile={onOpenProfile} />}
       {sheet?.type === "actions" && (
         <ContentActionSheet
-          isOwn={sheet.post.nom === meName}
+          isOwn={sheet.post.username === profile?.username}
           isAdmin={profile.role === "admin"}
           onClose={() => setSheet(null)}
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
@@ -3936,7 +3988,6 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
     lastScrollTopRef.current = top;
   };
   const tabs = [["publications", "Publications"], ["discussions", "Discussions"], ["membres", "Membres"]];
-  const meName = profile?.nom || "Vous";
   // La policy RLS "creator or admin updates group" (001_init.sql) applique déjà
   // cette même règle côté base — ce contrôle ici n'est qu'un raccourci d'UX.
   // Les communautés prédéfinies PISTE (created_by = NULL) ne sont modifiables
@@ -4174,7 +4225,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
       )}
       {sheet?.type === "actions" && (
         <ContentActionSheet
-          isOwn={sheet.post.nom === meName}
+          isOwn={sheet.post.username === profile?.username}
           isAdmin={profile.role === "admin"}
           onClose={() => setSheet(null)}
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
@@ -5398,19 +5449,24 @@ function ProfileEditor({ profile, onClose, onSave }) {
     </div>
   );
 }
-function DogFormScreen({ onClose, onSaved }) {
+// dog: chien existant à modifier, ou null/absent pour en créer un nouveau —
+// même formulaire, comme ComposeScreen/editingPost pour les publications.
+function DogFormScreen({ dog, onClose, onSaved, onDeleted }) {
   const { colors } = useTheme();
-  const [nom, setNom] = useState("");
-  const [race, setRace] = useState("");
-  const [birthMonth, setBirthMonth] = useState("");
-  const [birthYear, setBirthYear] = useState("");
-  const [sexe, setSexe] = useState(null);
-  const [specialite, setSpecialite] = useState(null);
-  const [description, setDescription] = useState("");
+  const isEditing = !!dog;
+  const [nom, setNom] = useState(dog?.nom || "");
+  const [race, setRace] = useState(dog?.race || "");
+  const [birthMonth, setBirthMonth] = useState(dog?.birth_date ? String(new Date(dog.birth_date).getUTCMonth() + 1) : "");
+  const [birthYear, setBirthYear] = useState(dog?.birth_date ? String(new Date(dog.birth_date).getUTCFullYear()) : "");
+  const [sexe, setSexe] = useState(dog?.sexe || null);
+  const [specialite, setSpecialite] = useState(dog?.specialite || null);
+  const [description, setDescription] = useState(dog?.description || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(dog?.photo_url || null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const photoInputRef = useRef(null);
   const pickPhoto = (e) => {
     const file = e.target.files?.[0];
@@ -5423,18 +5479,30 @@ function DogFormScreen({ onClose, onSaved }) {
     setError("");
     try {
       const birthDate = birthMonth && birthYear ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01` : null;
-      const dog = await dogService.createDog({ nom, race, birthDate, sexe, specialite, description, photoFile });
-      onSaved(dog);
+      const saved = isEditing
+        ? await dogService.updateDog(dog.id, { nom, race, birthDate, sexe, specialite, description, photoFile })
+        : await dogService.createDog({ nom, race, birthDate, sexe, specialite, description, photoFile });
+      onSaved(saved);
     } catch (e) {
       setError(e.message || "Impossible d'enregistrer ce chien pour le moment.");
     } finally {
       setSaving(false);
     }
   };
+  const confirmDeleteDog = async () => {
+    setDeleting(true);
+    try {
+      await dogService.deleteDog(dog.id);
+      onDeleted(dog.id);
+    } catch (e) {
+      setError(e.message || "Impossible de supprimer ce chien pour le moment.");
+      setDeleting(false);
+    }
+  };
   const swipeBack = useSwipeBack(onClose);
   return (
     <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
-      <ScreenHeader title="Ajouter un chien" onCloseX={onClose} />
+      <ScreenHeader title={isEditing ? "Modifier le chien" : "Ajouter un chien"} onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickPhoto} style={{ display: "none" }} />
         <button
@@ -5482,13 +5550,26 @@ function DogFormScreen({ onClose, onSaved }) {
           {["Chien d'arrêt", "Chien courant", "Chien leveur", "Chien de terrier", "Chien de rouge", "Autre"].map((s) => <Chip key={s} label={s} active={specialite === s} onClick={() => setSpecialite(specialite === s ? null : s)} />)}
         </div>
         <TextField label="Description" value={description} onChange={setDescription} placeholder="Quelques mots sur votre compagnon de chasse." textarea />
-        {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error }}>{error}</div>}
+        {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error, marginBottom: 12 }}>{error}</div>}
+        {isEditing && (
+          !confirmDelete ? (
+            <button onClick={() => setConfirmDelete(true)} style={{ width: "100%", background: colors.errorSoft, border: "none", borderRadius: RADIUS.sm, padding: "13px 14px", textAlign: "left", fontSize: 13, fontWeight: 600, color: colors.error, cursor: "pointer" }}>Supprimer ce chien</button>
+          ) : (
+            <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: 14 }}>
+              <div style={{ fontSize: 12.5, color: colors.error, marginBottom: 10, lineHeight: 1.5 }}>Supprimer {dog.nom} ? Les publications où il est identifié resteront, juste sans ce lien.</div>
+              <div className="flex gap-3">
+                <button onClick={confirmDeleteDog} disabled={deleting} style={{ background: "none", border: "none", color: colors.error, fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>{deleting ? "..." : "Confirmer"}</button>
+                <button onClick={() => setConfirmDelete(false)} style={{ background: "none", border: "none", color: colors.error, textDecoration: "underline", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Annuler</button>
+              </div>
+            </div>
+          )
+        )}
       </div>
       <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button disabled={!nom || saving} onClick={submit}>{saving ? "Enregistrement..." : "Enregistrer"}</Button></div>
     </div>
   );
 }
-function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmin, liked = [], saved = [], reposted = [], commentsByPost = {}, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
+function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmin, isOwner = false, onEditDog, liked = [], saved = [], reposted = [], commentsByPost = {}, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("photos");
   const [posts, setPosts] = useState([]);
@@ -5519,8 +5600,13 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
       <ScreenHeader title={dog.nom} onBack={onClose} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div className="px-5 pt-4">
-        <div style={{ width: 64, height: 64, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden" }}>
-          {dog.photo_url ? <img src={dog.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={26} color={colors.textFaint} />}
+        <div className="flex items-start justify-between" style={{ gap: 10 }}>
+          <div style={{ width: 64, height: 64, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden", flexShrink: 0 }}>
+            {dog.photo_url ? <img src={dog.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={26} color={colors.textFaint} />}
+          </div>
+          {isOwner && (
+            <button onClick={onEditDog} className="active:scale-[0.98] transition-transform" style={{ flexShrink: 0, border: "none", background: colors.surfaceAlt, color: colors.text, borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Modifier</button>
+          )}
         </div>
         <div style={{ fontSize: 16, fontWeight: 800, color: colors.text }}>{dog.nom}</div>
         <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}>{[dog.race, dog.sexe, ageFromBirthDate(dog.birth_date) !== null && `${ageFromBirthDate(dog.birth_date)} ans`, dog.specialite].filter(Boolean).join(" · ")}</div>
@@ -6449,7 +6535,7 @@ function SinglePostOverlay({ post, onClose, ...postCardProps }) {
     </div>
   );
 }
-function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile, chromeMode = "full", incomingRequestsCount = 0, onApproveRequest, onRejectRequest, traceGroup, onOpenTrace, onOpenFollowers, onCreatePost }) {
+function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDeleted, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile, chromeMode = "full", incomingRequestsCount = 0, onApproveRequest, onRejectRequest, traceGroup, onOpenTrace, onOpenFollowers, onCreatePost }) {
   const { colors } = useTheme();
   const [editing, setEditing] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
@@ -6465,7 +6551,6 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
   const [openPost, setOpenPost] = useState(null);
   const stats = profile.statistiques || { abonnes: 0, abonnements: 0, publications: posts.length };
   const profileTabs = [["publications", "Publications"], ["videos", "Vidéos"], ["chiens", "Chiens"], ["reposts", "Repost"]];
-  const meName = profile.nom || "Vous";
 
   useEffect(() => {
     let cancelled = false;
@@ -6627,7 +6712,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
 
       {sheet?.type === "actions" && (
         <ContentActionSheet
-          isOwn={sheet.post.nom === meName}
+          isOwn={sheet.post.username === profile?.username}
           isAdmin={profile.role === "admin"}
           onClose={() => setSheet(null)}
           onEdit={() => { setSheet(null); onEditRequest(sheet.post); }}
@@ -6644,7 +6729,18 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
       {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile(p); setEditing(false); }} />}
-      {dogForm && <DogFormScreen onClose={() => setDogForm(false)} onSaved={(d) => { addDog(d); setDogForm(false); }} />}
+      {dogForm && (
+        <DogFormScreen
+          dog={typeof dogForm === "object" ? dogForm : null}
+          onClose={() => setDogForm(false)}
+          onSaved={(d) => {
+            if (typeof dogForm === "object") { onDogUpdated(d); if (openDog?.id === d.id) setOpenDog(d); }
+            else addDog(d);
+            setDogForm(false);
+          }}
+          onDeleted={(id) => { onDogDeleted(id); setDogForm(false); setOpenDog(null); }}
+        />
+      )}
       {openDog && (
         <DogPage
           dog={openDog}
@@ -6653,6 +6749,8 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
           onOpenPlayer={onOpenPlayer}
           meUsername={profile.username}
           isAdmin={profile.role === "admin"}
+          isOwner
+          onEditDog={() => setDogForm(openDog)}
           liked={liked}
           saved={saved}
           reposted={reposted}
@@ -6740,12 +6838,21 @@ function VoiceMessagePlayer({ url, durationSeconds, mine, colors }) {
   );
 }
 function MessageBubble({ mine, media, colors }) {
+  const [failed, setFailed] = useState(false);
   if (!media) return null;
+  if (failed) {
+    return (
+      <div className="flex items-center gap-2" style={{ padding: "8px 4px", color: mine ? "rgba(255,255,255,0.85)" : colors.textFaint }}>
+        <AlertTriangle size={14} />
+        <span style={{ fontSize: 12 }}>Média indisponible</span>
+      </div>
+    );
+  }
   if (media.type === "image") {
-    return <img src={media.url} alt="" style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
+    return <img src={media.url} alt="" onError={() => setFailed(true)} style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
   }
   if (media.type === "video") {
-    return <video src={media.url} controls playsInline style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
+    return <video src={media.url} controls playsInline onError={() => setFailed(true)} style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
   }
   if (media.type === "audio") {
     return <VoiceMessagePlayer url={media.url} durationSeconds={media.duration_seconds} mine={mine} colors={colors} />;
@@ -8155,6 +8262,22 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
   const swipeBackSection = useSwipeBack(section ? () => setSection(null) : null);
   const [editing, setEditing] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const confirmDeleteAccount = async () => {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await authService.deleteAccount();
+      // Pas de navigation explicite à faire : Root() détecte la perte de
+      // session (authService.deleteAccount se déconnecte déjà) via
+      // onAuthStateChange et bascule seul vers l'écran d'accueil, comme
+      // pour une déconnexion normale.
+    } catch (e) {
+      setDeleteError(e.message || "Impossible de supprimer le compte pour le moment.");
+      setDeleting(false);
+    }
+  };
   const [pw1, setPw1] = useState("");
   const [pw2, setPw2] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
@@ -9147,6 +9270,8 @@ function MainApp({ session, onboardingData, ageInfo }) {
         setProfile={setProfile}
         dogs={dogs}
         addDog={(d) => setDogs((ds) => [d, ...ds])}
+        onDogUpdated={(d) => setDogs((ds) => ds.map((x) => (x.id === d.id ? d : x)))}
+        onDogDeleted={(id) => setDogs((ds) => ds.filter((x) => x.id !== id))}
         posts={posts.filter((p) => p.username === profile.username)}
         videos={videos.filter((v) => v.username === profile.username)}
         onOpenPlayer={openVideoPlayer}
@@ -9273,7 +9398,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         onClose={() => setPlusOpen(false)}
         profile={profile}
         setProfile={setProfile}
-        posts={posts}
+        posts={posts.filter((p) => !blockedAuthors.includes(p.username))}
         savedPostIds={savedPostIds}
         onToggleSave={toggleSave}
         blockedAuthors={blockedAuthors}
