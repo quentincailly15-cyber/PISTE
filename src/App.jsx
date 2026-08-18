@@ -3677,6 +3677,30 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
   // onglets flottants (Instants/Vidéos/Recherche) suivent le même mouvement.
   const [localMode, setLocalMode] = useState("full");
   const lastScrollTopRef = useRef(0);
+  // En plus du défilement : les pilules se retirent aussi après 3s sans
+  // aucun toucher (on regarde une vidéo sans scroller), et reviennent dès
+  // qu'on touche l'écran — pas seulement en scrollant vers le haut.
+  const hideTimerRef = useRef(null);
+  const scheduleAutoHide = () => {
+    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = window.setTimeout(() => {
+      setLocalMode("hidden");
+      onChromeMode?.("hidden");
+    }, 3000);
+  };
+  useEffect(() => {
+    scheduleAutoHide();
+    return () => { if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const handleActivity = () => {
+    setLocalMode((m) => {
+      if (m !== "hidden") return m;
+      onChromeMode?.("floating");
+      return "floating";
+    });
+    scheduleAutoHide();
+  };
   const handleScroll = (e) => {
     const top = e.currentTarget.scrollTop;
     const delta = top - lastScrollTopRef.current;
@@ -3689,10 +3713,11 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
       onChromeMode?.(mode);
     }
     lastScrollTopRef.current = top;
+    scheduleAutoHide();
   };
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 15, background: "#000", display: "flex", justifyContent: "center" }}>
-    <div style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflow: "hidden", background: "#000" }}>
+    <div onTouchStart={handleActivity} style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflow: "hidden", background: "#000" }}>
       {tabSwitcher && (
         <div
           style={{
