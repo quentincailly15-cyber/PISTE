@@ -3147,7 +3147,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
 /* ============================================================
    7. VIDÉO — VideoCard
    ============================================================ */
-function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = [], reposted = [], commentsByPost = {}, onLike, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenProfile, onOpenSharedPost }) {
+function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = [], reposted = [], commentsByPost = {}, onLike, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenProfile }) {
   const videoRef = useRef(null);
   const [sheet, setSheet] = useState(null); // 'comments' | 'actions' | 'report' | 'share' | null
   if (!video) return null;
@@ -3177,11 +3177,16 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#000", display: "flex", flexDirection: "column" }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "flex", justifyContent: "space-between", padding: "16px", paddingTop: "calc(16px + env(safe-area-inset-top, 0px))" }}>
-        <button onClick={rotate} aria-label="Plein écran / pivoter" style={{ background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+      {/* pointerEvents "none" sur le conteneur, "auto" remis sur chaque
+          bouton seulement : sans ça, cette bande capture aussi les taps dans
+          l'espace vide entre les deux boutons, au-dessus de la vidéo — et
+          bloque au passage les contrôles natifs du lecteur (AirPlay, volume)
+          qui peuvent s'afficher dans cette même zone haute selon l'appareil. */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "flex", justifyContent: "space-between", padding: "16px", paddingTop: "calc(16px + env(safe-area-inset-top, 0px))", pointerEvents: "none" }}>
+        <button onClick={rotate} aria-label="Plein écran / pivoter" style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <RotateCw size={16} color="#fff" />
         </button>
-        <button onClick={onClose} aria-label="Fermer" style={{ background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+        <button onClick={onClose} aria-label="Fermer" style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <X size={18} color="#fff" />
         </button>
       </div>
@@ -3197,8 +3202,11 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
         style={{ width: "100%", flex: 1, minHeight: 0, objectFit: "contain" }}
       />
       {/* Actions retirées de la liste Vidéos (voir VideoCard) — elles vivent
-          ici, une fois la vidéo réellement ouverte, plutôt que nulle part. */}
-      <div className="flex items-center gap-5" style={{ padding: "10px 18px calc(12px + env(safe-area-inset-bottom, 0px))", background: "#000" }}>
+          ici, une fois la vidéo réellement ouverte, plutôt que nulle part.
+          Séparées visuellement de la vidéo (léger filet) pour qu'on ne
+          confonde jamais un tap sur la barre de contrôle native (lecture,
+          volume, défilement — juste au-dessus) avec un tap sur ces actions. */}
+      <div className="flex items-center gap-5" style={{ padding: "10px 18px calc(12px + env(safe-area-inset-bottom, 0px))", background: "#000", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
         <button onClick={() => onLike?.(video.id)} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
           <Heart size={19} color={isLiked ? "#E4634A" : "#fff"} fill={isLiked ? "#E4634A" : "none"} strokeWidth={1.8} />
           <AnimatedCount value={video.likes || 0} style={{ fontSize: 12.5, color: "#fff", fontWeight: 600 }} />
@@ -3717,14 +3725,6 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
                 <VideoCard
                   key={v.id}
                   video={v}
-                  liked={liked.includes(v.id)}
-                  reposted={reposted.includes(v.id)}
-                  commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
-                  onLike={() => onLike(v.id)}
-                  onRepost={v.type === "video" ? undefined : () => onRepost(v.id)}
-                  onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
-                  onOpenActions={() => setSheet({ type: "actions", post: v })}
-                  onOpenAuthor={() => onOpenProfile(v.username)}
                   onOpenPlayer={() => onOpenPlayer(v)}
                 />
               ))}
@@ -3751,13 +3751,6 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
             <VideoCard
               key={v.id}
               video={v}
-              liked={liked.includes(v.id)}
-              reposted={reposted.includes(v.id)}
-              commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
-              onLike={() => onLike(v.id)}
-              onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
-              onOpenActions={() => setSheet({ type: "actions", post: v })}
-              onOpenAuthor={() => onOpenProfile(v.username)}
               onOpenPlayer={() => onOpenPlayer(v)}
             />
           ))}
@@ -5163,6 +5156,32 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, onDiscus
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
       <div onClick={close} style={{ position: "absolute", inset: 0, background: "rgba(8,9,6,0.78)" }} />
+      {/* Fermeture explicite et visible — pas seulement "taper en dehors du
+          menu", pas toujours découvrable au premier essai. */}
+      <button
+        onClick={close}
+        aria-label="Fermer"
+        className="active:scale-90 transition-transform"
+        style={{
+          position: "absolute",
+          top: "calc(16px + env(safe-area-inset-top, 0px))",
+          right: 16,
+          width: 38,
+          height: 38,
+          borderRadius: RADIUS.pill,
+          background: "rgba(255,255,255,0.12)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          border: "1px solid rgba(255,255,255,0.22)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          zIndex: 1,
+        }}
+      >
+        <X size={18} color="#fff" strokeWidth={2} />
+      </button>
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div
           ref={wheelRef}
@@ -5494,14 +5513,6 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
             <VideoCard
               key={v.id}
               video={v}
-              liked={liked.includes(v.id)}
-              reposted={reposted.includes(v.id)}
-              commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
-              onLike={() => onLike?.(v.id)}
-              onRepost={() => onRepost?.(v.id)}
-              onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments?.(v.id); }}
-              onOpenActions={() => setSheet({ type: "actions", post: v })}
-              onOpenAuthor={() => onOpenProfile?.(v.username)}
               onOpenPlayer={() => onOpenPlayer?.(v)}
             />
           ))
@@ -6335,6 +6346,8 @@ function PublicationsGrid({ posts, onOpen, emptyTitle, emptySubtitle, onAdd }) {
         <button key={p.id} onClick={() => onOpen(p)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
           {p.image ? (
             <img src={p.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : p.videoUrl ? (
+            <video src={p.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
               <span style={{ fontSize: 10.5, color: colors.textFaint, textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}>{p.texte || p.titre}</span>
@@ -6359,7 +6372,18 @@ function VideoThumbGrid({ videos, onOpen, emptyTitle, emptySubtitle }) {
     <div className="grid grid-cols-3 gap-2.5">
       {videos.map((v) => (
         <button key={v.id} onClick={() => onOpen(v)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
-          {v.image ? <img src={v.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Film size={18} color={colors.textFaint} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)" }} />}
+          {v.image ? (
+            <img src={v.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : v.videoUrl ? (
+            // Pas de miniature générée (vidéo publiée avant l'existence de la
+            // capture automatique, ou capture qui a échoué) — la première
+            // image du fichier vidéo lui-même sert de secours plutôt qu'une
+            // simple icône, le navigateur affiche sa première frame décodée
+            // sans avoir besoin de lecture.
+            <video src={v.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
+          ) : (
+            <Film size={18} color={colors.textFaint} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)" }} />
+          )}
           <Play size={13} color="#fff" fill="#fff" style={{ position: "absolute", top: 6, right: 6, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }} />
           {v.duree && <span style={{ position: "absolute", left: 5, bottom: 5, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "1.5px 5px" }}>{v.duree}</span>}
         </button>
@@ -7811,11 +7835,13 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
   );
 }
 
-const NOTIF_ICON = { like: Heart, comment: MessageSquare, follow: User, repost: Repeat2, message: MessageCircle, group_invite: Users, new_post: Bell, new_trace: Footprints, mention: MessageSquare, moderation: AlertTriangle, system: Bell };
+const NOTIF_ICON = { like: Heart, comment: MessageSquare, follow: User, follow_request: User, follow_accepted: User, repost: Repeat2, message: MessageCircle, group_invite: Users, new_post: Bell, new_trace: Footprints, mention: MessageSquare, moderation: AlertTriangle, system: Bell };
 const NOTIF_TEXT = {
   like: (nom) => `${nom} a aimé votre publication.`,
   comment: (nom) => `${nom} a commenté votre publication.`,
   follow: (nom) => `${nom} a commencé à vous suivre.`,
+  follow_request: (nom) => `${nom} souhaite s'abonner à votre compte privé.`,
+  follow_accepted: (nom) => `${nom} a accepté votre demande d'abonnement.`,
   repost: (nom) => `${nom} a reposté votre publication.`,
   message: (nom) => `${nom} vous a envoyé un message.`,
   group_invite: (nom) => `${nom} vous a ajouté à un groupe de messagerie.`,
