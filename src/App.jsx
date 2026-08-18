@@ -2615,7 +2615,10 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
   // pour la lisibilité, comme la référence : les icônes flottent nues sur
   // le dégradé, rien ne les encadre.
   const authorRow = (overlay) => (
-    <div className="flex items-center justify-between" style={overlay ? { position: "absolute", top: 0, left: 0, right: 0, padding: "12px 14px", background: "linear-gradient(to bottom, rgba(0,0,0,0.58), rgba(0,0,0,0))", zIndex: 2 } : { padding: "0 18px 10px" }}>
+    // padding top 14px (pas 0) sur la version non-overlay : sans ça, l'avatar,
+    // le nom et le bouton "..." touchent directement le haut de la carte sur
+    // une publication texte seul (sans image, où authorRow n'a rien au-dessus).
+    <div className="flex items-center justify-between" style={overlay ? { position: "absolute", top: 0, left: 0, right: 0, padding: "12px 14px", background: "linear-gradient(to bottom, rgba(0,0,0,0.58), rgba(0,0,0,0))", zIndex: 2 } : { padding: "14px 18px 10px" }}>
       {/* minWidth:0 sur le bouton + troncature du nom : sans ça, un nom
           d'auteur très long pousse le bouton "..." hors de la carte
           (déborde) au lieu de se couper proprement. */}
