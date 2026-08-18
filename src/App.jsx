@@ -1918,7 +1918,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
               )}
               {tab === "chiens" && (
                 dogs.length === 0 ? (
-                  <EmptyState title="Aucun chien enregistré" subtitle="Les chiens de ce compte apparaîtront ici." icon={Dog} />
+                  <EmptyState title="Aucun chien enregistré" subtitle="Les chiens de ce compte apparaîtront ici." icon={HelpCircle} />
                 ) : (
                   <div className="px-4 pt-2 flex flex-col">
                     {dogs.map((d) => (
@@ -2189,7 +2189,7 @@ function CommentsList({ comments, onDelete, meUsername, onOpenProfile, onReply }
   const topLevel = comments.filter((c) => !c.parentId);
   const repliesOf = (id) => comments.filter((c) => c.parentId === id);
   if (comments.length === 0) {
-    return <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à réagir à cette publication." icon={MessageSquare} />;
+    return <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à réagir à cette publication." icon={HelpCircle} />;
   }
   return (
     <div style={{ padding: "8px 16px" }}>
@@ -2815,7 +2815,7 @@ function TraceViewersSheet({ traceId, onClose }) {
             {loading ? (
               <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
             ) : viewers.length === 0 ? (
-              <EmptyState title="Aucune vue pour l'instant" subtitle="Les personnes qui regardent votre Trace apparaîtront ici." icon={Eye} />
+              <EmptyState title="Aucune vue pour l'instant" subtitle="Les personnes qui regardent votre Trace apparaîtront ici." icon={HelpCircle} />
             ) : (
               viewers.map((v) => (
                 <div key={v.username} className="flex items-center gap-3" style={{ padding: "8px 4px" }}>
@@ -3129,7 +3129,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
       </div>
       <div style={{ marginTop: 14 }}><TraceBar groups={traceGroups} onOpenGroup={onOpenTraceGroup} onCreateOwn={onCreateOwnTrace} /></div>
       {visible.length === 0 ? (
-        <EmptyState title="Aucun contenu pour le moment" subtitle={copy[tab]} icon={Home} />
+        <EmptyState title="Aucun contenu pour le moment" subtitle={copy[tab]} icon={HelpCircle} />
       ) : (
         <div style={{ paddingTop: 14 }}>
           {visible.map((p) => (
@@ -3718,7 +3718,7 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
       )}
       {items.length === 0 ? (
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
-          <EmptyState title="Aucun instant pour le moment" subtitle="Instants — le format vidéo court de PISTE — publiés par la communauté apparaîtront ici." icon={Film} />
+          <EmptyState title="Aucun instant pour le moment" subtitle="Instants — le format vidéo court de PISTE — publiés par la communauté apparaîtront ici." icon={HelpCircle} />
         </div>
       ) : (
         <div onScroll={handleScroll} style={{ height: "100%", overflowY: "auto", scrollSnapType: "y mandatory" }}>
@@ -3834,7 +3834,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
           {!q ? (
             <EmptyState title="Rechercher une vidéo" subtitle="Lancez une recherche pour trouver des vidéos publiées par la communauté." icon={Search} />
           ) : searchResults.length === 0 ? (
-            <EmptyState title="Aucun résultat" subtitle={`Aucune vidéo ne correspond à « ${query} ».`} icon={Search} />
+            <EmptyState title="Aucun résultat" subtitle={`Aucune vidéo ne correspond à « ${query} ».`} icon={HelpCircle} />
           ) : (
             <div style={{ paddingTop: 12 }}>
               {searchResults.map((v) => (
@@ -3875,7 +3875,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
         <EmptyState
           title={videoSubTab === "abonnements" ? "Aucune vidéo de vos abonnements" : "Aucune vidéo pour le moment"}
           subtitle={videoSubTab === "abonnements" ? "Les vidéos publiées par les comptes que vous suivez apparaîtront ici." : "Les vidéos publiées par la communauté apparaîtront ici."}
-          icon={Film}
+          icon={HelpCircle}
         />
       )}
       {showFollowing && <FollowListSheet userId={profile.id} mode="following" onClose={() => setShowFollowing(false)} onOpenProfile={onOpenProfile} />}
@@ -4193,7 +4193,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           loading ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
           ) : groupPosts.length === 0 ? (
-            <EmptyState title="Aucune publication" subtitle="Les publications de cette communauté apparaîtront ici." icon={Feather} />
+            <EmptyState title="Aucune publication" subtitle="Les publications de cette communauté apparaîtront ici." icon={HelpCircle} />
           ) : (
             // La marge latérale vient déjà de PostCard (comme dans le Fil) —
             // pas de padding horizontal ici, sinon elle s'additionnerait.
@@ -4221,7 +4221,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           membersLoading ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
           ) : members.length === 0 ? (
-            <EmptyState title="Aucun membre" subtitle="Les membres de cette communauté apparaîtront ici." icon={Users} />
+            <EmptyState title="Aucun membre" subtitle="Les membres de cette communauté apparaîtront ici." icon={HelpCircle} />
           ) : (
             <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
               {members.map((m) => (
@@ -4244,7 +4244,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           discussionsLoading ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
           ) : discussions.length === 0 ? (
-            <EmptyState title="Aucune discussion" subtitle="Lancez la première discussion de cette communauté." icon={MessageSquare} />
+            <EmptyState title="Aucune discussion" subtitle="Lancez la première discussion de cette communauté." icon={HelpCircle} />
           ) : (
             <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
               {discussions.map((d) => (
@@ -4265,7 +4265,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
             </div>
           )
         ) : (
-          <EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de cette communauté est vide pour le moment.`} icon={Users} />
+          <EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de cette communauté est vide pour le moment.`} icon={HelpCircle} />
         )}
       </div>
       <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}>
@@ -4568,7 +4568,7 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
       {joined.length > 0 && <div className="flex flex-col gap-2 px-4 pb-4">{joined.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>}
 
       {filtered.length === 0 ? (
-        <EmptyState title="Aucune communauté trouvée" subtitle="Essayez un autre mot-clé ou créez votre propre communauté." ctaLabel="Créer une communauté" onCta={() => setCreating(true)} icon={Users} />
+        <EmptyState title="Aucune communauté trouvée" subtitle="Essayez un autre mot-clé ou créez votre propre communauté." ctaLabel="Créer une communauté" onCta={() => setCreating(true)} icon={HelpCircle} />
       ) : (
         <div className="flex flex-col gap-2 px-4 pb-4" style={{ paddingTop: joined.length > 0 ? 12 : 22 }}>{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
       )}
@@ -5710,7 +5710,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
           logsLoading ? (
             <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
           ) : huntingLogs.length === 0 ? (
-            <EmptyState title="Aucune sortie enregistrée" subtitle={`Les statistiques du carnet de chasse où ${dog.nom} est identifié apparaîtront ici.`} icon={Footprints} />
+            <EmptyState title="Aucune sortie enregistrée" subtitle={`Les statistiques du carnet de chasse où ${dog.nom} est identifié apparaîtront ici.`} icon={HelpCircle} />
           ) : (
             <div style={{ paddingTop: 12 }}><HuntingLogStatsView stats={dogStats} /></div>
           )
@@ -6449,7 +6449,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
               </div>
             )}
             {filtered.length === 0 ? (
-              <EmptyState title={logs.length === 0 ? "Aucune sortie enregistrée" : "Aucun résultat"} subtitle={logs.length === 0 ? "Ajoutez votre première sortie pour commencer votre carnet." : "Essayez d'autres filtres."} ctaLabel={logs.length === 0 ? "Ajouter une sortie" : undefined} onCta={logs.length === 0 ? () => setShowForm(true) : undefined} icon={Footprints} />
+              <EmptyState title={logs.length === 0 ? "Aucune sortie enregistrée" : "Aucun résultat"} subtitle={logs.length === 0 ? "Ajoutez votre première sortie pour commencer votre carnet." : "Essayez d'autres filtres."} ctaLabel={logs.length === 0 ? "Ajouter une sortie" : undefined} onCta={logs.length === 0 ? () => setShowForm(true) : undefined} icon={HelpCircle} />
             ) : (
               // Le carnet est une PISTE, pas une liste de fiches : chaque
               // sortie est un point sur un fil chronologique continu, comme
@@ -6566,7 +6566,7 @@ function useGeneratedThumbnail(image, videoUrl, mediaId) {
   return image || generated;
 }
 function PublicationsGrid({ posts, onOpen, emptyTitle, emptySubtitle, onAdd }) {
-  if (posts.length === 0) return <EmptyState title={emptyTitle} subtitle={emptySubtitle} onAdd={onAdd} icon={Feather} />;
+  if (posts.length === 0) return <EmptyState title={emptyTitle} subtitle={emptySubtitle} onAdd={onAdd} icon={HelpCircle} />;
   return (
     <div className="grid grid-cols-3 gap-2.5">
       {posts.map((p) => <PublicationGridCell key={p.id} post={p} onOpen={onOpen} />)}
@@ -6599,7 +6599,7 @@ function PublicationGridCell({ post: p, onOpen }) {
 // de la référence (miniature + durée), plutôt que la carte pleine largeur
 // du fil Vidéos général : ici on parcourt vite, on ne lit pas en scrollant.
 function VideoThumbGrid({ videos, onOpen, emptyTitle, emptySubtitle }) {
-  if (videos.length === 0) return <EmptyState title={emptyTitle} subtitle={emptySubtitle} icon={Film} />;
+  if (videos.length === 0) return <EmptyState title={emptyTitle} subtitle={emptySubtitle} icon={HelpCircle} />;
   return (
     <div className="grid grid-cols-3 gap-2.5">
       {videos.map((v) => <VideoThumbCell key={v.id} video={v} onOpen={onOpen} />)}
@@ -7806,7 +7806,7 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
         {searching ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 20 }}>Recherche...</div>
         ) : results.length === 0 ? (
-          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher quelqu'un"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour trouver un compte."} icon={Search} />
+          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher quelqu'un"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour trouver un compte."} icon={query.trim() ? HelpCircle : Search} />
         ) : (
           results.map((u) => (
             <button
@@ -7937,7 +7937,7 @@ function NewConversationSheet({ onClose, onStarted }) {
         {searching ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 20 }}>Recherche...</div>
         ) : results.length === 0 ? (
-          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher un utilisateur"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour démarrer."} icon={Search} />
+          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher un utilisateur"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour démarrer."} icon={query.trim() ? HelpCircle : Search} />
         ) : (
           results.map((u) => (
             <button
@@ -8045,7 +8045,7 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
       {loading ? (
         <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
       ) : conversations.length === 0 ? (
-        <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." ctaLabel="Démarrer une conversation" onCta={() => setShowNew(true)} icon={MessageCircle} />
+        <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." ctaLabel="Démarrer une conversation" onCta={() => setShowNew(true)} icon={HelpCircle} />
       ) : filteredConversations.length === 0 ? (
         <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Aucune conversation ne correspond à « {query} ».</div>
       ) : (
@@ -8199,7 +8199,7 @@ function FollowRequestsSheet({ onClose, onApprove, onReject, onOpenProfile }) {
             {loading ? (
               <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
             ) : items.length === 0 ? (
-              <EmptyState title="Aucune demande" subtitle="Les demandes d'abonnement à votre compte privé apparaîtront ici." icon={Users} />
+              <EmptyState title="Aucune demande" subtitle="Les demandes d'abonnement à votre compte privé apparaîtront ici." icon={HelpCircle} />
             ) : (
               items.map((r) => (
                 <div key={r.id} className="flex items-center gap-3" style={{ padding: "10px 8px" }}>
@@ -8284,7 +8284,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
         {loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
         ) : items.length === 0 ? (
-          <EmptyState title="Aucune notification pour le moment" subtitle="Vous serez averti ici des interactions et des nouveautés qui vous concernent." icon={Bell} />
+          <EmptyState title="Aucune notification pour le moment" subtitle="Vous serez averti ici des interactions et des nouveautés qui vous concernent." icon={HelpCircle} />
         ) : (
           groupByDay(items, (n) => n.createdAt).map(([label, group]) => (
             <div key={label}>
@@ -8361,7 +8361,7 @@ function ToggleRow({ label, value, onToggle }) {
 function SavedList({ posts, savedIds, onUnsave }) {
   const { colors } = useTheme();
   const saved = posts.filter((p) => savedIds.includes(p.id));
-  if (saved.length === 0) return <EmptyState title="Aucun enregistrement pour le moment" subtitle="Les publications que vous enregistrez apparaîtront ici." icon={Bookmark} />;
+  if (saved.length === 0) return <EmptyState title="Aucun enregistrement pour le moment" subtitle="Les publications que vous enregistrez apparaîtront ici." icon={HelpCircle} />;
   return (
     <div className="px-4 pt-3 flex flex-col gap-2">
       {saved.map((p) => (
