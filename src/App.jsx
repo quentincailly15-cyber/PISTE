@@ -989,7 +989,7 @@ const FAQ_ITEMS = [
   { q: "Comment créer mon compte ?", a: "Depuis l'écran d'accueil, choisissez « Commencer » puis suivez les étapes : pseudo, e-mail, mot de passe, date de naissance, région et centres d'intérêt." },
   { q: "Comment modifier mon profil ?", a: "Rendez-vous sur l'onglet Profil puis appuyez sur « Modifier le profil » pour changer votre photo, votre bio ou votre localisation." },
   { q: "Comment publier du contenu ?", a: "Utilisez le bouton « Créer » dans la barre de navigation : vous pouvez publier un texte, une photo, une vidéo, un Instant, une discussion, un sondage ou une sortie." },
-  { q: "Qu'est-ce qu'un Instant ?", a: "Un Instant est un format vidéo court et vertical, pensé pour partager un moment rapidement." },
+  { q: "Qu'est-ce qu'un Instant ?", a: "Un Instant est un format vidéo court (3 minutes maximum), pensé pour partager un moment rapidement." },
   { q: "Comment fonctionnent les likes et commentaires ?", a: "Appuyez sur le cœur pour aimer une publication, ou sur l'icône de commentaire pour ouvrir la discussion et répondre." },
   { q: "Comment suivre quelqu'un ?", a: "Cette fonctionnalité sera activée avec de vrais comptes utilisateurs — la structure est déjà prête côté interface." },
   { q: "Comment rejoindre une communauté ?", a: "Ouvrez l'onglet Communautés, choisissez une catégorie et appuyez sur « Rejoindre »." },
@@ -3723,7 +3723,7 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
       )}
       {items.length === 0 ? (
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
-          <EmptyState title="Aucun instant pour le moment" subtitle="Instants — le format court et vertical de PISTE — publiés par la communauté apparaîtront ici." icon={Film} />
+          <EmptyState title="Aucun instant pour le moment" subtitle="Instants — le format vidéo court de PISTE — publiés par la communauté apparaîtront ici." icon={Film} />
         </div>
       ) : (
         <div onScroll={handleScroll} style={{ height: "100%", overflowY: "auto", scrollSnapType: "y mandatory" }}>
@@ -4819,8 +4819,9 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const captionLabel = isPoll ? "Question du sondage" : "Description";
 
   // Sonde durée + dimensions réelles d'une vidéo côté navigateur, sans
-  // dépendre du serveur — sert à faire respecter "Instant = vertical, max 1
-  // min" et "Vidéo = horizontale, max 30 min" dès la sélection du fichier.
+  // dépendre du serveur — sert à faire respecter "Instant : max 3 min" et
+  // "Vidéo : entre 3 et 30 min" dès la sélection du fichier (les deux
+  // formats acceptent maintenant l'horizontale comme la verticale).
   const probeVideoMeta = (file) => new Promise((resolve) => {
     const v = document.createElement("video");
     v.preload = "metadata";
