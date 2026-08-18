@@ -3248,7 +3248,7 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
       {/* Zone vidéo dédiée — 70% de l'écran, pas plein écran : le reste de la
           page (auteur, titre, actions, commentaires) reste visible en dessous,
           contrairement au lecteur plein écran des Instants. */}
-      <div style={{ position: "relative", width: "100%", height: "70vh", flexShrink: 0, background: "#000" }}>
+      <div style={{ position: "relative", width: "100%", height: "70dvh", flexShrink: 0, background: "#000" }}>
         {/* pointerEvents "none" sur le conteneur, "auto" remis sur chaque
             bouton seulement : sans ça, cette bande capture aussi les taps dans
             l'espace vide entre les deux boutons, au-dessus de la vidéo — et
