@@ -253,29 +253,13 @@ export async function toggleSave(postId, shouldSave) {
   return true;
 }
 
-/**
- * Commentaires privés : chaque commentaire porte thread_owner_id, l'auteur du
- * fil (voir migration 045) — un commentaire racine démarre son propre fil,
- * une réponse hérite du fil de son parent, pour que la RLS puisse le
- * réserver à ce seul auteur et à celui de la publication.
- */
 export async function addComment(postId, texte, parentId = null) {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("Non authentifié");
   const mentions = extractMentions(texte || "");
-  let threadOwnerId = userData.user.id;
-  if (parentId) {
-    const { data: parent, error: parentError } = await supabase
-      .from("comments")
-      .select("thread_owner_id")
-      .eq("id", parentId)
-      .single();
-    if (parentError) throw parentError;
-    threadOwnerId = parent.thread_owner_id;
-  }
   const { data, error } = await supabase
     .from("comments")
-    .insert({ post_id: postId, author_id: userData.user.id, texte, parent_id: parentId, mentions, thread_owner_id: threadOwnerId })
+    .insert({ post_id: postId, author_id: userData.user.id, texte, parent_id: parentId, mentions })
     .select()
     .single();
   if (error) throw error;

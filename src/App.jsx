@@ -1875,7 +1875,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={meUsername} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={meUsername} onOpenProfile={onOpenProfile} />
       )}
     </div>
   );
@@ -2041,7 +2041,7 @@ function MentionPickerButton({ onSelect }) {
     </>
   );
 }
-function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenProfile, postAuthorUsername }) {
+function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenProfile }) {
   const { colors } = useTheme();
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null); // { id, auteur } | null
@@ -2084,21 +2084,16 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
         }}
       >
         <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
-        <div style={{ padding: "6px 16px 10px" }}>
-          <div className="flex items-center justify-between">
-            <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Commentaires</span>
-            <IconButton icon={X} onClick={onClose} size={30} />
-          </div>
-          <div style={{ fontSize: 11, color: colors.textFaint, marginTop: 2 }}>Privés : seuls vous et l'auteur de la publication voyez votre échange.</div>
+        <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Commentaires</span>
+          <IconButton icon={X} onClick={onClose} size={30} />
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
         {comments.length === 0 ? (
-          <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à écrire — votre commentaire ne sera visible que par vous et l'auteur." />
+          <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à réagir à cette publication." />
         ) : (
           <div style={{ padding: "8px 16px" }}>
-            {topLevel.map((c) => {
-              const canReply = meUsername && (c.authorUsername === meUsername || meUsername === postAuthorUsername);
-              return (
+            {topLevel.map((c) => (
               <div key={c.id} style={{ padding: "10px 0", borderBottom: `1px solid ${colors.border}` }}>
                 <div className="flex items-center justify-between" style={{ marginBottom: 3 }}>
                   <div className="flex items-center gap-2">
@@ -2112,9 +2107,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
                   )}
                 </div>
                 <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(c.texte, colors, onOpenProfile)}</div>
-                {canReply && (
-                  <button onClick={() => setReplyTo({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: 4, padding: 0 }}>Répondre</button>
-                )}
+                <button onClick={() => setReplyTo({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: 4, padding: 0 }}>Répondre</button>
                 {repliesOf(c.id).map((r) => (
                   <div key={r.id} style={{ marginTop: 8, marginLeft: 18, paddingLeft: 10, borderLeft: `2px solid ${colors.border}` }}>
                     <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
@@ -2132,8 +2125,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
                   </div>
                 ))}
               </div>
-              );
-            })}
+            ))}
           </div>
         )}
       </div>
@@ -2839,7 +2831,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
     </div>
   );
@@ -3403,7 +3395,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "video", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
     </div>
   );
@@ -3747,7 +3739,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
     </div>
   );
@@ -4755,7 +4747,6 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
           onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined}
           meUsername={meUsername}
           onOpenProfile={onOpenProfile}
-          postAuthorUsername={sheet.post.username}
         />
       )}
     </div>
@@ -4816,7 +4807,6 @@ function SinglePostViewer({ post, autoOpenComments, onClose, onOpenProfile, meUs
           onDelete={onDeleteComment ? (commentId) => onDeleteComment(post.id, commentId) : undefined}
           meUsername={meUsername}
           onOpenProfile={onOpenProfile}
-          postAuthorUsername={post.username}
         />
       )}
     </div>
@@ -5737,7 +5727,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
       {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile(p); setEditing(false); }} />}
       {dogForm && <DogFormScreen onClose={() => setDogForm(false)} onSaved={(d) => { addDog(d); setDogForm(false); }} />}
@@ -7685,7 +7675,6 @@ function MainApp({ session, onboardingData, ageInfo }) {
         texte: r.texte,
         date: formatRelativeDate(r.created_at),
         parentId: r.parent_id,
-        threadOwnerId: r.thread_owner_id,
       }));
       setCommentsByPost((m) => ({ ...m, [postId]: mapped }));
     } catch (e) { /* pas bloquant : la feuille s'ouvrira simplement vide */ }
@@ -7722,11 +7711,19 @@ function MainApp({ session, onboardingData, ageInfo }) {
   };
   const addComment = async (id, texte, parentId) => {
     let comment;
-    if (isLocalId(id)) {
-      comment = { id: `local-${Date.now()}`, auteur: profile.nom || profile.username || "Vous", authorUsername: profile.username, texte, date: "à l'instant", parentId: parentId || null };
-    } else {
-      const c = await postService.addComment(id, texte, parentId);
-      comment = { id: c.id, auteur: profile.nom || profile.username || "Vous", authorUsername: profile.username, texte, date: "à l'instant", parentId: parentId || null };
+    try {
+      if (isLocalId(id)) {
+        comment = { id: `local-${Date.now()}`, auteur: profile.nom || profile.username || "Vous", authorUsername: profile.username, texte, date: "à l'instant", parentId: parentId || null };
+      } else {
+        const c = await postService.addComment(id, texte, parentId);
+        comment = { id: c.id, auteur: profile.nom || profile.username || "Vous", authorUsername: profile.username, texte, date: "à l'instant", parentId: parentId || null };
+      }
+    } catch (e) {
+      // Sans ce filet, un échec côté base (ex. contrainte non respectée) était
+      // totalement silencieux : le champ se vidait comme si le commentaire
+      // était bien envoyé, alors qu'il n'apparaissait jamais nulle part.
+      showToast("Impossible de publier ce commentaire pour le moment.");
+      return;
     }
     setCommentsByPost((m) => ({ ...m, [id]: [...(m[id] || []), comment] }));
     bumpComments(id, 1);
@@ -8148,7 +8145,6 @@ function MainApp({ session, onboardingData, ageInfo }) {
           onDelete={(commentId) => deleteComment(notifInstant.id, commentId)}
           meUsername={profile.username}
           onOpenProfile={setOpenProfileUsername}
-          postAuthorUsername={notifInstant.username}
         />
       )}
     </AppShell>
