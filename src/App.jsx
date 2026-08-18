@@ -239,15 +239,17 @@ function PisteGlyph({ type, size = 16, color }) {
   if (type === "gibier") {
     // Un gibier à plumes vu de dessous, ailes déployées — remplace l'icône
     // de partage générique (Share2), plus dans l'esprit de l'app. Ailes
-    // pleines (silhouette), pas de simples traits, plus tête et queue
-    // marquées : bien plus reconnaissable comme oiseau qu'un chevron abstrait.
+    // levées (pas juste écartées à plat) : la silhouette remplit mieux son
+    // cadre 24x24 en hauteur — à la même taille (size), elle ne paraît plus
+    // plus petite que les icônes lucide voisines (Heart, MessageSquare...),
+    // dont le tracé occupe une bien plus grande part du cadre.
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <path d="M12 10.2c2.5-1.6 6.5-1.2 9.3 4.1-3.3-.7-6.8-1.7-9.3-1.2z" fill={color} />
-        <path d="M12 10.2c2.5-1.6 6.5-1.2 9.3 4.1-3.3-.7-6.8-1.7-9.3-1.2z" fill={color} transform="translate(24,0) scale(-1,1)" />
-        <path d="M12 15.8 10.6 18.6 13.4 18.6z" fill={color} />
-        <ellipse cx="12" cy="12.8" rx="1.7" ry="2.8" fill={color} />
-        <circle cx="12" cy="9" r="1.3" fill={color} />
+        <path d="M12 8c3-2.3 6.5-3 9-2-3 2.5-6 4.5-8 6z" fill={color} />
+        <path d="M12 8c3-2.3 6.5-3 9-2-3 2.5-6 4.5-8 6z" fill={color} transform="translate(24,0) scale(-1,1)" />
+        <path d="M12 17.5 10.3 21 13.7 21z" fill={color} />
+        <ellipse cx="12" cy="13" rx="2.1" ry="4.3" fill={color} />
+        <circle cx="12" cy="5.5" r="1.6" fill={color} />
       </svg>
     );
   }
