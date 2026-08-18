@@ -11,13 +11,14 @@ import { supabase } from "./supabaseClient.js";
  * de modifier le profil de quelqu'un d'autre ou les colonnes protégées
  * (role, badges, verification_status) — ce n'est donc pas revérifié ici.
  */
-export async function updateProfile({ nom, username, bio, localisation, isPrivate }) {
+export async function updateProfile({ nom, username, bio, localisation, isPrivate, interets }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
 
   const payload = { nom, username, bio, departement: localisation };
   if (isPrivate !== undefined) payload.is_private = isPrivate;
+  if (interets !== undefined) payload.interets = interets;
 
   const { data, error } = await supabase
     .from("profiles")

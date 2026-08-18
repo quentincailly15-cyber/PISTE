@@ -16,7 +16,7 @@ import { validateUsernameFormat, computeAge } from "../lib/piste_core.js";
  * supabase/migrations/002_profile_trigger.sql), à partir des métadonnées
  * passées dans `options.data`. Ce fichier ne fait donc qu'un seul appel réseau.
  */
-export async function signUp({ email, password, username, day, month, year, region, departement }) {
+export async function signUp({ email, password, username, day, month, year, region, departement, interets }) {
   const formatCheck = validateUsernameFormat(username);
   if (!formatCheck.valid) {
     throw new Error(`Nom d'utilisateur invalide (${formatCheck.reason})`);
@@ -40,6 +40,7 @@ export async function signUp({ email, password, username, day, month, year, regi
         date_naissance: dateNaissance,
         region,
         departement,
+        interets: interets || [],
       },
     },
   });

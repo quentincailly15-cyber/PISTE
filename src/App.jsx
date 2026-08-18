@@ -1343,6 +1343,7 @@ function StepAccess({ data, onFinish, onBack }) {
         year: data.year,
         region: data.region,
         departement: data.departement,
+        interets: data.interests,
       });
       if (result.emailConfirmationRequired) {
         setStatus("sent"); // écran "vérifiez votre e-mail" ci-dessous
@@ -5368,6 +5369,7 @@ function ProfileEditor({ profile, onClose, onSave }) {
         username: form.username,
         bio: form.bio,
         localisation: form.localisation,
+        interets: form.interets,
       });
       onSave({ ...saved, avatar: avatarUrl, imageCouverture: bannerUrl, interets: form.interets });
     } catch (e) {
@@ -8720,7 +8722,12 @@ function MainApp({ session, onboardingData, ageInfo }) {
           imageCouverture: data.banniere_url || null,
           bio: data.bio || "",
           localisation: data.departement || "",
-          interets: p.interets,
+          // Lu depuis la vraie colonne "profiles.interets" (migration 054) —
+          // avant, cette ligne recopiait l'état local (p.interets), qui ne
+          // valait jamais rien après un rafraîchissement : ni l'onboarding ni
+          // "Modifier le profil" n'envoyaient les centres d'intérêt à
+          // Supabase, la colonne n'existait même pas.
+          interets: data.interets || [],
           badges: data.badges || [],
           age,
           estMineur: age !== null && age <= MODERATION_AGE_RULES.minor.maxAge,
