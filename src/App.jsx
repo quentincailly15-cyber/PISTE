@@ -2677,10 +2677,10 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
     </div>
   );
   return (
-    // Plus de marge latérale — l'image s'étend jusqu'au bord gauche et droit
-    // de l'écran, comme la référence (une carte "de contenu", pas une carte
-    // "dans une marge").
-    <div style={{ background: colors.surface, borderRadius: RADIUS.xl, margin: "0 0 12px", overflow: "hidden", paddingBottom: 14 }}>
+    // Marge latérale égale à l'espace entre deux publications (12px) : la
+    // carte "flotte" sur le fond au lieu de toucher les bords de l'écran —
+    // plus immersif qu'un bord à bord qui colle à la bordure du téléphone.
+    <div style={{ background: colors.surface, borderRadius: RADIUS.xl, margin: "0 12px 12px", overflow: "hidden", paddingBottom: 14 }}>
       {post.repostedAt && (
         <div className="flex items-center gap-1.5" style={{ padding: "14px 18px 6px", fontSize: 11.5, color: colors.textFaint, fontWeight: 600 }}>
           <Repeat2 size={13} /> Reposté
@@ -4161,11 +4161,9 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           ) : groupPosts.length === 0 ? (
             <EmptyState title="Aucune publication" subtitle="Les publications de cette communauté apparaîtront ici." icon={Feather} />
           ) : (
-            // Contrairement au Fil (photos bord à bord, voir la référence),
-            // les publications d'une communauté restent une carte à part
-            // entière dans la page — marge latérale fine pour qu'elles ne
-            // touchent ni les bords de l'écran ni les cartes voisines.
-            <div style={{ padding: "6px 10px 0" }}>
+            // La marge latérale vient déjà de PostCard (comme dans le Fil) —
+            // pas de padding horizontal ici, sinon elle s'additionnerait.
+            <div style={{ padding: "6px 0 0" }}>
               {groupPosts.map((p) => (
                 <PostCard
                   onOpenProfile={onOpenProfile}
