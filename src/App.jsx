@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   Home, Plus, Users, User, Search, Bell, MessageCircle, ArrowLeft, X, Menu,
   Image as ImageIcon, CalendarDays, Settings, ChevronRight,
@@ -7,6 +8,7 @@ import {
   Heart, MessageSquare, MoreHorizontal, Camera, Play, BookOpen, Mic,
   Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud, Target,
   RotateCw, Smartphone, AtSign, Feather,
+  Rabbit, Bird, UtensilsCrossed, Mountain, Backpack, Shirt, Truck, PawPrint, Leaf, Scale, GraduationCap, Crosshair, Trees, Compass,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as traceService from "./services/traceService.js";
@@ -2300,7 +2302,11 @@ function SharePostSheet({ item, onClose }) {
   const thumb = item.image || (item.videoUrl ? null : null);
   const isVideoLike = item.type === "video" || item.type === "video_courte";
 
-  return (
+  // Rendu via portail sur document.body : sans ça, un fixed/inset:0 imbriqué
+  // dans une carte peut se retrouver cadré par un ancêtre transformé (ex. une
+  // animation de balayage entre onglets) et sembler "à la taille du post"
+  // plutôt que couvrir vraiment toute la page.
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 92, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 16px calc(28px + env(safe-area-inset-bottom, 0px))" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
       <div style={{ width: "100%", maxWidth: 420, maxHeight: "100%", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 16px 48px rgba(0,0,0,0.28)", display: "flex", flexDirection: "column", position: "relative" }}>
@@ -2385,7 +2391,8 @@ function SharePostSheet({ item, onClose }) {
             </>
           )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, onRepost, onOpenComments, onOpenActions, onOpenAuthor, onOpenProfile }) {
@@ -2412,7 +2419,13 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
       </div>
       {post.texte && <div style={{ padding: "0 16px 12px", fontSize: 13.5, color: colors.text, lineHeight: 1.5 }}>{renderTextWithMentions(post.texte, colors, onOpenProfile)}</div>}
       {post.type === "sondage" && <PollCard postId={post.id} />}
-      {post.image && (
+      {post.videoUrl ? (
+        <SensitiveGate rating={post.contentRating}>
+          <div style={{ margin: "0 16px", aspectRatio: "4/3", borderRadius: RADIUS.lg, overflow: "hidden", background: "#000" }}>
+            <video src={post.videoUrl} poster={post.image || undefined} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </div>
+        </SensitiveGate>
+      ) : post.image && (
         <SensitiveGate rating={post.contentRating}>
           <div style={{ margin: "0 16px", aspectRatio: "4/3", borderRadius: RADIUS.lg, overflow: "hidden", background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -2635,8 +2648,8 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
   if (!group || !trace) return null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 80, background: "#000", display: "flex", justifyContent: "center" }}>
-      <div style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflow: "hidden" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 80, background: colors.overlay, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 14px calc(20px + env(safe-area-inset-bottom, 0px))" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 400, aspectRatio: "9/16", maxHeight: "100%", borderRadius: RADIUS.xl, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.45)", background: "#000" }}>
         {trace.mediaType === "video" ? (
           <video
             key={trace.id}
@@ -2997,7 +3010,11 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
 
   useEffect(() => {
     gatedRef.current = gated;
+    // Une fois le contenu sensible approuvé, on doit vraiment y accéder tout
+    // de suite — reprendre la lecture automatiquement plutôt que de laisser
+    // une image figée qui redonne l'impression d'être encore bloqué.
     if (gated) { videoRef.current?.pause(); setPlaying(false); }
+    else if (revealed) { videoRef.current?.play().catch(() => {}); setPlaying(true); }
   }, [gated]);
 
   useEffect(() => {
@@ -3395,6 +3412,52 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
 /* ============================================================
    8. GROUPES — grandes cartes visuelles
    ============================================================ */
+// Tant qu'une communauté prédéfinie n'a pas reçu de vraie photo, un dégradé +
+// icône propre à son thème (plutôt qu'un placeholder gris générique) — pas de
+// photo inventée, juste une identité visuelle cohérente en attendant.
+const GROUP_VISUALS = {
+  "Chevreuil": { icon: Crosshair, from: "#8B5A2B", to: "#C97C3D" },
+  "Grand gibier": { icon: Mountain, from: "#7A4A24", to: "#B8783D" },
+  "Petit gibier": { icon: Rabbit, from: "#8B5A2B", to: "#C97C3D" },
+  "Sanglier": { icon: PawPrint, from: "#5C3A22", to: "#93613A" },
+  "Gibier d'eau": { icon: Bird, from: "#2A5A66", to: "#4C93A0" },
+  "Gibier à plumes": { icon: Bird, from: "#8A6A1E", to: "#C9A227" },
+  "Chiens d'arrêt": { icon: Dog, from: "#2F6690", to: "#4F9DDE" },
+  "Chiens courants": { icon: PawPrint, from: "#2F6690", to: "#4F9DDE" },
+  "Chiens de chasse": { icon: Dog, from: "#2A567A", to: "#4685BE" },
+  "Cuisine du gibier": { icon: UtensilsCrossed, from: "#8C3B2E", to: "#D9724A" },
+  "Techniques de chasse": { icon: BookOpen, from: "#7A4A24", to: "#B8783D" },
+  "Territoires & biotopes": { icon: Trees, from: "#3E6B4F", to: "#6FA37A" },
+  "Observation & nature": { icon: Compass, from: "#355C63", to: "#5B9AA0" },
+  "Matériel & équipement": { icon: Backpack, from: "#4A4E58", to: "#767C8C" },
+  "Vêtements & équipement outdoor": { icon: Shirt, from: "#4A4E58", to: "#767C8C" },
+  "Photo & vidéo": { icon: Camera, from: "#5B3A63", to: "#8E5F99" },
+  "4x4 & véhicules": { icon: Truck, from: "#4A4E58", to: "#767C8C" },
+  "Sorties & territoires": { icon: MapPin, from: "#3E6B4F", to: "#6FA37A" },
+  "Chasse entre passionnés": { icon: Users, from: "#3A4A73", to: "#5D74AC" },
+  "Gestion du territoire": { icon: Mountain, from: "#3E6B4F", to: "#6FA37A" },
+  "Faune sauvage": { icon: PawPrint, from: "#3E7549", to: "#6FAE75" },
+  "Nature & environnement": { icon: Leaf, from: "#3E7549", to: "#6FAE75" },
+  "Réglementation & permis": { icon: Scale, from: "#3A4A73", to: "#5D74AC" },
+  "Débutants & conseils": { icon: GraduationCap, from: "#8A6A1E", to: "#C9A227" },
+  "Piégeage": { icon: Target, from: "#5C3A22", to: "#93613A" },
+  "Vénerie sous terre": { icon: Dog, from: "#5C3A22", to: "#93613A" },
+};
+// Dégradé neutre par catégorie pour une communauté créée par un utilisateur
+// (pas dans GROUP_VISUALS) — reste cohérent avec la thématique déclarée sans
+// avoir à connaître le nom exact.
+const CATEGORY_GRADIENTS = {
+  "Chasse": ["#8B5A2B", "#C97C3D"],
+  "Chiens": ["#2F6690", "#4F9DDE"],
+  "Cuisine": ["#8C3B2E", "#D9724A"],
+  "Territoire": ["#3E6B4F", "#6FA37A"],
+  "Observation": ["#355C63", "#5B9AA0"],
+  "Matériel": ["#4A4E58", "#767C8C"],
+  "Photographie": ["#5B3A63", "#8E5F99"],
+  "Associations": ["#3A4A73", "#5D74AC"],
+  "Nature": ["#3E7549", "#6FAE75"],
+  "Jeunes chasseurs": ["#8A6A1E", "#C9A227"],
+};
 function GroupImageArea({ group, height = 92, iconSize = 20 }) {
   const { colors } = useTheme();
   if (group.imageUrl) {
@@ -3405,10 +3468,14 @@ function GroupImageArea({ group, height = 92, iconSize = 20 }) {
       </div>
     );
   }
-  // Placeholder propre en attendant une vraie photo — jamais d'emoji.
+  const visual = GROUP_VISUALS[group.nom];
+  const categoryGrad = CATEGORY_GRADIENTS[group.categorie];
+  const themed = visual || categoryGrad;
+  const [gradFrom, gradTo] = visual ? [visual.from, visual.to] : categoryGrad ? categoryGrad : [colors.surfaceAlt, colors.border];
+  const Icon = visual?.icon || ImageIcon;
   return (
-    <div style={{ width: "100%", height, background: `linear-gradient(135deg, ${colors.surfaceAlt}, ${colors.border})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <ImageIcon size={iconSize} color={colors.textFaint} strokeWidth={1.5} />
+    <div style={{ width: "100%", height, background: `linear-gradient(135deg, ${gradFrom}, ${gradTo})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <Icon size={iconSize} color={themed ? "rgba(255,255,255,0.9)" : colors.textFaint} strokeWidth={1.5} />
     </div>
   );
 }
@@ -3441,6 +3508,9 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sheet, setSheet] = useState(null);
+  const [discussions, setDiscussions] = useState([]);
+  const [discussionsLoading, setDiscussionsLoading] = useState(true);
+  const [openDiscussion, setOpenDiscussion] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState("");
   const [localMode, setLocalMode] = useState("full");
@@ -3458,7 +3528,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
     else if (delta < -4) setLocalMode("floating");
     lastScrollTopRef.current = top;
   };
-  const tabs = [["publications", "Publications"], ["videos", "Vidéos"], ["discussions", "Discussions"], ["membres", "Membres"]];
+  const tabs = [["publications", "Publications"], ["discussions", "Discussions"], ["membres", "Membres"]];
   const meName = profile?.nom || "Vous";
   // La policy RLS "creator or admin updates group" (001_init.sql) applique déjà
   // cette même règle côté base — ce contrôle ici n'est qu'un raccourci d'UX.
@@ -3492,6 +3562,23 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
     return () => { cancelled = true; };
   }, [group.id]);
 
+  const refreshDiscussions = () => {
+    setDiscussionsLoading(true);
+    groupService.fetchGroupDiscussions(group.id)
+      .then(setDiscussions)
+      .catch(() => {})
+      .finally(() => setDiscussionsLoading(false));
+  };
+  useEffect(() => {
+    let cancelled = false;
+    setDiscussionsLoading(true);
+    groupService.fetchGroupDiscussions(group.id)
+      .then((rows) => { if (!cancelled) setDiscussions(rows); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setDiscussionsLoading(false); });
+    return () => { cancelled = true; };
+  }, [group.id]);
+
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(true);
   useEffect(() => {
@@ -3504,7 +3591,10 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
     return () => { cancelled = true; };
   }, [group.id, group.nombreMembres]);
 
-  const groupPosts = posts.filter((p) => p.type !== "video" && p.type !== "video_courte");
+  // Toutes les publications d'une communauté vivent dans un seul flux —
+  // photo, vidéo (accès direct à la Publication depuis "+") et Instant s'y
+  // affichent ensemble, plus d'onglet "Vidéos" séparé (voir CreateFlow).
+  const groupPosts = posts;
   const swipeBack = useSwipeBack(onClose);
 
   return (
@@ -3604,11 +3694,43 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
               ))}
             </div>
           )
+        ) : tab === "discussions" ? (
+          discussionsLoading ? (
+            <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
+          ) : discussions.length === 0 ? (
+            <EmptyState title="Aucune discussion" subtitle="Lancez la première discussion de cette communauté." />
+          ) : (
+            <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
+              {discussions.map((d) => (
+                <button key={d.id} onClick={() => setOpenDiscussion(d)} className="flex items-center gap-3" style={{ width: "100%", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, padding: "12px 14px", cursor: "pointer", textAlign: "left" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <MessageSquare size={16} color={colors.accent} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.titre}</div>
+                    <div style={{ fontSize: 11.5, color: colors.textFaint, marginTop: 1 }}>{d.authorNom} · {formatRelativeDate(d.createdAt)}</div>
+                  </div>
+                  <div className="flex items-center gap-1" style={{ flexShrink: 0, color: colors.textFaint }}>
+                    <MessageSquare size={12} />
+                    <span style={{ fontSize: 11.5, fontWeight: 600 }}>{d.messagesCount}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )
         ) : (
           <EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de cette communauté est vide pour le moment.`} />
         )}
       </div>
       <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button onClick={() => { onClose(); onCreatePost(group.id); }}>Publier dans cette communauté</Button></div>
+      {openDiscussion && (
+        <DiscussionThread
+          discussion={openDiscussion}
+          meUsername={profile.username}
+          isAdmin={profile.role === "admin"}
+          onClose={() => { setOpenDiscussion(null); refreshDiscussions(); }}
+        />
+      )}
       {sheet?.type === "actions" && (
         <ContentActionSheet
           isOwn={sheet.post.nom === meName}
@@ -3627,6 +3749,118 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
       {sheet?.type === "comments" && (
         <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
       )}
+    </div>
+  );
+}
+/** Fil de messages d'une discussion de communauté (table group_discussions /
+ *  group_discussion_messages, voir migration 046) — chaque membre peut y
+ *  écrire et liker, distinct des publications et des messages privés. */
+function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
+  const { colors } = useTheme();
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError("");
+    groupService.fetchDiscussionMessages(discussion.id)
+      .then((rows) => { if (!cancelled) setMessages(rows); })
+      .catch(() => { if (!cancelled) setLoadError("Impossible de charger cette discussion pour le moment."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [discussion.id]);
+
+  const send = async () => {
+    const texte = text.trim();
+    if (!texte || sending) return;
+    setSending(true);
+    setText("");
+    try {
+      const m = await groupService.sendDiscussionMessage(discussion.id, texte);
+      setMessages((ms) => [...ms, m]);
+    } catch (e) {
+      setText(texte);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const toggleLike = async (m) => {
+    setMessages((ms) => ms.map((x) => (x.id === m.id ? { ...x, liked: !x.liked, likeCount: x.likeCount + (x.liked ? -1 : 1) } : x)));
+    try {
+      await groupService.toggleDiscussionMessageLike(m.id, !m.liked);
+    } catch (e) {
+      setMessages((ms) => ms.map((x) => (x.id === m.id ? { ...x, liked: m.liked, likeCount: m.likeCount } : x)));
+    }
+  };
+
+  const deleteMsg = async (m) => {
+    setMessages((ms) => ms.filter((x) => x.id !== m.id));
+    try {
+      await groupService.deleteDiscussionMessage(m.id);
+    } catch (e) {
+      setMessages((ms) => [...ms, m].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)));
+    }
+  };
+
+  const swipeBack = useSwipeBack(onClose);
+  return (
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 71, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title={discussion.titre} onBack={onClose} />
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {loading ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
+        ) : loadError ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.error, marginTop: 24 }}>{loadError}</div>
+        ) : messages.length === 0 ? (
+          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Aucun message. Lancez la conversation !</div>
+        ) : (
+          messages.map((m) => {
+            const mine = m.authorUsername === meUsername;
+            return (
+              <div key={m.id} className="flex items-start gap-2.5">
+                <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {m.authorAvatar ? <img src={m.authorAvatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color={colors.textFaint} />}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text }}>{m.authorNom}</span>
+                    <span style={{ fontSize: 10.5, color: colors.textFaint }}>{formatRelativeDate(m.createdAt)}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4, marginTop: 2 }}>{m.texte}</div>
+                  <div className="flex items-center gap-3" style={{ marginTop: 4 }}>
+                    <button onClick={() => toggleLike(m)} className="flex items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                      <Heart size={13} color={m.liked ? colors.accent : colors.textFaint} fill={m.liked ? colors.accent : "none"} strokeWidth={1.8} />
+                      {m.likeCount > 0 && <span style={{ fontSize: 11, color: m.liked ? colors.accent : colors.textFaint, fontWeight: 600 }}>{m.likeCount}</span>}
+                    </button>
+                    {(mine || isAdmin) && (
+                      <button onClick={() => deleteMsg(m)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}>
+                        <Trash2 size={12.5} color={colors.textFaint} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div className="flex items-center gap-2" style={{ padding: "10px 14px 14px" }}>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+          placeholder="Écrire un message..."
+          style={{ flex: 1, border: "none", borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13, color: colors.text, outline: "none", background: colors.surfaceAlt }}
+        />
+        <button onClick={send} disabled={!text.trim() || sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: text.trim() ? colors.accent : colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: text.trim() ? "pointer" : "default", flexShrink: 0, boxShadow: text.trim() ? `0 2px 8px ${colors.accent}40` : "none", transition: "background 150ms ease, box-shadow 150ms ease" }}>
+          <ChevronRight size={17} color={text.trim() ? "white" : colors.textFaint} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -3786,6 +4020,17 @@ const CREATE_OPTIONS = [
   { key: "video", label: "Vidéo", icon: Video },
   { key: "publication", label: "Publication", icon: Feather },
 ];
+// Depuis une communauté : ni Trace (jamais rattachée à un groupe), ni Vidéo
+// séparée (la Publication accepte directement une vidéo ici) — Discussion
+// remplace ces deux-là.
+// "group_discussion" (et non "discussion") pour ne jamais entrer en conflit
+// avec l'ancien type de post "discussion" (voir isPost plus bas), toujours
+// utilisé pour éditer d'anciennes publications de ce type.
+const GROUP_CREATE_OPTIONS = [
+  { key: "publication", label: "Publication", icon: Feather },
+  { key: "video_courte", label: "Instant", icon: Film },
+  { key: "group_discussion", label: "Discussion", icon: MessageSquare },
+];
 function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPost, groupId }) {
   const { colors } = useTheme();
   const label = editingPost ? "Modifier" : CREATE_OPTIONS.find((o) => o.key === type)?.label || "Publication";
@@ -3817,6 +4062,11 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   // n'est pas proposé (les votes existants perdraient leur sens).
   const isPoll = !editingPost && type === "publication" && addPoll;
   const isVideoType = type === "video" || type === "video_courte";
+  // Dans une communauté, "Publication" accepte aussi une vidéo (pas d'onglet
+  // "Vidéo" séparé côté communautés — voir GROUP_CREATE_OPTIONS) : pas de
+  // contrainte de format/orientation particulière contrairement à Vidéo/Instant,
+  // juste le même plafond de durée que "Vidéo" (30 min).
+  const allowVideoInPublication = type === "publication" && !!groupId;
   const canIdentify = type === "publication";
   const captionLabel = isPoll ? "Question du sondage" : "Description";
 
@@ -3842,7 +4092,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     const files = Array.from(e.target.files || []);
     e.target.value = "";
     setMediaError("");
-    if (!isVideoType) { setMediaFiles(files); return; }
+    if (!isVideoType && !allowVideoInPublication) { setMediaFiles(files); return; }
     const maxSeconds = type === "video_courte" ? 60 : 1800;
     const valid = [];
     const durations = [];
@@ -3948,7 +4198,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
               <span style={{ fontSize: 12.5, color: colors.textFaint }}>
                 {mediaFiles.length > 0
                   ? `${mediaFiles.length} fichier${mediaFiles.length > 1 ? "s" : ""} sélectionné${mediaFiles.length > 1 ? "s" : ""}`
-                  : type === "publication" ? "Ajouter une photo (facultatif)" : "Choisir une ou plusieurs images/vidéos"}
+                  : type === "publication" ? (allowVideoInPublication ? "Ajouter une photo ou une vidéo (facultatif)" : "Ajouter une photo (facultatif)") : "Choisir une ou plusieurs images/vidéos"}
               </span>
               {type === "video_courte" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format vertical, 1 minute maximum</span>}
               {type === "video" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format horizontal, 30 minutes maximum</span>}
@@ -3956,7 +4206,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             <input
               id="piste-media-input"
               type="file"
-              accept={isVideoType ? "video/*" : "image/*"}
+              accept={isVideoType ? "video/*" : allowVideoInPublication ? "image/*,video/*" : "image/*"}
               multiple
               onChange={pickMedia}
               style={{ display: "none" }}
@@ -4135,7 +4385,39 @@ function TraceComposeScreen({ onClose, onPublished }) {
     </div>
   );
 }
-function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, authorName, editingPost, onEdited, groupId, initialType }) {
+function GroupDiscussionComposeScreen({ groupId, onClose, onPublished }) {
+  const { colors } = useTheme();
+  const [titre, setTitre] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async () => {
+    if (!titre.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const discussion = await groupService.createGroupDiscussion(groupId, titre.trim());
+      onPublished(discussion);
+    } catch (e) {
+      setError(e.message || "Impossible de créer cette discussion pour le moment.");
+      setSaving(false);
+    }
+  };
+  const swipeBack = useSwipeBack(onClose);
+  return (
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" }}>
+      <ScreenHeader title="Nouvelle discussion" onCloseX={onClose} />
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+        <TextField label="Titre de la discussion" value={titre} onChange={setTitre} placeholder="ex : Retours sur l'ouverture de la battue" />
+        <div style={{ fontSize: 12, color: colors.textFaint, lineHeight: 1.5 }}>Une fois créée, tous les membres pourront y écrire des messages et les liker.</div>
+        {error && <div style={{ marginTop: 12, background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "12px 14px", fontSize: 12.5, color: colors.error }}>{error}</div>}
+      </div>
+      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}>
+        <Button disabled={!titre.trim() || saving} onClick={submit}>{saving ? "Création..." : "Créer la discussion"}</Button>
+      </div>
+    </div>
+  );
+}
+function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, onDiscussionCreated, authorName, editingPost, onEdited, groupId, initialType }) {
   const { colors } = useTheme();
   const [step, setStep] = useState(editingPost ? "compose" : initialType ? "compose" : "pick");
   const [type, setType] = useState(editingPost ? editingPost.type : initialType || null);
@@ -4150,6 +4432,9 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, authorNa
   const close = () => { setStep("pick"); setType(null); onClose(); };
   if (step === "compose" && type === "trace") {
     return <TraceComposeScreen onClose={close} onPublished={(trace) => { close(); onTraceCreated(trace); }} />;
+  }
+  if (step === "compose" && type === "group_discussion") {
+    return <GroupDiscussionComposeScreen groupId={groupId} onClose={close} onPublished={(discussion) => { close(); onDiscussionCreated(discussion); }} />;
   }
   if (step === "compose") {
     return (
@@ -4172,7 +4457,7 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, authorNa
       <div onClick={close} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
         <div className="flex" style={{ width: "100%", maxWidth: 400, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.pill, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", padding: 6, gap: 2, pointerEvents: "auto" }}>
-          {CREATE_OPTIONS.map((o) => {
+          {(groupId ? GROUP_CREATE_OPTIONS : CREATE_OPTIONS).map((o) => {
             const Icon = o.icon;
             return (
               <button key={o.key} onClick={() => { setType(o.key); setStep("compose"); }} className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform" style={{ flex: 1, border: "none", borderRadius: RADIUS.pill, padding: "10px 4px 8px", background: "transparent", cursor: "pointer" }}>
@@ -7284,6 +7569,9 @@ function MainApp({ session, onboardingData, ageInfo }) {
     setCreateInitialType(null);
     showToast("Trace publiée — visible pendant 24h.");
   };
+  const handleDiscussionCreated = () => {
+    showToast("Discussion créée — retrouvez-la dans l'onglet « Discussions » de la communauté.");
+  };
   const viewTrace = (traceId) => {
     traceService.recordTraceView(traceId).catch(() => {});
     setTraces((t) => t.map((tr) => (tr.id === traceId ? { ...tr, viewed: true } : tr)));
@@ -7761,6 +8049,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         authorName={profile.nom || "Vous"}
         onPublished={handlePublished}
         onTraceCreated={handleTraceCreated}
+        onDiscussionCreated={handleDiscussionCreated}
         editingPost={editingPost}
         onEdited={handleEdited}
         groupId={createGroupId}

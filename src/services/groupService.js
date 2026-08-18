@@ -98,6 +98,128 @@ export async function uploadGroupImage(groupId, file) {
   return publicUrl.publicUrl;
 }
 
+/**
+ * Discussions d'une communauté (table "group_discussions" — voir migration
+ * 046) : un fil avec un titre, où les membres échangent de vrais messages
+ * (table "group_discussion_messages"), distinct des publications et des
+ * messages privés.
+ */
+export async function fetchGroupDiscussions(groupId) {
+  const { data, error } = await supabase
+    .from("group_discussions")
+    .select("*, profiles!group_discussions_author_id_fkey(username, nom, avatar_url)")
+    .eq("group_id", groupId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    titre: row.titre,
+    groupId: row.group_id,
+    authorId: row.author_id,
+    authorUsername: row.profiles?.username,
+    authorNom: row.profiles?.nom || row.profiles?.username,
+    authorAvatar: row.profiles?.avatar_url || null,
+    messagesCount: row.messages_count || 0,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function createGroupDiscussion(groupId, titre) {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error("Non authentifié");
+  const { data, error } = await supabase
+    .from("group_discussions")
+    .insert({ group_id: groupId, author_id: userData.user.id, titre })
+    .select("*, profiles!group_discussions_author_id_fkey(username, nom, avatar_url)")
+    .single();
+  if (error) throw error;
+  return {
+    id: data.id,
+    titre: data.titre,
+    groupId: data.group_id,
+    authorId: data.author_id,
+    authorUsername: data.profiles?.username,
+    authorNom: data.profiles?.nom || data.profiles?.username,
+    authorAvatar: data.profiles?.avatar_url || null,
+    messagesCount: 0,
+    createdAt: data.created_at,
+  };
+}
+
+export async function deleteGroupDiscussion(discussionId) {
+  const { error } = await supabase.from("group_discussions").delete().eq("id", discussionId);
+  if (error) throw error;
+  return true;
+}
+
+export async function fetchDiscussionMessages(discussionId) {
+  const { data: userData } = await supabase.auth.getUser();
+  const meId = userData?.user?.id || null;
+  const { data, error } = await supabase
+    .from("group_discussion_messages")
+    .select("*, profiles!group_discussion_messages_author_id_fkey(username, nom, avatar_url), group_discussion_message_likes(user_id)")
+    .eq("discussion_id", discussionId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    discussionId: row.discussion_id,
+    authorId: row.author_id,
+    authorUsername: row.profiles?.username,
+    authorNom: row.profiles?.nom || row.profiles?.username,
+    authorAvatar: row.profiles?.avatar_url || null,
+    texte: row.texte,
+    createdAt: row.created_at,
+    likeCount: row.group_discussion_message_likes?.length || 0,
+    liked: meId ? (row.group_discussion_message_likes || []).some((l) => l.user_id === meId) : false,
+  }));
+}
+
+export async function sendDiscussionMessage(discussionId, texte) {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error("Non authentifié");
+  const { data, error } = await supabase
+    .from("group_discussion_messages")
+    .insert({ discussion_id: discussionId, author_id: userData.user.id, texte })
+    .select("*, profiles!group_discussion_messages_author_id_fkey(username, nom, avatar_url)")
+    .single();
+  if (error) throw error;
+  return {
+    id: data.id,
+    discussionId: data.discussion_id,
+    authorId: data.author_id,
+    authorUsername: data.profiles?.username,
+    authorNom: data.profiles?.nom || data.profiles?.username,
+    authorAvatar: data.profiles?.avatar_url || null,
+    texte: data.texte,
+    createdAt: data.created_at,
+    likeCount: 0,
+    liked: false,
+  };
+}
+
+export async function deleteDiscussionMessage(messageId) {
+  const { error } = await supabase.from("group_discussion_messages").delete().eq("id", messageId);
+  if (error) throw error;
+  return true;
+}
+
+export async function toggleDiscussionMessageLike(messageId, shouldLike) {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error("Non authentifié");
+  if (shouldLike) {
+    const { error } = await supabase.from("group_discussion_message_likes").insert({ message_id: messageId, user_id: userData.user.id });
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("group_discussion_message_likes").delete().eq("message_id", messageId).eq("user_id", userData.user.id);
+    if (error) throw error;
+  }
+  return true;
+}
+
 /** Vrais membres d'un groupe (jointure group_members → profiles), avec leur
  *  rôle au sein du groupe ('member' | 'admin' — colonne group_members.role,
  *  distincte du rôle plateforme profiles.role). */
