@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
 import {
   Home, Plus, Users, User, Search, Bell, MessageCircle, ArrowLeft, X, Menu,
-  Image as ImageIcon, Type as TypeIcon, CalendarDays, Settings, ChevronRight,
+  Image as ImageIcon, CalendarDays, Settings, ChevronRight,
   Check, Video, Film, Dog, Repeat2, MapPin,
   Bookmark, HelpCircle, AlertTriangle, LogOut, Moon, Sun, Monitor, BarChart3,
-  Heart, MessageSquare, Share2, MoreHorizontal, Camera, Play, BookOpen, Mic,
+  Heart, MessageSquare, MoreHorizontal, Camera, Play, BookOpen, Mic,
   Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud, Target,
-  RotateCw, Smartphone, AtSign,
+  RotateCw, Smartphone, AtSign, Feather,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as traceService from "./services/traceService.js";
@@ -158,6 +158,17 @@ function PisteGlyph({ type, size = 16, color }) {
       </svg>
     );
   }
+  if (type === "gibier") {
+    // Un gibier à plumes vu de dessous, ailes déployées — remplace l'icône
+    // de partage générique (Share2), plus dans l'esprit de l'app.
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M2 15c4-5.5 8-5.5 10-1.2" stroke={color} strokeWidth="2.1" strokeLinecap="round" />
+        <path d="M22 15c-4-5.5-8-5.5-10-1.2" stroke={color} strokeWidth="2.1" strokeLinecap="round" />
+        <circle cx="12" cy="8.6" r="1.5" fill={color} />
+      </svg>
+    );
+  }
   if (type === "marketplace") {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -216,14 +227,23 @@ function Chip({ label, active, onClick }) {
     </button>
   );
 }
-function EmptyState({ title, subtitle, ctaLabel, onCta }) {
+function EmptyState({ title, subtitle, ctaLabel, onCta, onAdd }) {
   const { colors } = useTheme();
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "56px 32px", gap: 14 }}>
-      <div style={{ width: 54, height: 54, borderRadius: RADIUS.md, background: colors.surface, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Logo size={28} background={false} />
-        <div style={{ width: 28, height: 28, borderRadius: 8, background: colors.accentSoft, position: "absolute", opacity: 0 }} />
-      </div>
+      {onAdd ? (
+        <button
+          onClick={onAdd}
+          className="active:scale-95 transition-transform"
+          style={{ width: 54, height: 54, borderRadius: RADIUS.md, background: colors.surface, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+        >
+          <Plus size={24} color={colors.accent} strokeWidth={2.2} />
+        </button>
+      ) : (
+        <div style={{ width: 54, height: 54, borderRadius: RADIUS.md, background: colors.surface, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Logo size={28} background={false} />
+        </div>
+      )}
       <div style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>{title}</div>
       <div style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 1.55, maxWidth: 260 }}>{subtitle}</div>
       {ctaLabel && <div style={{ marginTop: 6 }}><Button onClick={onCta} full={false}>{ctaLabel}</Button></div>}
@@ -424,6 +444,17 @@ function computeAge(day, month, year) {
   if (!day || !month || !year) return null;
   const today = new Date();
   const birth = new Date(Number(year), Number(month) - 1, Number(day));
+  let age = today.getFullYear() - birth.getFullYear();
+  const hasHadBirthdayThisYear = today.getMonth() > birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() >= birth.getDate());
+  if (!hasHadBirthdayThisYear) age -= 1;
+  return age;
+}
+// Âge d'un chien recalculé à chaque affichage depuis sa date de naissance
+// (plutôt qu'un nombre saisi une fois qui devient faux avec le temps).
+function ageFromBirthDate(dateStr) {
+  if (!dateStr) return null;
+  const birth = new Date(dateStr);
+  const today = new Date();
   let age = today.getFullYear() - birth.getFullYear();
   const hasHadBirthdayThisYear = today.getMonth() > birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() >= birth.getDate());
   if (!hasHadBirthdayThisYear) age -= 1;
@@ -1367,19 +1398,100 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
     </div>
   );
 }
+// Ordre des onglets tel qu'affiché dans la barre du bas — sert au balayage
+// horizontal entre onglets : vers la gauche = onglet précédent (positionné à
+// gauche dans la barre), vers la droite = onglet suivant, exactement comme
+// pointer son doigt vers l'icône visée.
+const TAB_SWIPE_ORDER = ["fil", "video", "groupes", "messages", "profil"];
 function AppShell({ children, header, active, setActive, onCreate, unreadConversations, chromeMode = "full", refreshKey = 0 }) {
   const { colors } = useTheme();
+  const prevActiveRef = useRef(active);
+  // Sens du dernier changement d'onglet ('left' | 'right' | null) — pilote
+  // l'animation d'entrée du nouvel onglet (glissade fluide plutôt qu'un
+  // simple fondu), qu'il vienne d'un tap sur la barre ou d'un balayage.
+  const [navDir, setNavDir] = useState(null);
+  useEffect(() => {
+    if (prevActiveRef.current !== active) {
+      const curIdx = TAB_SWIPE_ORDER.indexOf(prevActiveRef.current);
+      const nextIdx = TAB_SWIPE_ORDER.indexOf(active);
+      setNavDir(curIdx !== -1 && nextIdx !== -1 && nextIdx !== curIdx ? (nextIdx > curIdx ? "right" : "left") : null);
+      prevActiveRef.current = active;
+    }
+  }, [active]);
+
+  const containerRef = useRef(null);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    let startX = null;
+    let startY = null;
+    let blocked = false;
+    const onStart = (e) => {
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      blocked = false;
+      // Ignoré si le geste démarre dans une zone qui défile déjà à
+      // l'horizontale (bandeau de Traces, chips...) ou dans un écran en
+      // détail ouvert par-dessus (fixed/absolute plein écran — GroupPage,
+      // DogPage, conversation...), pour ne jamais entrer en conflit avec un
+      // scroll existant ou le balayage-retour déjà en place sur ces écrans.
+      let node = e.target;
+      while (node && node !== el) {
+        if (node.scrollWidth > node.clientWidth + 2) { blocked = true; break; }
+        const cs = window.getComputedStyle(node);
+        if ((cs.position === "fixed" || cs.position === "absolute") && parseInt(cs.zIndex || "0", 10) >= 50) { blocked = true; break; }
+        node = node.parentElement;
+      }
+    };
+    const onEnd = (e) => {
+      if (startX === null || blocked) { startX = null; return; }
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      startX = null;
+      if (Math.abs(dx) < 70 || Math.abs(dy) > 80) return;
+      const curIdx = TAB_SWIPE_ORDER.indexOf(active);
+      if (curIdx === -1) return;
+      const nextIdx = dx < 0 ? curIdx - 1 : curIdx + 1;
+      if (nextIdx < 0 || nextIdx >= TAB_SWIPE_ORDER.length) return;
+      setActive(TAB_SWIPE_ORDER[nextIdx]);
+    };
+    const onCancel = () => { startX = null; };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onCancel, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onCancel);
+    };
+  }, [active, setActive]);
+
   return (
-    <div style={{ minHeight: "100dvh", background: colors.background }}>
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100dvh", position: "relative", background: colors.background }}>
+    <div ref={containerRef} style={{ minHeight: "100dvh", background: colors.background }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100dvh", position: "relative", background: colors.background, overflowX: "hidden" }}>
         {header}
         {/* refreshKey force un vrai remontage (donc un rechargement des données)
             quand on retape sur l'onglet déjà actif, pas seulement un défilement. */}
-        <div key={`${active}-${refreshKey}`} style={{ paddingBottom: NAV_HEIGHT + 12, animation: "piste-fade-in 220ms ease" }}>{children}</div>
+        <div
+          key={`${active}-${refreshKey}`}
+          style={{
+            paddingBottom: NAV_HEIGHT + 12,
+            animation:
+              navDir === "right" ? "piste-slide-from-right 320ms cubic-bezier(0.22, 1, 0.36, 1)" :
+              navDir === "left" ? "piste-slide-from-left 320ms cubic-bezier(0.22, 1, 0.36, 1)" :
+              "piste-fade-in 220ms ease",
+          }}
+        >
+          {children}
+        </div>
         <BottomNav active={active} setActive={setActive} onCreate={onCreate} unreadConversations={unreadConversations} chromeMode={chromeMode} />
       </div>
       <style>{`
         @keyframes piste-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes piste-slide-from-right { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes piste-slide-from-left { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: translateX(0); } }
         @keyframes piste-toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -1761,7 +1873,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={meUsername} onOpenProfile={onOpenProfile} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={meUsername} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
       )}
     </div>
   );
@@ -1927,7 +2039,7 @@ function MentionPickerButton({ onSelect }) {
     </>
   );
 }
-function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenProfile }) {
+function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenProfile, postAuthorUsername }) {
   const { colors } = useTheme();
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null); // { id, auteur } | null
@@ -1970,16 +2082,21 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
         }}
       >
         <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
-        <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
-          <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Commentaires</span>
-          <IconButton icon={X} onClick={onClose} size={30} />
+        <div style={{ padding: "6px 16px 10px" }}>
+          <div className="flex items-center justify-between">
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Commentaires</span>
+            <IconButton icon={X} onClick={onClose} size={30} />
+          </div>
+          <div style={{ fontSize: 11, color: colors.textFaint, marginTop: 2 }}>Privés : seuls vous et l'auteur de la publication voyez votre échange.</div>
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
         {comments.length === 0 ? (
-          <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à réagir à cette publication." />
+          <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à écrire — votre commentaire ne sera visible que par vous et l'auteur." />
         ) : (
           <div style={{ padding: "8px 16px" }}>
-            {topLevel.map((c) => (
+            {topLevel.map((c) => {
+              const canReply = meUsername && (c.authorUsername === meUsername || meUsername === postAuthorUsername);
+              return (
               <div key={c.id} style={{ padding: "10px 0", borderBottom: `1px solid ${colors.border}` }}>
                 <div className="flex items-center justify-between" style={{ marginBottom: 3 }}>
                   <div className="flex items-center gap-2">
@@ -1993,7 +2110,9 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
                   )}
                 </div>
                 <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(c.texte, colors, onOpenProfile)}</div>
-                <button onClick={() => setReplyTo({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: 4, padding: 0 }}>Répondre</button>
+                {canReply && (
+                  <button onClick={() => setReplyTo({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: 4, padding: 0 }}>Répondre</button>
+                )}
                 {repliesOf(c.id).map((r) => (
                   <div key={r.id} style={{ marginTop: 8, marginLeft: 18, paddingLeft: 10, borderLeft: `2px solid ${colors.border}` }}>
                     <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
@@ -2011,7 +2130,8 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
                   </div>
                 ))}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -2181,12 +2301,10 @@ function SharePostSheet({ item, onClose }) {
   const isVideoLike = item.type === "video" || item.type === "video_courte";
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 92 }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 92, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 16px calc(28px + env(safe-area-inset-bottom, 0px))" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
-      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "82vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
-          <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+      <div style={{ width: "100%", maxWidth: 420, maxHeight: "100%", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 16px 48px rgba(0,0,0,0.28)", display: "flex", flexDirection: "column", position: "relative" }}>
+          <div className="flex items-center justify-between" style={{ padding: "16px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Envoyer à...</span>
             <IconButton icon={X} onClick={onClose} size={30} />
           </div>
@@ -2200,7 +2318,7 @@ function SharePostSheet({ item, onClose }) {
             <>
               <div className="flex items-center gap-3" style={{ padding: "0 16px 12px" }}>
                 <div style={{ width: 44, height: 44, borderRadius: RADIUS.lg, background: colors.surfaceAlt, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {thumb ? <img src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : isVideoLike ? <Film size={18} color={colors.textFaint} /> : <TypeIcon size={18} color={colors.textFaint} />}
+                  {thumb ? <img src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : isVideoLike ? <Film size={18} color={colors.textFaint} /> : <Feather size={18} color={colors.textFaint} />}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.titre || item.texte || "Contenu PISTE"}</div>
@@ -2266,7 +2384,6 @@ function SharePostSheet({ item, onClose }) {
               </div>
             </>
           )}
-        </div>
       </div>
     </div>
   );
@@ -2317,7 +2434,7 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
             <span style={{ fontSize: 12, color: reposted ? colors.accent : colors.textSecondary, fontWeight: reposted ? 700 : 400 }}>{post.reposts || 0}</span>
           </button>
         )}
-        <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><Share2 size={17} color={colors.textSecondary} strokeWidth={1.8} /></button>
+        <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><PisteGlyph type="gibier" size={17} color={colors.textSecondary} /></button>
         <div style={{ flex: 1 }} />
         <button onClick={onSave} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
           <Bookmark size={17} color={saved ? colors.accent : colors.textSecondary} fill={saved ? colors.accent : "none"} strokeWidth={1.8} />
@@ -2709,7 +2826,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
       )}
     </div>
   );
@@ -2775,6 +2892,7 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
   const [revealed, setRevealed] = useState(false);
   const gated = video.contentRating === "sensitive" && !revealed;
   const [showShare, setShowShare] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
   return (
     <div style={{ padding: "10px 16px 16px" }}>
       <div className="flex gap-3" style={{ alignItems: "stretch" }}>
@@ -2823,7 +2941,7 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
             </button>
           )}
           <button onClick={() => setShowShare(true)} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-            <Share2 size={16} color={colors.textFaint} strokeWidth={1.8} />
+            <PisteGlyph type="gibier" size={16} color={colors.textFaint} />
           </button>
           <button onClick={onOpenActions} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
             <MoreHorizontal size={16} color={colors.textFaint} />
@@ -2832,6 +2950,20 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
       </div>
       {video.titre && (
         <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, marginTop: 10, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{video.titre}</div>
+      )}
+      {video.texte && video.texte !== video.titre && (
+        <div
+          onClick={() => setDescExpanded((v) => !v)}
+          style={{
+            fontSize: 12.5, color: colors.textSecondary, marginTop: 4, lineHeight: 1.4, cursor: "pointer",
+            display: descExpanded ? "block" : "-webkit-box",
+            WebkitLineClamp: descExpanded ? "unset" : 2,
+            WebkitBoxOrient: "vertical",
+            overflow: descExpanded ? "visible" : "hidden",
+          }}
+        >
+          {video.texte}
+        </div>
       )}
       {/* Sous la vidéo — auteur uniquement, les actions sont déjà dans la pilule */}
       <button onClick={onOpenAuthor} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0, marginTop: 8 }}>
@@ -2861,6 +2993,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
   const gated = item.contentRating === "sensitive" && !revealed;
   const gatedRef = useRef(gated);
   const [showShare, setShowShare] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   useEffect(() => {
     gatedRef.current = gated;
@@ -2915,7 +3048,20 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
           </div>
           <span style={{ fontSize: 13, fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.nom}</span>
         </button>
-        {item.texte && <div style={{ fontSize: 12.5, lineHeight: 1.4, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.texte}</div>}
+        {item.texte && (
+          <div
+            onClick={(e) => { e.stopPropagation(); setDescExpanded((v) => !v); }}
+            style={{
+              fontSize: 12.5, lineHeight: 1.4, textShadow: "0 1px 3px rgba(0,0,0,0.5)", pointerEvents: "auto", cursor: "pointer",
+              display: descExpanded ? "block" : "-webkit-box",
+              WebkitLineClamp: descExpanded ? "unset" : 2,
+              WebkitBoxOrient: "vertical",
+              overflow: descExpanded ? "visible" : "hidden",
+            }}
+          >
+            {item.texte}
+          </div>
+        )}
       </div>
       <div className="flex flex-col items-center gap-4" style={{ position: "absolute", right: 14, bottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>
         <button onClick={onLike} className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
@@ -2940,7 +3086,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
         )}
         <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer" }}>
           <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Share2 size={17} color="#fff" strokeWidth={2} />
+            <PisteGlyph type="gibier" size={17} color="#fff" />
           </div>
         </button>
         <button onClick={onOpenActions} style={{ background: "none", border: "none", cursor: "pointer" }}>
@@ -3240,7 +3386,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "video", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
       )}
     </div>
   );
@@ -3479,7 +3625,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
       )}
     </div>
   );
@@ -3638,7 +3784,7 @@ const CREATE_OPTIONS = [
   { key: "trace", label: "Trace", icon: Footprints },
   { key: "video_courte", label: "Instant", icon: Film },
   { key: "video", label: "Vidéo", icon: Video },
-  { key: "publication", label: "Publication", icon: TypeIcon },
+  { key: "publication", label: "Publication", icon: Feather },
 ];
 function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPost, groupId }) {
   const { colors } = useTheme();
@@ -4135,7 +4281,8 @@ function DogFormScreen({ onClose, onSaved }) {
   const { colors } = useTheme();
   const [nom, setNom] = useState("");
   const [race, setRace] = useState("");
-  const [age, setAge] = useState("");
+  const [birthMonth, setBirthMonth] = useState("");
+  const [birthYear, setBirthYear] = useState("");
   const [sexe, setSexe] = useState(null);
   const [specialite, setSpecialite] = useState(null);
   const [description, setDescription] = useState("");
@@ -4154,7 +4301,8 @@ function DogFormScreen({ onClose, onSaved }) {
     setSaving(true);
     setError("");
     try {
-      const dog = await dogService.createDog({ nom, race, age, sexe, specialite, description, photoFile });
+      const birthDate = birthMonth && birthYear ? `${birthYear}-${String(birthMonth).padStart(2, "0")}-01` : null;
+      const dog = await dogService.createDog({ nom, race, birthDate, sexe, specialite, description, photoFile });
       onSaved(dog);
     } catch (e) {
       setError(e.message || "Impossible d'enregistrer ce chien pour le moment.");
@@ -4183,7 +4331,27 @@ function DogFormScreen({ onClose, onSaved }) {
         </button>
         <TextField label="Nom" value={nom} onChange={setNom} placeholder="ex : Basco" />
         <TextField label="Race" value={race} onChange={setRace} placeholder="ex : Épagneul breton" />
-        <TextField label="Âge" value={age} onChange={setAge} placeholder="ex : 3 ans" type="number" />
+        <div style={{ marginBottom: SPACE.lg }}>
+          <label style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, display: "block" }}>Date de naissance</label>
+          <div className="flex gap-2">
+            <select
+              value={birthMonth}
+              onChange={(e) => setBirthMonth(e.target.value)}
+              style={{ flex: 1, border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "13px 14px", fontSize: 14, color: colors.text, outline: "none" }}
+            >
+              <option value="">Mois</option>
+              {["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."].map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+            <select
+              value={birthYear}
+              onChange={(e) => setBirthYear(e.target.value)}
+              style={{ flex: 1, border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "13px 14px", fontSize: 14, color: colors.text, outline: "none" }}
+            >
+              <option value="">Année</option>
+              {Array.from({ length: 25 }, (_, i) => new Date().getFullYear() - i).map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+        </div>
         <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>SEXE</div>
         <div className="flex gap-2" style={{ marginBottom: 16 }}>
           {["Mâle", "Femelle"].map((s) => <Chip key={s} label={s} active={sexe === s} onClick={() => setSexe(sexe === s ? null : s)} />)}
@@ -4232,7 +4400,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
           {dog.photo_url ? <img src={dog.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={26} color={colors.textFaint} />}
         </div>
         <div style={{ fontSize: 16, fontWeight: 800, color: colors.text }}>{dog.nom}</div>
-        <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}>{[dog.race, dog.sexe, dog.age && `${dog.age} ans`, dog.specialite].filter(Boolean).join(" · ")}</div>
+        <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}>{[dog.race, dog.sexe, ageFromBirthDate(dog.birth_date) !== null && `${ageFromBirthDate(dog.birth_date)} ans`, dog.specialite].filter(Boolean).join(" · ")}</div>
         {dog.description && <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 8, lineHeight: 1.5 }}>{dog.description}</div>}
       </div>
       <div className="px-4 pt-4">
@@ -4302,6 +4470,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
           onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined}
           meUsername={meUsername}
           onOpenProfile={onOpenProfile}
+          postAuthorUsername={sheet.post.username}
         />
       )}
     </div>
@@ -4362,6 +4531,7 @@ function SinglePostViewer({ post, autoOpenComments, onClose, onOpenProfile, meUs
           onDelete={onDeleteComment ? (commentId) => onDeleteComment(post.id, commentId) : undefined}
           meUsername={meUsername}
           onOpenProfile={onOpenProfile}
+          postAuthorUsername={post.username}
         />
       )}
     </div>
@@ -5042,7 +5212,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
     </div>
   );
 }
-function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile, chromeMode = "full", incomingRequestsCount = 0, onApproveRequest, onRejectRequest, traceGroup, onOpenTrace, onOpenFollowers }) {
+function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked, saved, reposted, commentsByPost, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenPlayer, onOpenProfile, chromeMode = "full", incomingRequestsCount = 0, onApproveRequest, onRejectRequest, traceGroup, onOpenTrace, onOpenFollowers, onCreatePost }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("publications");
   const [editing, setEditing] = useState(false);
@@ -5174,7 +5344,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
       </div>
 
       {tab === "publications" && (
-        posts.length === 0 ? <EmptyState title="Aucune publication" subtitle="Vos publications apparaîtront ici." /> : (
+        posts.length === 0 ? <EmptyState title="Aucune publication" subtitle="Vos publications apparaîtront ici." onAdd={onCreatePost} /> : (
           <div style={{ paddingTop: 10 }}>
             {posts.map((p) => (
               <PostCard
@@ -5282,7 +5452,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => onReport({ targetId: sheet.post.id, targetType: "post", reason })} />
       )}
       {sheet?.type === "comments" && (
-        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
+        <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} postAuthorUsername={sheet.post.username} />
       )}
       {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile(p); setEditing(false); }} />}
       {dogForm && <DogFormScreen onClose={() => setDogForm(false)} onSaved={(d) => { addDog(d); setDogForm(false); }} />}
@@ -5558,7 +5728,7 @@ function audioExtensionFor(mimeType) {
   if (mimeType.includes("mpeg")) return "mp3";
   return "webm";
 }
-function ConversationThread({ conversationId, meId, onClose, onLeave, title, subtitle, type, image, otherUser, onOpenProfile, onBlock, onReport, onRead }) {
+function ConversationThread({ conversationId, meId, onClose, onLeave, title, subtitle, type, image, otherUser, onOpenProfile, onBlock, onReport, onRead, onOpenSharedPost }) {
   const { colors } = useTheme();
   const [groupImage, setGroupImage] = useState(image || null);
   const [showSettings, setShowSettings] = useState(false);
@@ -5574,6 +5744,17 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   // sous mon dernier message envoyé, tenu à jour en direct par realtime.
   const [readState, setReadState] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // { id, texte, auteur } | null
+  const [highlightedId, setHighlightedId] = useState(null);
+  // Tap sur une citation "Réponse à X" : retrouve et met en évidence le
+  // message original, comme WhatsApp/iMessage — sans ça, une citation reste
+  // un simple aperçu texte, jamais vraiment "propre" pour retrouver le fil.
+  const scrollToMessage = (id) => {
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedId(id);
+    window.setTimeout(() => setHighlightedId((h) => (h === id ? null : h)), 1400);
+  };
   const lastTapRef = useRef({ id: null, time: 0 });
   // Rester appuyé sur un message pour y répondre (au lieu d'une flèche
   // visible sur chaque bulle) — un seul minuteur réutilisé, jamais deux
@@ -5803,7 +5984,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
               if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
             };
             return (
-              <div key={m.id} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
+              <div key={m.id} id={`msg-${m.id}`} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
                 {mine && (
                   <button onClick={() => deleteMsg(m)} aria-label="Supprimer le message" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0, opacity: 0.5 }}>
                     <Trash2 size={13} color={colors.textFaint} />
@@ -5834,13 +6015,17 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                       fontSize: 13.5,
                       lineHeight: 1.4,
                       wordBreak: "break-word",
-                      boxShadow: mine ? `0 2px 8px ${colors.accent}30` : "0 1px 6px rgba(0,0,0,0.05)",
+                      boxShadow: highlightedId === m.id ? `0 0 0 2.5px ${colors.accent}` : mine ? `0 2px 8px ${colors.accent}30` : "0 1px 6px rgba(0,0,0,0.05)",
+                      transition: "box-shadow 300ms ease",
                       cursor: "pointer",
                       userSelect: "none",
                     }}
                   >
                     {m.reply_to && (m.reply_to.texte || m.reply_to.profiles?.username) && (
-                      <div style={{ borderLeft: `2.5px solid ${mine ? "rgba(255,255,255,0.6)" : colors.accent}`, paddingLeft: 8, marginBottom: 6, opacity: 0.8 }}>
+                      <div
+                        onClick={(e) => { e.stopPropagation(); scrollToMessage(m.reply_to.id); }}
+                        style={{ borderLeft: `2.5px solid ${mine ? "rgba(255,255,255,0.6)" : colors.accent}`, paddingLeft: 8, marginBottom: 6, opacity: 0.8, cursor: "pointer" }}
+                      >
                         {(m.reply_to.profiles?.nom || m.reply_to.profiles?.username) && (
                           <div style={{ fontSize: 10.5, fontWeight: 700 }}>{m.reply_to.profiles?.nom || m.reply_to.profiles?.username}</div>
                         )}
@@ -5856,12 +6041,12 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                       const spIsVideo = sp.type === "video" || sp.type === "video_courte";
                       return (
                         <button
-                          onClick={(e) => { e.stopPropagation(); if (sp.profiles?.username) onOpenProfile(sp.profiles.username); }}
+                          onClick={(e) => { e.stopPropagation(); if (onOpenSharedPost) onOpenSharedPost(sp.id); else if (sp.profiles?.username) onOpenProfile(sp.profiles.username); }}
                           className="flex items-center gap-2"
                           style={{ width: "100%", background: mine ? "rgba(255,255,255,0.14)" : colors.surfaceAlt, border: "none", borderRadius: RADIUS.md, padding: 6, marginBottom: m.texte ? 6 : 0, cursor: "pointer", textAlign: "left" }}
                         >
                           <div style={{ position: "relative", width: 44, height: 44, borderRadius: RADIUS.sm, overflow: "hidden", background: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {spThumb ? <img src={spThumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : spIsVideo ? <Film size={16} color="rgba(255,255,255,0.6)" /> : <TypeIcon size={16} color={colors.textFaint} />}
+                            {spThumb ? <img src={spThumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : spIsVideo ? <Film size={16} color="rgba(255,255,255,0.6)" /> : <Feather size={16} color={colors.textFaint} />}
                             {spIsVideo && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)" }}><Play size={12} color="#fff" fill="#fff" /></div>}
                           </div>
                           <div style={{ minWidth: 0 }}>
@@ -6159,7 +6344,7 @@ function NewConversationSheet({ onClose, onStarted }) {
     </div>
   );
 }
-function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversation, onOpenProfile, onBlock, onReport, onRead, chromeMode = "full" }) {
+function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversation, onOpenProfile, onBlock, onReport, onRead, onOpenSharedPost, chromeMode = "full" }) {
   const { colors } = useTheme();
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -6255,6 +6440,7 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
           onBlock={onBlock}
           onReport={onReport}
           onRead={onRead}
+          onOpenSharedPost={onOpenSharedPost}
         />
       )}
       {showNew && (
@@ -7211,6 +7397,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         texte: r.texte,
         date: formatRelativeDate(r.created_at),
         parentId: r.parent_id,
+        threadOwnerId: r.thread_owner_id,
       }));
       setCommentsByPost((m) => ({ ...m, [postId]: mapped }));
     } catch (e) { /* pas bloquant : la feuille s'ouvrira simplement vide */ }
@@ -7464,7 +7651,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         chromeMode={chromeMode}
       />
     ),
-    messages: <ScreenMessages meId={session?.user?.id} initialConversationId={pendingConversationId} onConsumeInitialConversation={() => setPendingConversationId(null)} onOpenProfile={setOpenProfileUsername} onBlock={blockAuthor} onReport={reportContent} onRead={refreshUnread} chromeMode={chromeMode} />,
+    messages: <ScreenMessages meId={session?.user?.id} initialConversationId={pendingConversationId} onConsumeInitialConversation={() => setPendingConversationId(null)} onOpenProfile={setOpenProfileUsername} onBlock={blockAuthor} onReport={reportContent} onRead={refreshUnread} onOpenSharedPost={openNotificationPost} chromeMode={chromeMode} />,
     profil: (
       <ScreenProfil
         profile={profile}
@@ -7497,6 +7684,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         traceGroup={traceGroups[0]}
         onOpenTrace={() => openTraceGroup(0)}
         onOpenFollowers={() => markNotifTypeRead(["follow"])}
+        onCreatePost={() => setCreateOpen(true)}
       />
     ),
   };
@@ -7671,6 +7859,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
           onDelete={(commentId) => deleteComment(notifInstant.id, commentId)}
           meUsername={profile.username}
           onOpenProfile={setOpenProfileUsername}
+          postAuthorUsername={notifInstant.username}
         />
       )}
     </AppShell>

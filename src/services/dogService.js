@@ -4,7 +4,7 @@
 
 import { supabase } from "./supabaseClient.js";
 
-export async function createDog({ nom, race, age, sexe, specialite, description, photoFile }) {
+export async function createDog({ nom, race, birthDate, sexe, specialite, description, photoFile }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
@@ -27,7 +27,7 @@ export async function createDog({ nom, race, age, sexe, specialite, description,
       owner_id: userData.user.id,
       nom,
       race,
-      age: age ? Number(age) : null,
+      birth_date: birthDate || null,
       sexe,
       specialite,
       description,
