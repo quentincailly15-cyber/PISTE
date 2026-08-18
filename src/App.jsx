@@ -1763,7 +1763,6 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [dogs, setDogs] = useState([]);
-  const [repostedPosts, setRepostedPosts] = useState([]);
   const [tab, setTab] = useState("publications");
   const [openDog, setOpenDog] = useState(null);
   const [followSheet, setFollowSheet] = useState(null); // 'followers' | 'following' | null
@@ -1773,7 +1772,8 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
   const [sheet, setSheet] = useState(null);
   const [localMode, setLocalMode] = useState("full");
   const [openPost, setOpenPost] = useState(null);
-  const tabs = [["publications", "Publications"], ["videos", "Vidéos"], ["chiens", "Chiens"], ["reposts", "Repost"]];
+  // Onglet "Repost" désactivé à la demande — voir ScreenProfil.
+  const tabs = [["publications", "Publications"], ["videos", "Vidéos"], ["chiens", "Chiens"]];
   const lastScrollTopRef = useRef(0);
   const handleScroll = (e) => {
     const el = e.currentTarget;
@@ -1805,7 +1805,6 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
         return Promise.all([
           postService.fetchUserPosts(p.id).then((rows) => { if (!cancelled) setPosts(rows.map(mapPostRow)); }),
           dogService.fetchUserDogs(p.id).then((rows) => { if (!cancelled) setDogs(rows); }).catch(() => {}),
-          postService.fetchUserRepostedPosts(p.id).then((rows) => { if (!cancelled) setRepostedPosts(rows.map(mapPostRow)); }).catch(() => {}),
         ]);
       })
       .catch((e) => { if (!cancelled) setError(e.message || "Profil introuvable."); })
@@ -1905,7 +1904,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
             )}
           </div>
           {profile.isPrivate && !isSelf && !isFollowing ? (
-            <EmptyState title="Ce compte est privé" subtitle={`Demandez à vous abonner pour voir les publications, vidéos, chiens et reposts de @${profile.username}.`} icon={Lock} />
+            <EmptyState title="Ce compte est privé" subtitle={`Demandez à vous abonner pour voir les publications, vidéos et chiens de @${profile.username}.`} icon={Lock} />
           ) : (
             <>
               <div style={{ marginTop: 16 }}>
@@ -1946,17 +1945,6 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                           <div style={{ fontSize: 11.5, color: colors.textFaint }}>{[d.race, ageFromBirthDate(d.birth_date) !== null && `${ageFromBirthDate(d.birth_date)} ans`].filter(Boolean).join(" · ")}</div>
                         </div>
                       </button>
-                    ))}
-                  </div>
-                )
-              )}
-              {tab === "reposts" && (
-                repostedPosts.length === 0 ? (
-                  <EmptyState title="Aucun repost" subtitle="Les publications repartagées par ce compte apparaîtront ici." icon={Repeat2} />
-                ) : (
-                  <div className="flex flex-col" style={{ paddingTop: 8 }}>
-                    {repostedPosts.map((p) => (
-                      <RepostRow key={p.id} post={p} onOpen={(post) => (post.type === "video_courte" ? setViewingInstant(post) : setOpenPost(post))} />
                     ))}
                   </div>
                 )
@@ -2727,12 +2715,9 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
           <MessageSquare size={17} color={colors.textSecondary} strokeWidth={1.8} />
           <AnimatedCount value={commentCount} style={{ fontSize: 12, color: colors.textSecondary }} />
         </button>
-        {onRepost && (
-          <button onClick={onRepost} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <Repeat2 size={17} color={reposted ? colors.accent : colors.textSecondary} strokeWidth={1.8} />
-            <AnimatedCount value={post.reposts || 0} style={{ fontSize: 12, color: reposted ? colors.accent : colors.textSecondary, fontWeight: reposted ? 700 : 400 }} />
-          </button>
-        )}
+        {/* Option repost désactivée à la demande — le reste (service, prop
+            onRepost, composant RepostRow...) reste en place pour pouvoir la
+            réactiver facilement plus tard, seul ce bouton disparaît. */}
         <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><PisteGlyph type="gibier" size={17} color={colors.textSecondary} /></button>
         <div style={{ flex: 1 }} />
         <button onClick={onSave} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
@@ -3267,12 +3252,7 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
           <MessageSquare size={19} color="#fff" strokeWidth={1.8} />
           <AnimatedCount value={commentCount} style={{ fontSize: 12.5, color: "#fff", fontWeight: 600 }} />
         </button>
-        {video.type !== "video" && onRepost && (
-          <button onClick={() => onRepost(video.id)} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <Repeat2 size={19} color={isReposted ? "#E0813F" : "#fff"} strokeWidth={1.8} />
-            <AnimatedCount value={video.reposts || 0} style={{ fontSize: 12.5, color: "#fff", fontWeight: 600 }} />
-          </button>
-        )}
+        {/* Option repost désactivée à la demande — voir PostCard. */}
         <button onClick={() => setSheet("share")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
           <PisteGlyph type="gibier" size={19} color="#fff" />
         </button>
@@ -3528,14 +3508,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
           </div>
           <AnimatedCount value={commentCount} style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }} />
         </button>
-        {onRepost && (
-          <button onClick={onRepost} className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Repeat2 size={18} color={reposted ? colors.accent : "#fff"} strokeWidth={2} />
-            </div>
-            <AnimatedCount value={item.reposts || 0} style={{ fontSize: 10.5, color: reposted ? colors.accent : "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }} />
-          </button>
-        )}
+        {/* Option repost désactivée à la demande — voir PostCard. */}
         <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer" }}>
           <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <PisteGlyph type="gibier" size={17} color="#fff" />
@@ -6559,21 +6532,12 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
   const [followSheet, setFollowSheet] = useState(null); // 'followers' | 'following' | null
   const [viewingInstant, setViewingInstant] = useState(null);
   const [sheet, setSheet] = useState(null);
-  const [repostedPosts, setRepostedPosts] = useState([]);
-  const [repostsLoading, setRepostsLoading] = useState(true);
   const [tab, setTab] = useState("publications");
   const [openPost, setOpenPost] = useState(null);
   const stats = profile.statistiques || { abonnes: 0, abonnements: 0, publications: posts.length };
-  const profileTabs = [["publications", "Publications"], ["videos", "Vidéos"], ["chiens", "Chiens"], ["reposts", "Repost"]];
-
-  useEffect(() => {
-    let cancelled = false;
-    postService.fetchMyRepostedPosts()
-      .then((rows) => { if (!cancelled) setRepostedPosts(rows.map(mapPostRow)); })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setRepostsLoading(false); });
-    return () => { cancelled = true; };
-  }, [reposted]);
+  // Onglet "Repost" désactivé à la demande — postService.fetchMyRepostedPosts
+  // et RepostRow restent définis, prêts à être rebranchés plus tard.
+  const profileTabs = [["publications", "Publications"], ["videos", "Vidéos"], ["chiens", "Chiens"]];
 
   return (
     <div style={{ position: "relative" }}>
@@ -6698,19 +6662,6 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
         </div>
       )}
 
-      {tab === "reposts" && (
-        repostsLoading ? (
-          <div style={{ fontSize: 12, color: colors.textFaint, padding: "10px 16px 0" }}>Chargement...</div>
-        ) : repostedPosts.length === 0 ? (
-          <EmptyState title="Aucun repost" subtitle="Les publications que vous repartagez apparaîtront ici." icon={Repeat2} />
-        ) : (
-          <div className="flex flex-col" style={{ paddingTop: 8 }}>
-            {repostedPosts.map((p) => (
-              <RepostRow key={p.id} post={p} onOpen={(post) => (post.type === "video_courte" ? setViewingInstant(post) : setOpenPost(post))} />
-            ))}
-          </div>
-        )
-      )}
 
       {openPost && (
         <SinglePostOverlay
