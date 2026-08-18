@@ -7312,6 +7312,13 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     window.setTimeout(() => setHighlightedId((h) => (h === id ? null : h)), 1400);
   };
   const lastTapRef = useRef({ id: null, time: 0 });
+  // Balayer une bulle vers la gauche pour y répondre (façon Instagram),
+  // en plus de l'appui long — un seul geste actif à la fois, suivi via une
+  // ref partagée plutôt qu'un state par message (impossible : un Hook ne
+  // peut pas être déclaré à l'intérieur du .map() ci-dessous).
+  const dragRef = useRef({ id: null, startX: 0, startY: 0, dx: 0, locked: null });
+  const SWIPE_REPLY_THRESHOLD = 44;
+  const SWIPE_REPLY_MAX = 60;
   // Rester appuyé sur un message pour y répondre (au lieu d'une flèche
   // visible sur chaque bulle) — un seul minuteur réutilisé, jamais deux
   // pressions longues actives en même temps.
@@ -7551,6 +7558,52 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
             const cancelLongPress = () => {
               if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
             };
+            // Balayage vers la gauche = répondre (voir dragRef plus haut) —
+            // combiné aux mêmes événements tactiles que l'appui long, un seul
+            // jeu de handlers par bulle. Transform appliqué directement au
+            // DOM (pas de state par message) pour un suivi du doigt fluide,
+            // sans re-render de toute la liste à chaque pixel de mouvement.
+            const resetSwipe = (el, animate) => {
+              if (!el) return;
+              el.style.transition = animate ? "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" : "none";
+              el.style.transform = "translateX(0px)";
+              const icon = el.parentElement?.querySelector("[data-reply-icon]");
+              if (icon) icon.style.opacity = "0";
+            };
+            const onBubbleTouchStart = (e) => {
+              startLongPress();
+              dragRef.current = { id: m.id, startX: e.touches[0].clientX, startY: e.touches[0].clientY, dx: 0, locked: null };
+              e.currentTarget.style.transition = "none";
+            };
+            const onBubbleTouchMove = (e) => {
+              cancelLongPress();
+              const d = dragRef.current;
+              if (d.id !== m.id) return;
+              const dx = e.touches[0].clientX - d.startX;
+              const dy = e.touches[0].clientY - d.startY;
+              if (!d.locked) {
+                if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+                d.locked = Math.abs(dy) > Math.abs(dx) ? "vertical" : "horizontal";
+              }
+              if (d.locked !== "horizontal") return;
+              const clamped = Math.max(dx, -SWIPE_REPLY_MAX);
+              d.dx = clamped;
+              e.currentTarget.style.transform = `translateX(${Math.min(clamped, 0)}px)`;
+              const icon = e.currentTarget.parentElement?.querySelector("[data-reply-icon]");
+              if (icon) icon.style.opacity = String(Math.min(1, -clamped / SWIPE_REPLY_THRESHOLD));
+            };
+            const onBubbleTouchEnd = (e) => {
+              cancelLongPress();
+              const d = dragRef.current;
+              if (d.id === m.id && d.dx <= -SWIPE_REPLY_THRESHOLD) triggerReply();
+              resetSwipe(e.currentTarget, true);
+              dragRef.current = { id: null, startX: 0, startY: 0, dx: 0, locked: null };
+            };
+            const onBubbleTouchCancel = (e) => {
+              cancelLongPress();
+              resetSwipe(e.currentTarget, true);
+              dragRef.current = { id: null, startX: 0, startY: 0, dx: 0, locked: null };
+            };
             return (
               <React.Fragment key={m.id}>
                 {changedSender && <div style={{ height: 1, background: colors.border, opacity: 0.6, margin: "6px 10px" }} />}
@@ -7560,18 +7613,25 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                     <MoreHorizontal size={13} color={colors.textFaint} />
                   </button>
                 )}
-                <div style={{ maxWidth: "78%" }}>
+                <div style={{ maxWidth: "78%", position: "relative" }}>
                   {!mine && senderLabel && (
                     <button onClick={() => onOpenProfile(m.profiles.username)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 10.5, color: colors.textFaint, marginBottom: 2, marginLeft: 4 }}>
                       {senderLabel}
                     </button>
                   )}
+                  {/* Icône révélée par le glissement — ancrée sur le bord
+                      "vers le centre" de l'écran (jamais le bord de l'appareil,
+                      pas de risque de la voir tronquée) ; opacity pilotée par
+                      onBubbleTouchMove, jamais par un re-render React. */}
+                  <div data-reply-icon aria-hidden="true" style={{ position: "absolute", top: "50%", [mine ? "left" : "right"]: -34, transform: "translateY(-50%)", opacity: 0, width: 26, height: 26, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                    <Reply size={13} color={colors.accent} />
+                  </div>
                   <div
                     onClick={() => { if (!longPressFiredRef.current) handleBubbleTap(m); }}
-                    onTouchStart={startLongPress}
-                    onTouchEnd={cancelLongPress}
-                    onTouchMove={cancelLongPress}
-                    onTouchCancel={cancelLongPress}
+                    onTouchStart={onBubbleTouchStart}
+                    onTouchEnd={onBubbleTouchEnd}
+                    onTouchMove={onBubbleTouchMove}
+                    onTouchCancel={onBubbleTouchCancel}
                     style={{
                       position: "relative",
                       background: mine ? `linear-gradient(135deg, ${colors.accent}, ${colors.accent}dd)` : colors.headerBg,
