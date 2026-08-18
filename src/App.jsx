@@ -107,8 +107,11 @@ const THEMES = {
     text: "#1A1A18",
     textSecondary: "#8A8A85",
     textFaint: "#B7B7B1",
-    accent: "#6B7A47",
-    accentSoft: "#E6E9D9",
+    // Orange chasse (était un vert sauge #6B7A47) — voir Logo, l'anneau
+    // "Trace" autour de l'avatar et les pilules pleines pour le camaïeu
+    // orange/vert complet.
+    accent: "#B85A28",
+    accentSoft: "#F6E1D1",
     onAccent: "#FFFFFF",
     error: "#C0453A",
     errorSoft: "#F6E2DF",
@@ -125,8 +128,8 @@ const THEMES = {
     text: "#F4F2EF",
     textSecondary: "#A8A8A4",
     textFaint: "#6E6E6A",
-    accent: "#94A66C",
-    accentSoft: "rgba(148,166,108,0.16)",
+    accent: "#E0813F",
+    accentSoft: "rgba(224,129,63,0.16)",
     onAccent: "#14170D",
     error: "#E17466",
     errorSoft: "rgba(225,116,102,0.16)",
@@ -198,8 +201,16 @@ function Logo({ size = 30, background = true }) {
   );
   if (!background) return mark;
   return (
-    <div style={{ width: size, height: size, borderRadius: size * 0.3, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      {mark}
+    <div style={{ width: size, height: size, borderRadius: size * 0.3, position: "relative", overflow: "hidden", background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      {/* Camaïeu chasse orange/vert plutôt qu'un aplat uni : quelques taches
+          organiques superposées, comme un tissu camouflage, sans jamais
+          nuire à la lecture du "P" (toujours blanc, toujours au premier plan). */}
+      <svg width={size} height={size} viewBox="0 0 40 40" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0 }}>
+        <path d="M-4 4c9-5 13 5 23-1 9-5 17 3 21-2v13c-6 5-13-4-21 1-9 5-15-4-23 1z" fill="#5A6B3B" />
+        <path d="M-4 22c10-6 15 4 24-2 9-5 16 4 20-1v21h-44z" fill="#3C4A28" />
+        <path d="M6 12c6-3 9 3 15-1 5-3 10 2 13-1v9c-4 3-8-2-13 1-6 3-9-3-15 1z" fill="#B85A28" opacity="0.55" />
+      </svg>
+      <div style={{ position: "relative", zIndex: 1 }}>{mark}</div>
     </div>
   );
 }
@@ -1824,9 +1835,12 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
               qui n'existe plus visuellement ici. */}
           <div className="px-4" style={{ marginTop: 18, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
             <div>
+              {/* Anneau "Trace" (non vue) : orange (accent) vers vert #5A6B3B,
+                  même paire que le logo — l'anneau de l'avatar reprend le
+                  camaïeu chasse plutôt qu'un simple dégradé de l'accent seul. */}
               {traceGroup && traceGroup.traces.length > 0 ? (
                 <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
-                  <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
+                  <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, #5A6B3B)` }}>
                     <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                       <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
                     </div>
@@ -2762,7 +2776,7 @@ function TraceBar({ groups, onOpenGroup, onCreateOwn }) {
                   borderRadius: RADIUS.pill,
                   padding: 2.5,
                   boxSizing: "border-box",
-                  background: empty ? colors.border : g.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})`,
+                  background: empty ? colors.border : g.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, #5A6B3B)`,
                 }}
               >
                 <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.background, padding: 2, boxSizing: "border-box" }}>
@@ -3252,7 +3266,7 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
         </button>
         {video.type !== "video" && onRepost && (
           <button onClick={() => onRepost(video.id)} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <Repeat2 size={19} color={isReposted ? "#94A66C" : "#fff"} strokeWidth={1.8} />
+            <Repeat2 size={19} color={isReposted ? "#E0813F" : "#fff"} strokeWidth={1.8} />
             <AnimatedCount value={video.reposts || 0} style={{ fontSize: 12.5, color: "#fff", fontWeight: 600 }} />
           </button>
         )}
@@ -6572,7 +6586,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
         <div>
           {traceGroup && traceGroup.traces.length > 0 ? (
             <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
-              <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
+              <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, #5A6B3B)` }}>
                 <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
                 </div>
