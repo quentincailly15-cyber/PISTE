@@ -304,6 +304,20 @@ export async function fetchUserPosts(userId, { limit = 50 } = {}) {
   return data;
 }
 
+/** Un post précis par id — sert à ouvrir la bonne cible en tapant une
+ *  notification (like/commentaire/repost/mention/nouvelle publication),
+ *  jusqu'ici toutes redirigeaient à tort vers le profil de l'auteur de
+ *  l'action plutôt que vers le contenu concerné. */
+export async function fetchPostById(postId) {
+  const { data, error } = await supabase
+    .from("posts")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds)")
+    .eq("id", postId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 /** Publications où un chien précis a été identifié (table de jointure
  *  post_dogs, déjà utilisée par createPost) — sert à l'onglet correspondant
  *  de DogPage ("Photos"/"Vidéos"/"Publications"), jusqu'ici toujours vide. */

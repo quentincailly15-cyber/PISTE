@@ -277,29 +277,71 @@ function SegmentedControl({ options, value, onChange }) {
     </div>
   );
 }
-// Balayage depuis le bord gauche de l'écran pour revenir en arrière (comme le
-// geste natif iOS) — détection manuelle par tactile brut plutôt qu'une
-// librairie : on ne déclenche que si le doigt démarre tout près du bord
-// gauche (sinon ça interférerait avec le scroll normal ou un swipe-to-delete
-// ailleurs dans l'écran) et se déplace surtout à l'horizontale.
+// Balayage depuis le bord gauche de l'écran pour revenir en arrière — pas un
+// simple raccourci "comme si on appuyait sur la flèche", un vrai effet de
+// glisse : l'écran suit le doigt en direct (transform posé à même le DOM,
+// sans passer par un re-render React à chaque pixel, pour rester fluide),
+// s'arrondit et projette une ombre pendant le geste, façon liquide. Au
+// relâchement : au-delà du seuil, l'écran termine sa glissée puis se ferme ;
+// en-deçà, il revient élastiquement à sa place. Écoute le DOM directement
+// (une seule fois, jamais réabonnée) plutôt que les événements React
+// synthétiques, pour ne rater aucune frame du geste.
 function useSwipeBack(onBack) {
-  const startRef = useRef(null);
-  if (!onBack) return {};
-  return {
-    onTouchStart: (e) => {
+  const ref = useRef(null);
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let startX = null;
+    let startY = null;
+    const onStart = (e) => {
+      if (!onBackRef.current) return;
       const t = e.touches[0];
-      startRef.current = t.clientX < 24 ? { x: t.clientX, y: t.clientY } : null;
-    },
-    onTouchEnd: (e) => {
-      if (!startRef.current) return;
+      if (t.clientX < 24) { startX = t.clientX; startY = t.clientY; } else { startX = null; }
+    };
+    const onMove = (e) => {
+      if (startX === null) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (Math.abs(dy) > 60) { startX = null; el.style.transform = ""; return; }
+      if (dx > 0) {
+        el.style.transition = "none";
+        el.style.transform = `translateX(${dx}px)`;
+        el.style.borderTopLeftRadius = `${RADIUS.xl}px`;
+        el.style.borderBottomLeftRadius = `${RADIUS.xl}px`;
+        el.style.boxShadow = "-10px 0 34px rgba(0,0,0,0.22)";
+      }
+    };
+    const onEnd = (e) => {
+      if (startX === null) return;
       const t = e.changedTouches[0];
-      const dx = t.clientX - startRef.current.x;
-      const dy = t.clientY - startRef.current.y;
-      startRef.current = null;
-      if (dx > 70 && Math.abs(dy) < 60) onBack();
-    },
-    onTouchCancel: () => { startRef.current = null; },
-  };
+      const dx = t.clientX - startX;
+      startX = null;
+      el.style.transition = "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 280ms ease, box-shadow 280ms ease";
+      if (dx > 90 && onBackRef.current) {
+        el.style.transform = "translateX(100%)";
+        window.setTimeout(() => onBackRef.current && onBackRef.current(), 220);
+      } else {
+        el.style.transform = "";
+        el.style.borderTopLeftRadius = "";
+        el.style.borderBottomLeftRadius = "";
+        el.style.boxShadow = "";
+      }
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: true });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+  return ref;
 }
 function ScreenHeader({ title, onBack, onCloseX, rightAction, chromeMode = "full" }) {
   const { colors } = useTheme();
@@ -347,7 +389,7 @@ function ProgressDots({ step, total }) {
 /* ============================================================
    TAXONOMIES (données de structure réelles, pas du contenu)
    ============================================================ */
-const INTERESTS = ["Grand gibier", "Petit gibier", "Gibier d'eau", "Battue", "Chasse à courre", "Approche", "Affût", "Chien d'arrêt", "Chiens courants", "Cuisine du gibier", "Matériel", "Photographie", "Nature / observation"];
+const INTERESTS = ["Grand gibier", "Petit gibier", "Gibier d'eau", "Battue", "Chasse à courre", "Approche", "Affût", "Piégeage", "Vénerie sous terre", "Chien d'arrêt", "Chiens courants", "Cuisine du gibier", "Matériel", "Photographie", "Nature / observation"];
 const PROFILE_TYPES = ["Chasseur", "Passionné", "Créateur", "Professionnel"];
 // Structure de données réelle région → départements français (au lieu d'une simple liste
 // de régions comparée en texte). Garantit qu'un département affiché appartient forcément
@@ -582,7 +624,7 @@ function mapPostRow(row) {
   };
 }
 const ANIMALS = ["Chevreuil", "Sanglier", "Cerf", "Lièvre", "Faisan", "Canard", "Autre", "Aucun"];
-const PRACTICE_TYPES = ["Approche", "Affût", "Battue", "Chasse au chien", "Gibier d'eau", "Petit gibier", "Grand gibier", "Observation", "Préparation", "Matériel", "Autre"];
+const PRACTICE_TYPES = ["Approche", "Affût", "Battue", "Chasse au chien", "Gibier d'eau", "Petit gibier", "Grand gibier", "Piégeage", "Vénerie sous terre", "Observation", "Préparation", "Matériel", "Autre"];
 const GROUP_CATEGORIES = ["Grand gibier", "Petit gibier", "Gibier d'eau", "Chiens de chasse", "Approche", "Affût", "Battue", "Matériel", "Photographie", "Nature"];
 
 // --- Modération -------------------------------------------------------------
@@ -1467,7 +1509,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 64, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 64, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       {loading ? (
         <>
           <ScreenHeader title="Profil" onBack={onClose} />
@@ -1580,7 +1622,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                         saved={saved.includes(p.id)}
                         reposted={reposted.includes(p.id)}
                         onRepost={() => onRepost(p.id)}
-                        commentCount={(commentsByPost[p.id] || []).length}
+                        commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
                         onLike={() => onLike(p.id)}
                         onSave={() => onSave(p.id)}
                         onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
@@ -1602,7 +1644,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                         video={v}
                         liked={liked.includes(v.id)}
                         reposted={reposted.includes(v.id)}
-                        commentCount={(commentsByPost[v.id] || []).length}
+                        commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
                         onLike={() => onLike(v.id)}
                         onRepost={v.type === "video" ? undefined : () => onRepost(v.id)}
                         onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
@@ -1647,7 +1689,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                           saved={saved.includes(p.id)}
                           reposted={true}
                           onRepost={() => onRepost(p.id)}
-                          commentCount={(commentsByPost[p.id] || []).length}
+                          commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
                           onLike={() => onLike(p.id)}
                           onSave={() => onSave(p.id)}
                           onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
@@ -1695,7 +1737,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
           onClose={() => setViewingInstant(null)}
           liked={liked.includes(viewingInstant.id)}
           reposted={true}
-          commentCount={(commentsByPost[viewingInstant.id] || []).length}
+          commentCount={commentsByPost[viewingInstant.id] ? commentsByPost[viewingInstant.id].length : (viewingInstant.commentaires || 0)}
           onLike={() => onLike(viewingInstant.id)}
           onRepost={() => onRepost(viewingInstant.id)}
           onOpenComments={() => { setSheet({ type: "comments", post: viewingInstant }); onLoadComments(viewingInstant.id); }}
@@ -2077,12 +2119,161 @@ function PollCard({ postId }) {
     </div>
   );
 }
+// Partager un contenu PISTE (publication/vidéo/Instant) en privé — choisir un
+// ou plusieurs destinataires parmi ses conversations existantes ou une
+// recherche, puis l'envoyer comme un vrai message référencé dans leur
+// conversation (voir messageService.sendSharedPost, migration 041). Le
+// contenu n'est jamais dupliqué : seul son id est envoyé, la personne verra
+// toujours la version à jour.
+function SharePostSheet({ item, onClose }) {
+  const { colors } = useTheme();
+  const [conversations, setConversations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState([]); // [{ key, conversationId?, userId?, name, avatar }]
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    messageService.fetchConversations().then(setConversations).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) { setResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(() => {
+      socialService.searchUsers(q).then((rows) => { if (!cancelled) setResults(rows); }).catch(() => {}).finally(() => { if (!cancelled) setSearching(false); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query]);
+
+  const toggleConv = (c) => setSelected((s) => (s.some((x) => x.key === `c:${c.id}`) ? s.filter((x) => x.key !== `c:${c.id}`) : [...s, { key: `c:${c.id}`, conversationId: c.id, name: c.nom, avatar: c.avatar }]));
+  const toggleUser = (u) => setSelected((s) => (s.some((x) => x.key === `u:${u.id}`) ? s.filter((x) => x.key !== `u:${u.id}`) : [...s, { key: `u:${u.id}`, userId: u.id, name: u.nom || u.username, avatar: u.avatar_url }]));
+
+  const send = async () => {
+    if (selected.length === 0) return;
+    setSending(true);
+    setError("");
+    try {
+      for (const target of selected) {
+        const conversationId = target.conversationId || (await messageService.startDirectConversation(target.userId));
+        await messageService.sendSharedPost(conversationId, item.id);
+      }
+      setSent(true);
+    } catch (e) {
+      setError(e.message || "Impossible d'envoyer pour le moment.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const nativeShare = async () => {
+    if (navigator.share) { try { await navigator.share({ title: "PISTE", text: item.titre || item.texte || "Un contenu PISTE" }); } catch (e) {} }
+    else setError("Le partage natif n'est pas disponible sur cet appareil.");
+  };
+
+  const thumb = item.image || (item.videoUrl ? null : null);
+  const isVideoLike = item.type === "video" || item.type === "video_courte";
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 92 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "82vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
+          <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Envoyer à...</span>
+            <IconButton icon={X} onClick={onClose} size={30} />
+          </div>
+          {sent ? (
+            <div style={{ padding: "12px 20px 28px", textAlign: "center" }}>
+              <div style={{ width: 48, height: 48, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}><Check size={22} color={colors.accent} strokeWidth={2.5} /></div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, marginBottom: 4 }}>Envoyé</div>
+              <div style={{ fontSize: 12, color: colors.textSecondary }}>Retrouvable dans la conversation avec {selected.length > 1 ? "chaque personne" : "cette personne"}.</div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3" style={{ padding: "0 16px 12px" }}>
+                <div style={{ width: 44, height: 44, borderRadius: RADIUS.lg, background: colors.surfaceAlt, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {thumb ? <img src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : isVideoLike ? <Film size={18} color={colors.textFaint} /> : <TypeIcon size={18} color={colors.textFaint} />}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.titre || item.texte || "Contenu PISTE"}</div>
+                  <div style={{ fontSize: 11, color: colors.textFaint }}>{item.nom}</div>
+                </div>
+              </div>
+              <div style={{ padding: "0 16px 10px" }}>
+                <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
+                  <Search size={15} color={colors.textFaint} />
+                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un pseudo..." style={{ border: "none", outline: "none", background: "transparent", fontSize: 13, color: colors.text, flex: 1 }} />
+                </div>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", padding: "0 12px" }}>
+                {query.trim() ? (
+                  searching ? (
+                    <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Recherche...</div>
+                  ) : results.length === 0 ? (
+                    <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Aucun résultat.</div>
+                  ) : (
+                    results.map((u) => {
+                      const active = selected.some((x) => x.key === `u:${u.id}`);
+                      return (
+                        <button key={u.id} onClick={() => toggleUser(u)} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
+                          <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
+                            <div style={{ fontSize: 11, color: colors.textFaint }}>@{u.username}</div>
+                          </div>
+                          <div style={{ width: 20, height: 20, borderRadius: RADIUS.pill, border: `1.5px solid ${active ? colors.accent : colors.border}`, background: active ? colors.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {active && <Check size={11} color={colors.onAccent} strokeWidth={3} />}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )
+                ) : loading ? (
+                  <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Chargement...</div>
+                ) : conversations.length === 0 ? (
+                  <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Recherchez un pseudo pour commencer une conversation.</div>
+                ) : (
+                  conversations.map((c) => {
+                    const active = selected.some((x) => x.key === `c:${c.id}`);
+                    return (
+                      <button key={c.id} onClick={() => toggleConv(c)} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
+                        <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : c.type === "group" ? <Users size={16} color={colors.textFaint} /> : <User size={16} color={colors.textFaint} />}
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: colors.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nom}</div>
+                        <div style={{ width: 20, height: 20, borderRadius: RADIUS.pill, border: `1.5px solid ${active ? colors.accent : colors.border}`, background: active ? colors.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {active && <Check size={11} color={colors.onAccent} strokeWidth={3} />}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              {error && <div style={{ margin: "8px 16px 0", fontSize: 12, color: colors.error }}>{error}</div>}
+              <div style={{ padding: 16 }} className="flex flex-col gap-2">
+                <Button onClick={send} disabled={selected.length === 0 || sending}>{sending ? "Envoi..." : `Envoyer${selected.length > 0 ? ` (${selected.length})` : ""}`}</Button>
+                <Button variant="secondary" onClick={nativeShare}>Partager ailleurs</Button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, onRepost, onOpenComments, onOpenActions, onOpenAuthor, onOpenProfile }) {
   const { colors } = useTheme();
-  const share = async () => {
-    if (navigator.share) { try { await navigator.share({ title: "PISTE", text: post.texte || "Une publication PISTE" }); } catch (e) {} }
-    else alert("Le partage natif n'est pas disponible sur cet appareil. Le partage par lien sera activé une fois le backend connecté.");
-  };
+  const [showShare, setShowShare] = useState(false);
   return (
     <div style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${colors.border}`, borderRadius: RADIUS.xl, margin: "0 12px 12px", overflow: "hidden", paddingTop: 14, paddingBottom: 14 }}>
       {post.repostedAt && (
@@ -2126,7 +2317,7 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
             <span style={{ fontSize: 12, color: reposted ? colors.accent : colors.textSecondary, fontWeight: reposted ? 700 : 400 }}>{post.reposts || 0}</span>
           </button>
         )}
-        <button onClick={share} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><Share2 size={17} color={colors.textSecondary} strokeWidth={1.8} /></button>
+        <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><Share2 size={17} color={colors.textSecondary} strokeWidth={1.8} /></button>
         <div style={{ flex: 1 }} />
         <button onClick={onSave} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
           <Bookmark size={17} color={saved ? colors.accent : colors.textSecondary} fill={saved ? colors.accent : "none"} strokeWidth={1.8} />
@@ -2139,6 +2330,7 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
           {(post.hashtags || []).map((h) => <span key={h} style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent }}>{h}</span>)}
         </div>
       )}
+      {showShare && <SharePostSheet item={post} onClose={() => setShowShare(false)} />}
     </div>
   );
 }
@@ -2491,7 +2683,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
               saved={saved.includes(p.id)}
               reposted={reposted.includes(p.id)}
               onRepost={() => onRepost(p.id)}
-              commentCount={(commentsByPost[p.id] || []).length}
+              commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
               onLike={() => onLike(p.id)}
               onSave={() => onSave(p.id)}
               onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
@@ -2582,10 +2774,7 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
   // miniature, un second lance la lecture, comme n'importe quelle vignette.
   const [revealed, setRevealed] = useState(false);
   const gated = video.contentRating === "sensitive" && !revealed;
-  const share = async () => {
-    if (navigator.share) { try { await navigator.share({ title: "PISTE", text: video.titre || "Une vidéo PISTE" }); } catch (e) {} }
-    else alert("Le partage natif n'est pas disponible sur cet appareil.");
-  };
+  const [showShare, setShowShare] = useState(false);
   return (
     <div style={{ padding: "10px 16px 16px" }}>
       <div className="flex gap-3" style={{ alignItems: "stretch" }}>
@@ -2633,7 +2822,7 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
               <Repeat2 size={17} color={reposted ? colors.accent : colors.textFaint} strokeWidth={1.8} />
             </button>
           )}
-          <button onClick={share} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+          <button onClick={() => setShowShare(true)} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
             <Share2 size={16} color={colors.textFaint} strokeWidth={1.8} />
           </button>
           <button onClick={onOpenActions} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
@@ -2652,6 +2841,7 @@ function VideoCard({ video, liked, reposted, commentCount, onLike, onRepost, onO
         <span style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{video.nom}</span>
         {video.duree && <span style={{ fontSize: 11, color: colors.textFaint, flexShrink: 0 }}>· {video.duree}</span>}
       </button>
+      {showShare && <SharePostSheet item={video} onClose={() => setShowShare(false)} />}
     </div>
   );
 }
@@ -2670,10 +2860,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
   const [revealed, setRevealed] = useState(false);
   const gated = item.contentRating === "sensitive" && !revealed;
   const gatedRef = useRef(gated);
-  const share = async () => {
-    if (navigator.share) { try { await navigator.share({ title: "PISTE", text: item.texte || "Un instant PISTE" }); } catch (e) {} }
-    else alert("Le partage natif n'est pas disponible sur cet appareil.");
-  };
+  const [showShare, setShowShare] = useState(false);
 
   useEffect(() => {
     gatedRef.current = gated;
@@ -2751,7 +2938,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
             <span style={{ fontSize: 10.5, color: reposted ? colors.accent : "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.reposts || 0}</span>
           </button>
         )}
-        <button onClick={share} style={{ background: "none", border: "none", cursor: "pointer" }}>
+        <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer" }}>
           <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Share2 size={17} color="#fff" strokeWidth={2} />
           </div>
@@ -2770,6 +2957,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
           <button onClick={() => setRevealed(true)} style={{ marginTop: 4, background: "#fff", color: "#14170D", border: "none", borderRadius: RADIUS.pill, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Afficher le contenu</button>
         </div>
       )}
+      {showShare && <SharePostSheet item={item} onClose={() => setShowShare(false)} />}
     </div>
   );
 }
@@ -2876,7 +3064,7 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
               item={item}
               liked={liked.includes(item.id)}
               reposted={reposted.includes(item.id)}
-              commentCount={(commentsByPost[item.id] || []).length}
+              commentCount={commentsByPost[item.id] ? commentsByPost[item.id].length : (item.commentaires || 0)}
               onLike={() => onLike(item.id)}
               onRepost={() => onRepost(item.id)}
               onOpenComments={() => onOpenComments(item)}
@@ -2986,7 +3174,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
                   video={v}
                   liked={liked.includes(v.id)}
                   reposted={reposted.includes(v.id)}
-                  commentCount={(commentsByPost[v.id] || []).length}
+                  commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
                   onLike={() => onLike(v.id)}
                   onRepost={v.type === "video" ? undefined : () => onRepost(v.id)}
                   onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
@@ -3020,7 +3208,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
               video={v}
               liked={liked.includes(v.id)}
               reposted={reposted.includes(v.id)}
-              commentCount={(commentsByPost[v.id] || []).length}
+              commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
               onLike={() => onLike(v.id)}
               onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
               onOpenActions={() => setSheet({ type: "actions", post: v })}
@@ -3174,7 +3362,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
   const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
       <div onScroll={handleScroll} style={{ flex: 1, overflowY: "auto" }}>
         <ScreenHeader title={group.nom} onBack={onClose} chromeMode={localMode} />
         <div style={{ position: "relative", marginTop: 10, borderRadius: RADIUS.xl, overflow: "hidden" }}>
@@ -3237,7 +3425,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
                   saved={saved.includes(p.id)}
                   reposted={reposted.includes(p.id)}
                   onRepost={() => onRepost(p.id)}
-                  commentCount={(commentsByPost[p.id] || []).length}
+                  commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
                   onLike={() => onLike(p.id)}
                   onSave={() => onSave(p.id)}
                   onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
@@ -3330,7 +3518,7 @@ function CreateGroupForm({ onClose, onCreated }) {
   };
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 46, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 46, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title="Créer une communauté" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickImage} style={{ display: "none" }} />
@@ -3595,7 +3783,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 70, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title={label} onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <TextField label={captionLabel} value={text} onChange={setText} placeholder="Ajouter une description... (#hashtag, @mention)" textarea rows={isPoll ? 2 : 4} />
@@ -3761,7 +3949,7 @@ function TraceComposeScreen({ onClose, onPublished }) {
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Nouvelle Trace" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={inputRef} type="file" accept="image/*,video/*" onChange={pick} style={{ display: "none" }} />
@@ -3909,7 +4097,7 @@ function ProfileEditor({ profile, onClose, onSave }) {
   const toggleInterest = (i) => setForm({ ...form, interets: form.interets.includes(i) ? form.interets.filter((x) => x !== i) : [...form.interets, i] });
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 50, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title="Modifier le profil" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <input ref={bannerInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickBanner} style={{ display: "none" }} />
@@ -3976,7 +4164,7 @@ function DogFormScreen({ onClose, onSaved }) {
   };
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 65, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title="Ajouter un chien" onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickPhoto} style={{ display: "none" }} />
@@ -4037,7 +4225,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
+    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: colors.background, display: "flex", flexDirection: "column" }}>
       <ScreenHeader title={dog.nom} onBack={onClose} />
       <div className="px-5 pt-4">
         <div style={{ width: 64, height: 64, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden" }}>
@@ -4062,7 +4250,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
               video={v}
               liked={liked.includes(v.id)}
               reposted={reposted.includes(v.id)}
-              commentCount={(commentsByPost[v.id] || []).length}
+              commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
               onLike={() => onLike?.(v.id)}
               onRepost={() => onRepost?.(v.id)}
               onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments?.(v.id); }}
@@ -4079,7 +4267,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
               liked={liked.includes(p.id)}
               saved={saved.includes(p.id)}
               reposted={reposted.includes(p.id)}
-              commentCount={(commentsByPost[p.id] || []).length}
+              commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
               onLike={() => onLike?.(p.id)}
               onSave={() => onSave?.(p.id)}
               onRepost={() => onRepost?.(p.id)}
@@ -4119,11 +4307,73 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
     </div>
   );
 }
+/** Ouvre UN post précis (publication/photo/sondage) hors du fil — sert
+ *  notamment à faire atterrir une notification like/commentaire/mention sur
+ *  le contenu réel plutôt que sur le profil de la personne qui a agi.
+ *  `autoOpenComments` ouvre directement les commentaires (notification de
+ *  commentaire ou de mention) au lieu de juste montrer le post. */
+function SinglePostViewer({ post, autoOpenComments, onClose, onOpenProfile, meUsername, isAdmin, liked = [], saved = [], reposted = [], commentsByPost = {}, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
+  const { colors } = useTheme();
+  const [sheet, setSheet] = useState(autoOpenComments ? { type: "comments", post } : null);
+  useEffect(() => {
+    if (autoOpenComments) onLoadComments?.(post.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const swipeBack = useSwipeBack(onClose);
+  return (
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 91, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+      <ScreenHeader title="Publication" onCloseX={onClose} />
+      <div style={{ flex: 1, overflowY: "auto", paddingTop: 8 }}>
+        <PostCard
+          post={post}
+          liked={liked.includes(post.id)}
+          saved={saved.includes(post.id)}
+          reposted={reposted.includes(post.id)}
+          commentCount={commentsByPost[post.id] ? commentsByPost[post.id].length : (post.commentaires || 0)}
+          onLike={() => onLike?.(post.id)}
+          onSave={() => onSave?.(post.id)}
+          onRepost={() => onRepost?.(post.id)}
+          onOpenComments={() => { setSheet({ type: "comments", post }); onLoadComments?.(post.id); }}
+          onOpenActions={() => setSheet({ type: "actions", post })}
+          onOpenAuthor={() => onOpenProfile?.(post.username)}
+          onOpenProfile={onOpenProfile}
+        />
+      </div>
+      {sheet?.type === "actions" && (
+        <ContentActionSheet
+          isOwn={post.username === meUsername}
+          isAdmin={isAdmin}
+          onClose={() => setSheet(null)}
+          onEdit={() => { setSheet(null); onEditRequest?.(post); }}
+          onDelete={() => { onDelete?.(post.id); setSheet(null); onClose(); }}
+          onReport={() => setSheet({ type: "report", post })}
+          onHide={() => { onHide?.(post.id); setSheet(null); onClose(); }}
+          onBlock={() => { onBlock?.(post.username); setSheet(null); onClose(); }}
+        />
+      )}
+      {sheet?.type === "report" && (
+        <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => { onReport?.({ targetId: post.id, targetType: "post", reason }); setSheet(null); }} />
+      )}
+      {sheet?.type === "comments" && (
+        <CommentsSheet
+          comments={commentsByPost[post.id] || []}
+          onClose={() => setSheet(null)}
+          onAdd={(texte, parentId) => onAddComment?.(post.id, texte, parentId)}
+          onDelete={onDeleteComment ? (commentId) => onDeleteComment(post.id, commentId) : undefined}
+          meUsername={meUsername}
+          onOpenProfile={onOpenProfile}
+        />
+      )}
+    </div>
+  );
+}
 /* ============================================================
    CARNET DE CHASSE — strictement privé (voir migration 025)
    ============================================================ */
 const HUNTING_TYPES = [
   { key: "chasse", label: "Chasse" },
+  { key: "piegeage", label: "Piégeage" },
+  { key: "venerie_sous_terre", label: "Vénerie sous terre" },
   { key: "reperage", label: "Repérage" },
   { key: "entrainement_chien", label: "Entraînement chien" },
   { key: "observation", label: "Observation" },
@@ -4287,7 +4537,7 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={isEdit ? "Modifier la sortie" : "Nouvelle sortie"} onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <TextField label="Date" value={date} onChange={setDate} type="date" />
@@ -4687,7 +4937,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
   const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 65, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 65, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Carnet de chasse" onBack={onClose} />
       <div className="flex items-center gap-1.5" style={{ padding: "10px 16px 0", fontSize: 11, color: colors.textFaint }}>
         <Lock size={11} /><span>Strictement privé — visible par vous et les personnes que vous identifiez sur une sortie.</span>
@@ -4935,7 +5185,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
                 saved={saved.includes(p.id)}
                 reposted={reposted.includes(p.id)}
                 onRepost={() => onRepost(p.id)}
-                commentCount={(commentsByPost[p.id] || []).length}
+                commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
                 onLike={() => onLike(p.id)}
                 onSave={() => onSave(p.id)}
                 onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
@@ -4955,7 +5205,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
                 video={v}
                 liked={liked.includes(v.id)}
                 reposted={reposted.includes(v.id)}
-                commentCount={(commentsByPost[v.id] || []).length}
+                commentCount={commentsByPost[v.id] ? commentsByPost[v.id].length : (v.commentaires || 0)}
                 onLike={() => onLike(v.id)}
                 onRepost={v.type === "video" ? undefined : () => onRepost(v.id)}
                 onOpenComments={() => { setSheet({ type: "comments", post: v }); onLoadComments(v.id); }}
@@ -4986,7 +5236,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
                   saved={saved.includes(p.id)}
                   reposted={true}
                   onRepost={() => onRepost(p.id)}
-                  commentCount={(commentsByPost[p.id] || []).length}
+                  commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
                   onLike={() => onLike(p.id)}
                   onSave={() => onSave(p.id)}
                   onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments(p.id); }}
@@ -5068,7 +5318,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
           onClose={() => setViewingInstant(null)}
           liked={liked.includes(viewingInstant.id)}
           reposted={true}
-          commentCount={(commentsByPost[viewingInstant.id] || []).length}
+          commentCount={commentsByPost[viewingInstant.id] ? commentsByPost[viewingInstant.id].length : (viewingInstant.commentaires || 0)}
           onLike={() => onLike(viewingInstant.id)}
           onRepost={() => onRepost(viewingInstant.id)}
           onOpenComments={() => { setSheet({ type: "comments", post: viewingInstant }); onLoadComments(viewingInstant.id); }}
@@ -5325,6 +5575,11 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const [readState, setReadState] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // { id, texte, auteur } | null
   const lastTapRef = useRef({ id: null, time: 0 });
+  // Rester appuyé sur un message pour y répondre (au lieu d'une flèche
+  // visible sur chaque bulle) — un seul minuteur réutilisé, jamais deux
+  // pressions longues actives en même temps.
+  const longPressTimerRef = useRef(null);
+  const longPressFiredRef = useRef(false);
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
   const recorderRef = useRef(null);
@@ -5516,7 +5771,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
       {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
       <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -5534,33 +5789,38 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
             const isLastMine = mine && m.id === lastMineId;
             const readByAll = isLastMine && readState.length > 0 && readState.every((r) => r.last_read_at && new Date(r.last_read_at) >= new Date(m.created_at));
             const reactionCount = m.message_reactions?.length || 0;
-            const replyButton = (
-              <button onClick={() => setReplyTo({ id: m.id, texte: m.texte, auteur: mine ? "Vous" : (m.profiles?.nom || m.profiles?.username || "Utilisateur") })} aria-label="Répondre" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0, opacity: 0.5 }}>
-                <ArrowLeft size={13} color={colors.textFaint} style={{ transform: "scaleX(-1)" }} />
-              </button>
-            );
+            const senderLabel = m.profiles?.nom || m.profiles?.username || null;
+            const triggerReply = () => {
+              longPressFiredRef.current = true;
+              if (navigator.vibrate) navigator.vibrate(10);
+              setReplyTo({ id: m.id, texte: m.texte, auteur: mine ? "Vous" : senderLabel || "ce message" });
+            };
+            const startLongPress = () => {
+              longPressFiredRef.current = false;
+              longPressTimerRef.current = window.setTimeout(triggerReply, 500);
+            };
+            const cancelLongPress = () => {
+              if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+            };
             return (
               <div key={m.id} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
                 {mine && (
-                  <>
-                    {replyButton}
-                    <button onClick={() => deleteMsg(m)} aria-label="Supprimer le message" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0, opacity: 0.5 }}>
-                      <Trash2 size={13} color={colors.textFaint} />
-                    </button>
-                  </>
+                  <button onClick={() => deleteMsg(m)} aria-label="Supprimer le message" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0, opacity: 0.5 }}>
+                    <Trash2 size={13} color={colors.textFaint} />
+                  </button>
                 )}
                 <div style={{ maxWidth: "78%" }}>
-                  {!mine && (
-                    m.profiles?.username ? (
-                      <button onClick={() => onOpenProfile(m.profiles.username)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 10.5, color: colors.textFaint, marginBottom: 2, marginLeft: 4 }}>
-                        {m.profiles?.nom || m.profiles?.username}
-                      </button>
-                    ) : (
-                      <div style={{ fontSize: 10.5, color: colors.textFaint, marginBottom: 2, marginLeft: 4 }}>Utilisateur</div>
-                    )
+                  {!mine && senderLabel && (
+                    <button onClick={() => onOpenProfile(m.profiles.username)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 10.5, color: colors.textFaint, marginBottom: 2, marginLeft: 4 }}>
+                      {senderLabel}
+                    </button>
                   )}
                   <div
-                    onClick={() => handleBubbleTap(m)}
+                    onClick={() => { if (!longPressFiredRef.current) handleBubbleTap(m); }}
+                    onTouchStart={startLongPress}
+                    onTouchEnd={cancelLongPress}
+                    onTouchMove={cancelLongPress}
+                    onTouchCancel={cancelLongPress}
                     style={{
                       position: "relative",
                       background: mine ? `linear-gradient(135deg, ${colors.accent}, ${colors.accent}dd)` : colors.headerBg,
@@ -5579,18 +5839,44 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                       userSelect: "none",
                     }}
                   >
-                    {m.reply_to && (
+                    {m.reply_to && (m.reply_to.texte || m.reply_to.profiles?.username) && (
                       <div style={{ borderLeft: `2.5px solid ${mine ? "rgba(255,255,255,0.6)" : colors.accent}`, paddingLeft: 8, marginBottom: 6, opacity: 0.8 }}>
-                        <div style={{ fontSize: 10.5, fontWeight: 700 }}>{m.reply_to.profiles?.nom || m.reply_to.profiles?.username || "Utilisateur"}</div>
-                        <div style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{m.reply_to.texte || "Message"}</div>
+                        {(m.reply_to.profiles?.nom || m.reply_to.profiles?.username) && (
+                          <div style={{ fontSize: 10.5, fontWeight: 700 }}>{m.reply_to.profiles?.nom || m.reply_to.profiles?.username}</div>
+                        )}
+                        {m.reply_to.texte && (
+                          <div style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{m.reply_to.texte}</div>
+                        )}
                       </div>
                     )}
+                    {m.shared_post && (() => {
+                      const sp = m.shared_post;
+                      const spMedia = sp.post_media?.[0];
+                      const spThumb = spMedia?.type === "video" ? spMedia.thumbnail_url : spMedia?.url;
+                      const spIsVideo = sp.type === "video" || sp.type === "video_courte";
+                      return (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); if (sp.profiles?.username) onOpenProfile(sp.profiles.username); }}
+                          className="flex items-center gap-2"
+                          style={{ width: "100%", background: mine ? "rgba(255,255,255,0.14)" : colors.surfaceAlt, border: "none", borderRadius: RADIUS.md, padding: 6, marginBottom: m.texte ? 6 : 0, cursor: "pointer", textAlign: "left" }}
+                        >
+                          <div style={{ position: "relative", width: 44, height: 44, borderRadius: RADIUS.sm, overflow: "hidden", background: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {spThumb ? <img src={spThumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : spIsVideo ? <Film size={16} color="rgba(255,255,255,0.6)" /> : <TypeIcon size={16} color={colors.textFaint} />}
+                            {spIsVideo && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)" }}><Play size={12} color="#fff" fill="#fff" /></div>}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.85 }}>{sp.type === "video" ? "Vidéo" : sp.type === "video_courte" ? "Instant" : sp.type === "sondage" ? "Sondage" : "Publication"} de {sp.profiles?.nom || sp.profiles?.username || "quelqu'un"}</div>
+                            <div style={{ fontSize: 11.5, opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180 }}>{sp.titre || sp.texte || ""}</div>
+                          </div>
+                        </button>
+                      );
+                    })()}
                     {media && <MessageBubble mine={mine} media={media} colors={colors} />}
                     {m.texte && <div style={{ marginTop: media ? 6 : 0 }}>{m.texte}</div>}
                     {reactionCount > 0 && (
-                      <div style={{ position: "absolute", bottom: -8, [mine ? "left" : "right"]: -4, background: colors.surface, borderRadius: RADIUS.pill, padding: "1px 5px", fontSize: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 2 }}>
-                        <Heart size={9} color={colors.error} fill={colors.error} />
-                        {reactionCount > 1 && <span style={{ color: colors.textSecondary, fontWeight: 700 }}>{reactionCount}</span>}
+                      <div style={{ position: "absolute", bottom: -8, [mine ? "left" : "right"]: -4, background: colors.accent, borderRadius: RADIUS.pill, padding: "2px 6px", fontSize: 10.5, boxShadow: "0 1px 4px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 2 }}>
+                        <Heart size={11} color="#fff" fill="#fff" />
+                        {reactionCount > 1 && <span style={{ color: "#fff", fontWeight: 700 }}>{reactionCount}</span>}
                       </div>
                     )}
                   </div>
@@ -5599,7 +5885,6 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                     {isLastMine && (readByAll ? <span style={{ color: colors.accent, fontWeight: 600 }}> · Lu</span> : <span> · Envoyé</span>)}
                   </div>
                 </div>
-                {!mine && replyButton}
               </div>
             );
           })
@@ -5610,7 +5895,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
         <div className="flex items-center justify-between" style={{ margin: "0 12px 8px", background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "8px 12px" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: colors.accent }}>Réponse à {replyTo.auteur}</div>
-            <div style={{ fontSize: 11.5, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{replyTo.texte || "Message"}</div>
+            {replyTo.texte && <div style={{ fontSize: 11.5, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{replyTo.texte}</div>}
           </div>
           <button onClick={() => setReplyTo(null)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, marginLeft: 8, display: "flex" }}><X size={14} color={colors.textFaint} /></button>
         </div>
@@ -5700,7 +5985,7 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Rechercher" onCloseX={onClose} />
       <div style={{ padding: "14px 16px 10px" }}>
         <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
@@ -5800,7 +6085,7 @@ function NewConversationSheet({ onClose, onStarted }) {
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={groupMode ? "Nouveau groupe" : "Nouveau message"} onCloseX={onClose} />
       <div style={{ padding: "14px 16px 10px" }}>
         <SegmentedControl
@@ -6099,7 +6384,7 @@ function FollowRequestsSheet({ onClose, onApprove, onReject }) {
     </div>
   );
 }
-function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onGoToFeed, onUnreadChange }) {
+function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenPost, onGoToFeed, onUnreadChange }) {
   const { colors } = useTheme();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -6119,8 +6404,14 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onGoToF
       setItems((its) => its.map((x) => (x.id === n.id ? { ...x, lu: true } : x)));
       onUnreadChange?.((prev) => Math.max(0, prev - 1));
     }
-    if (n.type === "message" || n.type === "group_invite") onOpenConversation(n.targetId);
-    else if (n.actor?.username) onOpenAuthor(n.actor.username);
+    // Chaque notification doit amener sur ce qu'elle concerne réellement —
+    // pas juste sur le profil de la personne qui a agi. target_type vient
+    // directement de la ligne en base (voir migrations 014/033/036) :
+    // 'conversation' pour message/group_invite, 'user' pour follow, 'post'
+    // pour like/comment/repost/mention/new_post.
+    if (n.type === "message" || n.type === "group_invite" || n.targetType === "conversation") onOpenConversation(n.targetId);
+    else if (n.targetType === "post") onOpenPost(n.targetId, n.type);
+    else if (n.type === "follow" || n.actor?.username) onOpenAuthor(n.actor.username);
     else onGoToFeed();
     onClose();
   };
@@ -6133,7 +6424,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onGoToF
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div {...swipeBack} style={{ position: "fixed", inset: 0, zIndex: 50, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 50, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title="Notifications" onBack={onClose} />
       {items.some((n) => !n.lu) && (
         <div style={{ padding: "0 16px 8px", textAlign: "right" }}>
@@ -6272,7 +6563,7 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
       </div>
 
       {section && (
-        <div {...swipeBackSection} style={{ position: "absolute", inset: 0, background: colors.background, display: "flex", flexDirection: "column" }}>
+        <div ref={swipeBackSection} style={{ position: "absolute", inset: 0, background: colors.background, display: "flex", flexDirection: "column" }}>
           <ScreenHeader title={rows.find((r) => r.key === section).label} onBack={() => setSection(null)} />
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
             {section === "compte" && (
@@ -6537,7 +6828,7 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
         </div>
       </div>
       {sub && (
-        <div {...swipeBackSub} style={{ position: "absolute", inset: 0, zIndex: 56, background: colors.background, display: "flex", flexDirection: "column" }}>
+        <div ref={swipeBackSub} style={{ position: "absolute", inset: 0, zIndex: 56, background: colors.background, display: "flex", flexDirection: "column" }}>
           <ScreenHeader title={sub.label} onBack={() => setSub(null)} />
           {sub.appearance ? (
             <div style={{ padding: 20 }}>
@@ -6727,7 +7018,25 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const [privacy, setPrivacy] = useState({ compte: "public", commentaires: "tout_le_monde", messages: "tout_le_monde" });
   const [toast, setToast] = useState(null);
   const [playingVideo, setPlayingVideo] = useState(null);
+  // Cible réelle d'une notification like/commentaire/repost/mention/nouvelle
+  // publication (voir openNotificationPost) — avant ça, ces notifications
+  // ouvraient à tort le profil de la personne qui avait agi.
+  const [notifPost, setNotifPost] = useState(null); // { post, autoOpenComments }
+  const [notifInstant, setNotifInstant] = useState(null);
+  const [notifInstantSheet, setNotifInstantSheet] = useState(null); // 'comments' | 'actions' | 'report' | null
   const showToast = (msg) => { setToast(msg); window.clearTimeout(showToast._t); showToast._t = window.setTimeout(() => setToast(null), 2200); };
+
+  const openNotificationPost = async (postId, notifType) => {
+    try {
+      const row = await postService.fetchPostById(postId);
+      const mapped = mapPostRow(row);
+      if (mapped.type === "video") setPlayingVideo(mapped);
+      else if (mapped.type === "video_courte") setNotifInstant(mapped);
+      else setNotifPost({ post: mapped, autoOpenComments: notifType === "comment" || notifType === "mention" });
+    } catch (e) {
+      showToast("Ce contenu n'est plus disponible.");
+    }
+  };
 
   // Chargement initial des vraies publications + de mes likes/enregistrements,
   // une fois qu'on sait qui est connecté (voir profileLoaded plus haut).
@@ -7209,6 +7518,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
           onUnreadChange={setUnreadCount}
           onOpenConversation={(conversationId) => { setPendingConversationId(conversationId); setActive("messages"); }}
           onOpenAuthor={setOpenProfileUsername}
+          onOpenPost={openNotificationPost}
           onGoToFeed={() => setActive("fil")}
         />
       )}
@@ -7299,6 +7609,70 @@ function MainApp({ session, onboardingData, ageInfo }) {
       />
       <Toast message={toast} />
       <FullScreenVideoPlayer video={playingVideo} onClose={() => setPlayingVideo(null)} />
+      {notifPost && (
+        <SinglePostViewer
+          post={notifPost.post}
+          autoOpenComments={notifPost.autoOpenComments}
+          onClose={() => setNotifPost(null)}
+          onOpenProfile={setOpenProfileUsername}
+          meUsername={profile.username}
+          isAdmin={profile.role === "admin"}
+          liked={likedIds}
+          saved={savedPostIds}
+          reposted={repostedIds}
+          commentsByPost={commentsByPost}
+          onLike={toggleLike}
+          onSave={toggleSave}
+          onRepost={toggleRepost}
+          onAddComment={addComment}
+          onDelete={deleteContent}
+          onDeleteComment={deleteComment}
+          onEditRequest={setEditingPost}
+          onReport={reportContent}
+          onHide={hidePost}
+          onBlock={blockAuthor}
+          onLoadComments={loadComments}
+        />
+      )}
+      {notifInstant && (
+        <SingleInstantViewer
+          item={notifInstant}
+          onClose={() => { setNotifInstant(null); setNotifInstantSheet(null); }}
+          liked={likedIds.includes(notifInstant.id)}
+          reposted={repostedIds.includes(notifInstant.id)}
+          commentCount={commentsByPost[notifInstant.id] ? commentsByPost[notifInstant.id].length : (notifInstant.commentaires || 0)}
+          onLike={() => toggleLike(notifInstant.id)}
+          onRepost={() => toggleRepost(notifInstant.id)}
+          onOpenComments={() => { setNotifInstantSheet("comments"); loadComments(notifInstant.id); }}
+          onOpenActions={() => setNotifInstantSheet("actions")}
+          onOpenAuthor={() => setOpenProfileUsername(notifInstant.username)}
+        />
+      )}
+      {notifInstant && notifInstantSheet === "actions" && (
+        <ContentActionSheet
+          isOwn={notifInstant.username === profile.username}
+          isAdmin={profile.role === "admin"}
+          onClose={() => setNotifInstantSheet(null)}
+          onEdit={() => { setNotifInstantSheet(null); setEditingPost(notifInstant); }}
+          onDelete={() => { deleteContent(notifInstant.id); setNotifInstant(null); setNotifInstantSheet(null); }}
+          onReport={() => setNotifInstantSheet("report")}
+          onHide={() => { hidePost(notifInstant.id); setNotifInstant(null); setNotifInstantSheet(null); }}
+          onBlock={() => { blockAuthor(notifInstant.username); setNotifInstant(null); setNotifInstantSheet(null); }}
+        />
+      )}
+      {notifInstant && notifInstantSheet === "report" && (
+        <ReportSheet onClose={() => setNotifInstantSheet(null)} onSubmit={(reason) => { reportContent({ targetId: notifInstant.id, targetType: "post", reason }); setNotifInstantSheet(null); }} />
+      )}
+      {notifInstant && notifInstantSheet === "comments" && (
+        <CommentsSheet
+          comments={commentsByPost[notifInstant.id] || []}
+          onClose={() => setNotifInstantSheet(null)}
+          onAdd={(texte, parentId) => addComment(notifInstant.id, texte, parentId)}
+          onDelete={(commentId) => deleteComment(notifInstant.id, commentId)}
+          meUsername={profile.username}
+          onOpenProfile={setOpenProfileUsername}
+        />
+      )}
     </AppShell>
   );
 }

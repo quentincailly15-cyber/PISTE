@@ -200,7 +200,7 @@ export async function fetchConversationMembers(conversationId) {
 // ("Could not find a relationship..."). Le nom de colonne ne dépend d'aucune
 // convention de nommage côté Postgres et fonctionne dès que la clé étrangère
 // existe, quel que soit son nom.
-const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!reply_to_id(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username)), message_reactions(user_id, emoji)";
+const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!reply_to_id(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username)), message_reactions(user_id, emoji), shared_post:posts!shared_post_id(id, type, texte, titre, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url))";
 
 export async function fetchMessages(conversationId) {
   const { data, error } = await supabase
@@ -217,6 +217,23 @@ export async function sendMessage(conversationId, texte, replyToId = null) {
   const { data, error } = await supabase
     .from("messages")
     .insert({ conversation_id: conversationId, sender_id: me.id, texte, reply_to_id: replyToId })
+    .select(MESSAGE_SELECT)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Partage une publication/vidéo/Instant en message privé (voir migration
+ * 041) — référence le post existant, ne duplique jamais son contenu. La
+ * visibilité reçue par le destinataire reste celle du post d'origine (RLS
+ * sur "posts", inchangée).
+ */
+export async function sendSharedPost(conversationId, postId, note = null) {
+  const me = await requireUser();
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({ conversation_id: conversationId, sender_id: me.id, texte: note, shared_post_id: postId })
     .select(MESSAGE_SELECT)
     .single();
   if (error) throw error;
