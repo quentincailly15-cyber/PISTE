@@ -6,9 +6,9 @@ import {
   Check, Video, Film, Dog, Repeat2, MapPin,
   Bookmark, HelpCircle, AlertTriangle, LogOut, Moon, Sun, Monitor, BarChart3,
   Heart, MessageSquare, MoreHorizontal, Camera, Play, BookOpen, Mic,
-  Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud, Target,
-  RotateCw, Smartphone, AtSign, Feather,
-  Rabbit, Bird, UtensilsCrossed, Mountain, Backpack, Shirt, Truck, PawPrint, Leaf, Scale, GraduationCap, Crosshair, Trees, Compass,
+  Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud,
+  RotateCw, Smartphone, AtSign, Feather, Reply,
+  Backpack, Shirt, Truck, Scale, GraduationCap,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as traceService from "./services/traceService.js";
@@ -171,6 +171,99 @@ function PisteGlyph({ type, size = 16, color }) {
       </svg>
     );
   }
+  if (type === "cerf") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M12 10.5c-1.6 0-2.8 1.3-2.8 3 0 1.9 1.3 3.3 2.8 3.3s2.8-1.4 2.8-3.3c0-1.7-1.2-3-2.8-3z" fill={color} />
+        <path d="M9.5 10c-.8-1.6-.6-3.4.3-4.8M9.5 10c-1.6.2-2.8-.6-3.4-2M9.8 6.2c-1-.4-1.6-1.3-1.8-2.4" stroke={color} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+        <path d="M14.5 10c.8-1.6.6-3.4-.3-4.8M14.5 10c1.6.2 2.8-.6 3.4-2M14.2 6.2c1-.4 1.6-1.3 1.8-2.4" stroke={color} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+        <circle cx="10.3" cy="12.8" r="0.6" fill="white" opacity="0.5" />
+        <circle cx="13.7" cy="12.8" r="0.6" fill="white" opacity="0.5" />
+      </svg>
+    );
+  }
+  if (type === "sanglier") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M4 13c0-3 2.5-5.5 6-5.5 1 0 1.8.2 2.5.6.6-.5 1.4-.8 2.3-.8.4 0 .7.3.7.7 0 .3-.2.6-.5.7.5.4.8 1 .8 1.6 0 .4-.1.7-.3 1 1.6.6 2.5 2 2.5 3.7 0 2.5-2.5 4.4-6 4.4S4 15.9 4 13z" fill={color} />
+        <path d="M17 10.2l1.8-.6-1 1.7" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <circle cx="14.5" cy="11.5" r="0.6" fill="white" opacity="0.5" />
+        <path d="M6.5 17.5c0 .8-.1 1.5-.3 2.2M9 18.3c0 .8 0 1.5-.1 2.2" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (type === "lapin") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <ellipse cx="12" cy="15.5" rx="4.5" ry="3.8" fill={color} />
+        <circle cx="12" cy="10" r="2.6" fill={color} />
+        <path d="M10.3 8.5c-.6-2-.6-4 .1-5.6M13.7 8.5c.6-2 .6-4-.1-5.6" stroke={color} strokeWidth="1.6" strokeLinecap="round" fill="none" />
+        <circle cx="10.9" cy="9.7" r="0.5" fill="white" opacity="0.5" />
+        <circle cx="13.1" cy="9.7" r="0.5" fill="white" opacity="0.5" />
+      </svg>
+    );
+  }
+  if (type === "chien") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M5 18c0-3.5 1.2-6 3-7.5-.3-.9-.1-1.9.6-2.6.9-1 2.3-1.2 3.4-.5.5-.3 1.1-.4 1.7-.4 2 0 3.6 1.6 3.6 3.6 0 .5-.1 1-.3 1.4 1.2.8 2 2.2 2 3.7v2.3H5z" fill={color} />
+        <path d="M8.5 8.3c-.8-.5-1.8-.6-2.7-.1" stroke={color} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+        <circle cx="9.8" cy="10.5" r="0.6" fill="white" opacity="0.5" />
+      </svg>
+    );
+  }
+  if (type === "piege") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M4 12c2-5 6-7 8-7s6 2 8 7" stroke={color} strokeWidth="2" strokeLinecap="round" fill="none" />
+        <path d="M4 12c2 5 6 7 8 7s6-2 8-7" stroke={color} strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.55" />
+        <circle cx="12" cy="12" r="1.6" fill={color} />
+      </svg>
+    );
+  }
+  if (type === "foret") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M7 15l3-6 3 6z" fill={color} />
+        <path d="M7 18l3-6 3 6z" fill={color} opacity="0.85" />
+        <path d="M14 16l2.5-5 2.5 5z" fill={color} opacity="0.7" />
+        <rect x="9" y="18" width="2" height="3" rx="0.5" fill={color} />
+      </svg>
+    );
+  }
+  if (type === "montagne") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M2 18l6-10 4 6 2-3 8 7z" fill={color} />
+        <path d="M8 8l1.2 1.8-1.2 1.8-1.2-1.8z" fill="white" opacity="0.5" />
+      </svg>
+    );
+  }
+  if (type === "cible") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="8.5" stroke={color} strokeWidth="1.6" fill="none" />
+        <circle cx="12" cy="12" r="5" stroke={color} strokeWidth="1.6" fill="none" />
+        <circle cx="12" cy="12" r="1.8" fill={color} />
+      </svg>
+    );
+  }
+  if (type === "cuisine") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M8 20v-6.3c-1.7-.6-2.8-2.1-2.8-3.9 0-2.3 2-4.2 4.4-4.2.4 0 .8.05 1.2.15C11.3 4.7 12.6 4 14 4c2.4 0 4.4 1.9 4.4 4.2 0 1.8-1.1 3.3-2.8 3.9V20z" fill={color} />
+        <rect x="7.5" y="18.4" width="9" height="1.8" rx="0.9" fill={color} />
+      </svg>
+    );
+  }
+  if (type === "boussole") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.6" fill="none" />
+        <path d="M14.5 9.5l-1.2 4-4 1.2 1.2-4z" fill={color} />
+      </svg>
+    );
+  }
   if (type === "marketplace") {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -229,7 +322,7 @@ function Chip({ label, active, onClick }) {
     </button>
   );
 }
-function EmptyState({ title, subtitle, ctaLabel, onCta, onAdd }) {
+function EmptyState({ title, subtitle, ctaLabel, onCta, onAdd, icon: Icon }) {
   const { colors } = useTheme();
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "56px 32px", gap: 14 }}>
@@ -243,7 +336,7 @@ function EmptyState({ title, subtitle, ctaLabel, onCta, onAdd }) {
         </button>
       ) : (
         <div style={{ width: 54, height: 54, borderRadius: RADIUS.md, background: colors.surface, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Logo size={28} background={false} />
+          {Icon ? <Icon size={24} color={colors.textFaint} strokeWidth={1.6} /> : <Logo size={28} background={false} />}
         </div>
       )}
       <div style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>{title}</div>
@@ -1627,7 +1720,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
             )}
           </div>
           {profile.isPrivate && !isSelf && !isFollowing ? (
-            <EmptyState title="Ce compte est privé" subtitle={`Demandez à vous abonner pour voir les publications, vidéos, chiens et reposts de @${profile.username}.`} />
+            <EmptyState title="Ce compte est privé" subtitle={`Demandez à vous abonner pour voir les publications, vidéos, chiens et reposts de @${profile.username}.`} icon={Lock} />
           ) : (
             <>
               <div className="px-4 mt-5">
@@ -1647,7 +1740,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
               </div>
               {tab === "publications" && (
                 posts.filter((p) => p.type !== "video" && p.type !== "video_courte").length === 0 ? (
-                  <EmptyState title="Aucune publication" subtitle="Les publications de ce compte apparaîtront ici." />
+                  <EmptyState title="Aucune publication" subtitle="Les publications de ce compte apparaîtront ici." icon={Feather} />
                 ) : (
                   <div style={{ paddingTop: 10 }}>
                     {posts.filter((p) => p.type !== "video" && p.type !== "video_courte").map((p) => (
@@ -1672,7 +1765,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
               )}
               {tab === "videos" && (
                 posts.filter((p) => p.type === "video" || p.type === "video_courte").length === 0 ? (
-                  <EmptyState title="Aucune vidéo" subtitle="Les vidéos de ce compte apparaîtront ici." />
+                  <EmptyState title="Aucune vidéo" subtitle="Les vidéos de ce compte apparaîtront ici." icon={Film} />
                 ) : (
                   <div style={{ paddingTop: 6 }}>
                     {posts.filter((p) => p.type === "video" || p.type === "video_courte").map((v) => (
@@ -1695,7 +1788,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
               )}
               {tab === "chiens" && (
                 dogs.length === 0 ? (
-                  <EmptyState title="Aucun chien enregistré" subtitle="Les chiens de ce compte apparaîtront ici." />
+                  <EmptyState title="Aucun chien enregistré" subtitle="Les chiens de ce compte apparaîtront ici." icon={Dog} />
                 ) : (
                   <div className="px-4 pt-4 flex flex-col gap-2">
                     {dogs.map((d) => (
@@ -1711,7 +1804,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
               )}
               {tab === "reposts" && (
                 repostedPosts.length === 0 ? (
-                  <EmptyState title="Aucun repost" subtitle="Les publications repartagées par ce compte apparaîtront ici." />
+                  <EmptyState title="Aucun repost" subtitle="Les publications repartagées par ce compte apparaîtront ici." icon={Repeat2} />
                 ) : (
                   <div style={{ paddingTop: 10 }}>
                     {repostedPosts.map((p) => (
@@ -1850,7 +1943,7 @@ function ReportSheet({ onClose, onSubmit }) {
           <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Signalement</span>
           <IconButton icon={X} onClick={onClose} size={30} />
         </div>
-        <EmptyState title="Signalement envoyé" subtitle="Merci, notre équipe examinera ce contenu. Retrouvez l'historique de vos signalements dans Paramètres > Sécurité." />
+        <EmptyState title="Signalement envoyé" subtitle="Merci, notre équipe examinera ce contenu. Retrouvez l'historique de vos signalements dans Paramètres > Sécurité." icon={Check} />
       </Sheet>
     );
   }
@@ -2013,7 +2106,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
         {comments.length === 0 ? (
-          <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à réagir à cette publication." />
+          <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à réagir à cette publication." icon={MessageSquare} />
         ) : (
           <div style={{ padding: "8px 16px" }}>
             {topLevel.map((c) => (
@@ -2342,8 +2435,11 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
         </SensitiveGate>
       ) : post.image && (
         <SensitiveGate rating={post.contentRating}>
-          <div style={{ margin: "0 16px", aspectRatio: "4/3", borderRadius: RADIUS.lg, overflow: "hidden", background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          {/* Toutes tailles/orientations acceptées — plus de recadrage forcé
+              en 4/3 : la photo garde ses proportions, juste plafonnée en
+              hauteur pour ne pas déséquilibrer le fil. */}
+          <div style={{ margin: "0 16px", maxHeight: 520, borderRadius: RADIUS.lg, overflow: "hidden", background: colors.surfaceAlt, display: "flex", justifyContent: "center" }}>
+            <img src={post.image} alt="" style={{ maxWidth: "100%", maxHeight: 520, width: "auto", height: "auto", display: "block" }} />
           </div>
         </SensitiveGate>
       )}
@@ -2451,7 +2547,7 @@ function TraceViewersSheet({ traceId, onClose }) {
             {loading ? (
               <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
             ) : viewers.length === 0 ? (
-              <EmptyState title="Aucune vue pour l'instant" subtitle="Les personnes qui regardent votre Trace apparaîtront ici." />
+              <EmptyState title="Aucune vue pour l'instant" subtitle="Les personnes qui regardent votre Trace apparaîtront ici." icon={Eye} />
             ) : (
               viewers.map((v) => (
                 <div key={v.username} className="flex items-center gap-3" style={{ padding: "8px 4px" }}>
@@ -2716,7 +2812,7 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
       </div>
       <div style={{ marginTop: 14 }}><TraceBar groups={traceGroups} onOpenGroup={onOpenTraceGroup} onCreateOwn={onCreateOwnTrace} /></div>
       {visible.length === 0 ? (
-        <EmptyState title="Aucun contenu pour le moment" subtitle={copy[tab]} />
+        <EmptyState title="Aucun contenu pour le moment" subtitle={copy[tab]} icon={Home} />
       ) : (
         <div style={{ paddingTop: 14 }}>
           {visible.map((p) => (
@@ -2922,6 +3018,29 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
   const gatedRef = useRef(gated);
   const [showShare, setShowShare] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  // Charge le <video> (donc démarre le téléchargement) seulement quand la
+  // slide approche de l'écran, pas toutes en même temps dès l'arrivée sur
+  // Instants — sinon N vidéos réclament leurs métadonnées d'un coup, d'où le
+  // lag ressenti à l'ouverture. Une fois chargée, reste chargée (pas de
+  // rechargement/scintillement en remontant dans le fil).
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const shouldLoadRef = useRef(false);
+
+  useEffect(() => {
+    const el = slideRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !shouldLoadRef.current) {
+          shouldLoadRef.current = true;
+          setShouldLoad(true);
+        }
+      },
+      { rootMargin: "150% 0px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     gatedRef.current = gated;
@@ -2949,7 +3068,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [shouldLoad]);
 
   const togglePlay = () => {
     const vid = videoRef.current;
@@ -2960,8 +3079,10 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
 
   return (
     <div ref={slideRef} style={{ position: "relative", width: "100%", height: "100%", scrollSnapAlign: "start", background: "#000", flexShrink: 0, overflow: "hidden" }}>
-      {item.videoUrl ? (
-        <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline onClick={togglePlay} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      {item.videoUrl && shouldLoad ? (
+        <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline preload="metadata" onClick={togglePlay} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : item.image ? (
+        <img src={item.image} alt="" onClick={togglePlay} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Film size={36} color="rgba(255,255,255,0.3)" /></div>
       )}
@@ -3132,7 +3253,7 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
       )}
       {items.length === 0 ? (
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
-          <EmptyState title="Aucun instant pour le moment" subtitle="Instants — le format court et vertical de PISTE — publiés par la communauté apparaîtront ici." />
+          <EmptyState title="Aucun instant pour le moment" subtitle="Instants — le format court et vertical de PISTE — publiés par la communauté apparaîtront ici." icon={Film} />
         </div>
       ) : (
         <div onScroll={handleScroll} style={{ height: "100%", overflowY: "auto", scrollSnapType: "y mandatory" }}>
@@ -3241,9 +3362,9 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une vidéo, un instant, un créateur" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
           </div>
           {!q ? (
-            <EmptyState title="Rechercher une vidéo" subtitle="Lancez une recherche pour trouver des vidéos publiées par la communauté." />
+            <EmptyState title="Rechercher une vidéo" subtitle="Lancez une recherche pour trouver des vidéos publiées par la communauté." icon={Search} />
           ) : searchResults.length === 0 ? (
-            <EmptyState title="Aucun résultat" subtitle={`Aucune vidéo ne correspond à « ${query} ».`} />
+            <EmptyState title="Aucun résultat" subtitle={`Aucune vidéo ne correspond à « ${query} ».`} icon={Search} />
           ) : (
             <div style={{ paddingTop: 12 }}>
               {searchResults.map((v) => (
@@ -3299,6 +3420,7 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
         <EmptyState
           title={videoSubTab === "abonnements" ? "Aucune vidéo de vos abonnements" : "Aucune vidéo pour le moment"}
           subtitle={videoSubTab === "abonnements" ? "Les vidéos publiées par les comptes que vous suivez apparaîtront ici." : "Les vidéos publiées par la communauté apparaîtront ici."}
+          icon={Film}
         />
       )}
       {showFollowing && <FollowListSheet userId={profile.id} mode="following" onClose={() => setShowFollowing(false)} onOpenProfile={onOpenProfile} />}
@@ -3330,33 +3452,35 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
 // Tant qu'une communauté prédéfinie n'a pas reçu de vraie photo, un dégradé +
 // icône propre à son thème (plutôt qu'un placeholder gris générique) — pas de
 // photo inventée, juste une identité visuelle cohérente en attendant.
+// glyph = illustration maison (PisteGlyph, plusieurs formes, plus travaillée) ;
+// icon = pictogramme lucide simple (suffisant pour ces thèmes non-animaliers).
 const GROUP_VISUALS = {
-  "Chevreuil": { icon: Crosshair, from: "#8B5A2B", to: "#C97C3D" },
-  "Grand gibier": { icon: Mountain, from: "#7A4A24", to: "#B8783D" },
-  "Petit gibier": { icon: Rabbit, from: "#8B5A2B", to: "#C97C3D" },
-  "Sanglier": { icon: PawPrint, from: "#5C3A22", to: "#93613A" },
-  "Gibier d'eau": { icon: Bird, from: "#2A5A66", to: "#4C93A0" },
-  "Gibier à plumes": { icon: Bird, from: "#8A6A1E", to: "#C9A227" },
-  "Chiens d'arrêt": { icon: Dog, from: "#2F6690", to: "#4F9DDE" },
-  "Chiens courants": { icon: PawPrint, from: "#2F6690", to: "#4F9DDE" },
-  "Chiens de chasse": { icon: Dog, from: "#2A567A", to: "#4685BE" },
-  "Cuisine du gibier": { icon: UtensilsCrossed, from: "#8C3B2E", to: "#D9724A" },
-  "Techniques de chasse": { icon: BookOpen, from: "#7A4A24", to: "#B8783D" },
-  "Territoires & biotopes": { icon: Trees, from: "#3E6B4F", to: "#6FA37A" },
-  "Observation & nature": { icon: Compass, from: "#355C63", to: "#5B9AA0" },
+  "Chevreuil": { glyph: "cerf", from: "#8B5A2B", to: "#C97C3D" },
+  "Grand gibier": { glyph: "montagne", from: "#7A4A24", to: "#B8783D" },
+  "Petit gibier": { glyph: "lapin", from: "#8B5A2B", to: "#C97C3D" },
+  "Sanglier": { glyph: "sanglier", from: "#5C3A22", to: "#93613A" },
+  "Gibier d'eau": { glyph: "gibier", from: "#2A5A66", to: "#4C93A0" },
+  "Gibier à plumes": { glyph: "gibier", from: "#8A6A1E", to: "#C9A227" },
+  "Chiens d'arrêt": { glyph: "chien", from: "#2F6690", to: "#4F9DDE" },
+  "Chiens courants": { glyph: "chien", from: "#2F6690", to: "#4F9DDE" },
+  "Chiens de chasse": { glyph: "chien", from: "#2A567A", to: "#4685BE" },
+  "Cuisine du gibier": { glyph: "cuisine", from: "#8C3B2E", to: "#D9724A" },
+  "Techniques de chasse": { glyph: "cible", from: "#7A4A24", to: "#B8783D" },
+  "Territoires & biotopes": { glyph: "foret", from: "#3E6B4F", to: "#6FA37A" },
+  "Observation & nature": { glyph: "boussole", from: "#355C63", to: "#5B9AA0" },
   "Matériel & équipement": { icon: Backpack, from: "#4A4E58", to: "#767C8C" },
   "Vêtements & équipement outdoor": { icon: Shirt, from: "#4A4E58", to: "#767C8C" },
   "Photo & vidéo": { icon: Camera, from: "#5B3A63", to: "#8E5F99" },
   "4x4 & véhicules": { icon: Truck, from: "#4A4E58", to: "#767C8C" },
-  "Sorties & territoires": { icon: MapPin, from: "#3E6B4F", to: "#6FA37A" },
+  "Sorties & territoires": { glyph: "foret", from: "#3E6B4F", to: "#6FA37A" },
   "Chasse entre passionnés": { icon: Users, from: "#3A4A73", to: "#5D74AC" },
-  "Gestion du territoire": { icon: Mountain, from: "#3E6B4F", to: "#6FA37A" },
-  "Faune sauvage": { icon: PawPrint, from: "#3E7549", to: "#6FAE75" },
-  "Nature & environnement": { icon: Leaf, from: "#3E7549", to: "#6FAE75" },
+  "Gestion du territoire": { glyph: "montagne", from: "#3E6B4F", to: "#6FA37A" },
+  "Faune sauvage": { glyph: "cerf", from: "#3E7549", to: "#6FAE75" },
+  "Nature & environnement": { glyph: "foret", from: "#3E7549", to: "#6FAE75" },
   "Réglementation & permis": { icon: Scale, from: "#3A4A73", to: "#5D74AC" },
   "Débutants & conseils": { icon: GraduationCap, from: "#8A6A1E", to: "#C9A227" },
-  "Piégeage": { icon: Target, from: "#5C3A22", to: "#93613A" },
-  "Vénerie sous terre": { icon: Dog, from: "#5C3A22", to: "#93613A" },
+  "Piégeage": { glyph: "piege", from: "#5C3A22", to: "#93613A" },
+  "Vénerie sous terre": { glyph: "chien", from: "#5C3A22", to: "#93613A" },
 };
 // Dégradé neutre par catégorie pour une communauté créée par un utilisateur
 // (pas dans GROUP_VISUALS) — reste cohérent avec la thématique déclarée sans
@@ -3387,10 +3511,14 @@ function GroupImageArea({ group, height = 92, iconSize = 20 }) {
   const categoryGrad = CATEGORY_GRADIENTS[group.categorie];
   const themed = visual || categoryGrad;
   const [gradFrom, gradTo] = visual ? [visual.from, visual.to] : categoryGrad ? categoryGrad : [colors.surfaceAlt, colors.border];
-  const Icon = visual?.icon || ImageIcon;
+  const Icon = visual?.icon || (visual?.glyph ? null : ImageIcon);
   return (
     <div style={{ width: "100%", height, background: `linear-gradient(135deg, ${gradFrom}, ${gradTo})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <Icon size={iconSize} color={themed ? "rgba(255,255,255,0.9)" : colors.textFaint} strokeWidth={1.5} />
+      {visual?.glyph ? (
+        <PisteGlyph type={visual.glyph} size={iconSize * 1.5} color="rgba(255,255,255,0.92)" />
+      ) : (
+        <Icon size={iconSize} color={themed ? "rgba(255,255,255,0.9)" : colors.textFaint} strokeWidth={1.5} />
+      )}
     </div>
   );
 }
@@ -3564,7 +3692,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           loading ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
           ) : groupPosts.length === 0 ? (
-            <EmptyState title="Aucune publication" subtitle="Les publications de cette communauté apparaîtront ici." />
+            <EmptyState title="Aucune publication" subtitle="Les publications de cette communauté apparaîtront ici." icon={Feather} />
           ) : (
             <div style={{ paddingTop: 6 }}>
               {groupPosts.map((p) => (
@@ -3590,7 +3718,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           membersLoading ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
           ) : members.length === 0 ? (
-            <EmptyState title="Aucun membre" subtitle="Les membres de cette communauté apparaîtront ici." />
+            <EmptyState title="Aucun membre" subtitle="Les membres de cette communauté apparaîtront ici." icon={Users} />
           ) : (
             <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
               {members.map((m) => (
@@ -3613,7 +3741,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           discussionsLoading ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
           ) : discussions.length === 0 ? (
-            <EmptyState title="Aucune discussion" subtitle="Lancez la première discussion de cette communauté." />
+            <EmptyState title="Aucune discussion" subtitle="Lancez la première discussion de cette communauté." icon={MessageSquare} />
           ) : (
             <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
               {discussions.map((d) => (
@@ -3634,10 +3762,16 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
             </div>
           )
         ) : (
-          <EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de cette communauté est vide pour le moment.`} />
+          <EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de cette communauté est vide pour le moment.`} icon={Users} />
         )}
       </div>
-      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}><Button onClick={() => { onClose(); onCreatePost(group.id); }}>Publier dans cette communauté</Button></div>
+      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}>
+        {group.joined ? (
+          <Button onClick={() => { onClose(); onCreatePost(group.id); }}>Publier dans cette communauté</Button>
+        ) : (
+          <Button variant="secondary" onClick={() => onToggleJoin(group.id)}>Rejoindre pour publier</Button>
+        )}
+      </div>
       {openDiscussion && (
         <DiscussionThread
           discussion={openDiscussion}
@@ -3677,6 +3811,7 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
   const [loadError, setLoadError] = useState("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState(null); // { id, auteur, texte } | null
 
   useEffect(() => {
     let cancelled = false;
@@ -3694,8 +3829,10 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
     if (!texte || sending) return;
     setSending(true);
     setText("");
+    const replyToId = replyTo?.id || null;
+    setReplyTo(null);
     try {
-      const m = await groupService.sendDiscussionMessage(discussion.id, texte);
+      const m = await groupService.sendDiscussionMessage(discussion.id, texte, replyToId);
       setMessages((ms) => [...ms, m]);
     } catch (e) {
       setText(texte);
@@ -3726,7 +3863,7 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
   return (
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 71, background: colors.background, paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <ScreenHeader title={discussion.titre} onBack={onClose} />
-      <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
         ) : loadError ? (
@@ -3737,24 +3874,48 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
           messages.map((m) => {
             const mine = m.authorUsername === meUsername;
             return (
-              <div key={m.id} className="flex items-start gap-2.5">
-                <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {m.authorAvatar ? <img src={m.authorAvatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color={colors.textFaint} />}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="flex items-center gap-2">
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text }}>{m.authorNom}</span>
-                    <span style={{ fontSize: 10.5, color: colors.textFaint }}>{formatRelativeDate(m.createdAt)}</span>
+              <div key={m.id} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
+                {!mine && (
+                  <div style={{ width: 24, height: 24, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {m.authorAvatar ? <img src={m.authorAvatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={11} color={colors.textFaint} />}
                   </div>
-                  <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4, marginTop: 2 }}>{m.texte}</div>
-                  <div className="flex items-center gap-3" style={{ marginTop: 4 }}>
+                )}
+                <div style={{ maxWidth: "76%" }}>
+                  {!mine && <div style={{ fontSize: 10.5, color: colors.textFaint, marginBottom: 2, marginLeft: 4 }}>{m.authorNom}</div>}
+                  <div
+                    style={{
+                      background: mine ? `linear-gradient(135deg, ${colors.accent}, ${colors.accent}dd)` : colors.headerBg,
+                      backdropFilter: mine ? "none" : "blur(20px)",
+                      WebkitBackdropFilter: mine ? "none" : "blur(20px)",
+                      color: mine ? colors.onAccent : colors.text,
+                      borderRadius: RADIUS.lg,
+                      borderBottomRightRadius: mine ? 5 : RADIUS.lg,
+                      borderBottomLeftRadius: mine ? RADIUS.lg : 5,
+                      padding: "9px 13px",
+                      fontSize: 13.5,
+                      lineHeight: 1.4,
+                      wordBreak: "break-word",
+                      boxShadow: mine ? `0 2px 8px ${colors.accent}30` : "0 1px 6px rgba(0,0,0,0.05)",
+                    }}
+                  >
+                    {m.replyTo && (m.replyTo.texte || m.replyTo.auteur) && (
+                      <div style={{ borderLeft: `2.5px solid ${mine ? "rgba(255,255,255,0.6)" : colors.accent}`, paddingLeft: 8, marginBottom: 6, opacity: 0.8 }}>
+                        {m.replyTo.auteur && <div style={{ fontSize: 10.5, fontWeight: 700 }}>{m.replyTo.auteur}</div>}
+                        {m.replyTo.texte && <div style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{m.replyTo.texte}</div>}
+                      </div>
+                    )}
+                    {m.texte}
+                  </div>
+                  <div className="flex items-center gap-3" style={{ marginTop: 3, justifyContent: mine ? "flex-end" : "flex-start" }}>
+                    <span style={{ fontSize: 9.5, color: colors.textFaint }}>{formatRelativeDate(m.createdAt)}</span>
                     <button onClick={() => toggleLike(m)} className="flex items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                      <Heart size={13} color={m.liked ? colors.accent : colors.textFaint} fill={m.liked ? colors.accent : "none"} strokeWidth={1.8} />
-                      {m.likeCount > 0 && <span style={{ fontSize: 11, color: m.liked ? colors.accent : colors.textFaint, fontWeight: 600 }}>{m.likeCount}</span>}
+                      <Heart size={12} color={m.liked ? colors.accent : colors.textFaint} fill={m.liked ? colors.accent : "none"} strokeWidth={1.8} />
+                      {m.likeCount > 0 && <span style={{ fontSize: 10.5, color: m.liked ? colors.accent : colors.textFaint, fontWeight: 600 }}>{m.likeCount}</span>}
                     </button>
+                    <button onClick={() => setReplyTo({ id: m.id, auteur: mine ? "Vous" : m.authorNom, texte: m.texte })} style={{ background: "none", border: "none", color: colors.textFaint, fontSize: 10.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>Répondre</button>
                     {(mine || isAdmin) && (
                       <button onClick={() => deleteMsg(m)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}>
-                        <Trash2 size={12.5} color={colors.textFaint} />
+                        <Trash2 size={11.5} color={colors.textFaint} />
                       </button>
                     )}
                   </div>
@@ -3764,12 +3925,20 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
           })
         )}
       </div>
+      {replyTo && (
+        <div className="flex items-center justify-between" style={{ padding: "6px 16px", background: colors.surfaceAlt }}>
+          <div style={{ minWidth: 0 }}>
+            <span style={{ fontSize: 11.5, color: colors.textSecondary, fontWeight: 700 }}>Réponse à {replyTo.auteur}</span>
+            {replyTo.texte && <div style={{ fontSize: 11, color: colors.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{replyTo.texte}</div>}
+          </div>
+          <button onClick={() => setReplyTo(null)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}><X size={13} color={colors.textFaint} /></button>
+        </div>
+      )}
       <div className="flex items-center gap-2" style={{ padding: "10px 14px 14px" }}>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") send(); }}
-          placeholder="Écrire un message..."
+          placeholder={replyTo ? `Répondre à ${replyTo.auteur}...` : "Écrire un message..."}
           style={{ flex: 1, border: "none", borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13, color: colors.text, outline: "none", background: colors.surfaceAlt }}
         />
         <button onClick={send} disabled={!text.trim() || sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: text.trim() ? colors.accent : colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: text.trim() ? "pointer" : "default", flexShrink: 0, boxShadow: text.trim() ? `0 2px 8px ${colors.accent}40` : "none", transition: "background 150ms ease, box-shadow 150ms ease" }}>
@@ -3886,7 +4055,7 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
       {joined.length > 0 && <div className="grid grid-cols-2 gap-3 px-4 pb-4">{joined.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>}
 
       {filtered.length === 0 ? (
-        <EmptyState title="Aucune communauté trouvée" subtitle="Essayez un autre mot-clé ou créez votre propre communauté." ctaLabel="Créer une communauté" onCta={() => setCreating(true)} />
+        <EmptyState title="Aucune communauté trouvée" subtitle="Essayez un autre mot-clé ou créez votre propre communauté." ctaLabel="Créer une communauté" onCta={() => setCreating(true)} icon={Users} />
       ) : (
         <div className="grid grid-cols-2 gap-3 px-4 pb-4" style={{ paddingTop: joined.length > 0 ? 12 : 22 }}>{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
       )}
@@ -3943,7 +4112,6 @@ const CREATE_OPTIONS = [
 // utilisé pour éditer d'anciennes publications de ce type.
 const GROUP_CREATE_OPTIONS = [
   { key: "publication", label: "Publication", icon: Feather },
-  { key: "video_courte", label: "Instant", icon: Film },
   { key: "group_discussion", label: "Discussion", icon: MessageSquare },
 ];
 function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPost, groupId }) {
@@ -4610,7 +4778,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
         {loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
         ) : filtered.length === 0 ? (
-          <EmptyState title="Aucun contenu" subtitle={`Les ${tabs.find((t) => t[0] === tab)[1].toLowerCase()} où ${dog.nom} est identifié apparaîtront ici.`} />
+          <EmptyState title="Aucun contenu" subtitle={`Les ${tabs.find((t) => t[0] === tab)[1].toLowerCase()} où ${dog.nom} est identifié apparaîtront ici.`} icon={Dog} />
         ) : tab === "videos" ? (
           filtered.map((v) => (
             <VideoCard
@@ -5345,7 +5513,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
               </div>
             )}
             {filtered.length === 0 ? (
-              <EmptyState title={logs.length === 0 ? "Aucune sortie enregistrée" : "Aucun résultat"} subtitle={logs.length === 0 ? "Ajoutez votre première sortie pour commencer votre carnet." : "Essayez d'autres filtres."} ctaLabel={logs.length === 0 ? "Ajouter une sortie" : undefined} onCta={logs.length === 0 ? () => setShowForm(true) : undefined} />
+              <EmptyState title={logs.length === 0 ? "Aucune sortie enregistrée" : "Aucun résultat"} subtitle={logs.length === 0 ? "Ajoutez votre première sortie pour commencer votre carnet." : "Essayez d'autres filtres."} ctaLabel={logs.length === 0 ? "Ajouter une sortie" : undefined} onCta={logs.length === 0 ? () => setShowForm(true) : undefined} icon={Footprints} />
             ) : (
               <div className="flex flex-col gap-2" style={{ padding: "4px 16px 90px" }}>
                 {filtered.map((l) => (
@@ -5542,7 +5710,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
       </div>
 
       {tab === "publications" && (
-        posts.length === 0 ? <EmptyState title="Aucune publication" subtitle="Vos publications apparaîtront ici." onAdd={onCreatePost} /> : (
+        posts.length === 0 ? <EmptyState title="Aucune publication" subtitle="Vos publications apparaîtront ici." onAdd={onCreatePost} icon={Feather} /> : (
           <div style={{ paddingTop: 10 }}>
             {posts.map((p) => (
               <PostCard
@@ -5565,7 +5733,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         )
       )}
       {tab === "videos" && (
-        videos.length === 0 ? <EmptyState title="Aucune vidéo" subtitle="Vos vidéos apparaîtront ici." /> : (
+        videos.length === 0 ? <EmptyState title="Aucune vidéo" subtitle="Vos vidéos apparaîtront ici." icon={Film} /> : (
           <div style={{ paddingTop: 6 }}>
             {videos.map((v) => (
               <VideoCard
@@ -5589,7 +5757,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
         repostsLoading ? (
           <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
         ) : repostedPosts.length === 0 ? (
-          <EmptyState title="Aucun repost" subtitle="Les publications que vous repartagez apparaîtront ici." />
+          <EmptyState title="Aucun repost" subtitle="Les publications que vous repartagez apparaîtront ici." icon={Repeat2} />
         ) : (
           <div style={{ paddingTop: 10 }}>
             {repostedPosts.map((p) => (
@@ -5618,7 +5786,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
       )}
       {tab === "chiens" && (
         dogs.length === 0 ? (
-          <EmptyState title="Aucun chien enregistré" subtitle="Créez le profil de votre chien pour partager ses sorties et ses publications." ctaLabel="Ajouter un chien" onCta={() => setDogForm(true)} />
+          <EmptyState title="Aucun chien enregistré" subtitle="Créez le profil de votre chien pour partager ses sorties et ses publications." ctaLabel="Ajouter un chien" onCta={() => setDogForm(true)} icon={Dog} />
         ) : (
           <div className="px-4 pt-4 flex flex-col gap-2">
             {dogs.map((d) => (
@@ -5701,6 +5869,53 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
 /* ============================================================
    10.5 MESSAGERIE
    ============================================================ */
+// Lecteur vocal maison — remplace le <audio controls> natif (moche, affiche
+// déjà sa propre durée) où on rajoutait un second chiffre de durée à côté :
+// un seul affiché ici, plus un vrai bouton play/pause + barre de progression
+// dans la DA de l'app plutôt que le widget brut du navigateur.
+function VoiceMessagePlayer({ url, durationSeconds, mine, colors }) {
+  const audioRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(durationSeconds || 0);
+
+  const toggle = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) a.play().catch(() => {});
+    else a.pause();
+  };
+
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const fg = mine ? "#fff" : colors.accent;
+
+  return (
+    <div className="flex items-center gap-2.5" style={{ minWidth: 190 }}>
+      <audio
+        ref={audioRef}
+        src={url}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setProgress(0); }}
+        onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (d && isFinite(d)) setDuration(d); }}
+        onTimeUpdate={(e) => { const d = e.currentTarget.duration; if (d) setProgress(e.currentTarget.currentTime / d); }}
+        style={{ display: "none" }}
+      />
+      <button
+        onClick={toggle}
+        className="active:scale-90 transition-transform"
+        style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: mine ? "rgba(255,255,255,0.25)" : colors.accentSoft, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+      >
+        {playing ? <Pause size={13} color={fg} fill={fg} /> : <Play size={13} color={fg} fill={fg} style={{ marginLeft: 1 }} />}
+      </button>
+      <div style={{ flex: 1, height: 3, borderRadius: 2, background: mine ? "rgba(255,255,255,0.3)" : colors.border, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${progress * 100}%`, background: fg, transition: "width 80ms linear" }} />
+      </div>
+      <span style={{ fontSize: 10.5, color: mine ? "rgba(255,255,255,0.85)" : colors.textFaint, flexShrink: 0, minWidth: 28, textAlign: "right" }}>{fmt(duration)}</span>
+    </div>
+  );
+}
 function MessageBubble({ mine, media, colors }) {
   if (!media) return null;
   if (media.type === "image") {
@@ -5710,16 +5925,7 @@ function MessageBubble({ mine, media, colors }) {
     return <video src={media.url} controls playsInline style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
   }
   if (media.type === "audio") {
-    return (
-      <div className="flex items-center gap-2" style={{ minWidth: 180 }}>
-        <audio src={media.url} controls style={{ height: 32, flex: 1 }} />
-        {media.duration_seconds != null && (
-          <span style={{ fontSize: 10.5, color: mine ? colors.onAccent : colors.textFaint, flexShrink: 0 }}>
-            {Math.floor(media.duration_seconds / 60)}:{String(media.duration_seconds % 60).padStart(2, "0")}
-          </span>
-        )}
-      </div>
-    );
+    return <VoiceMessagePlayer url={media.url} durationSeconds={media.duration_seconds} mine={mine} colors={colors} />;
   }
   return null;
 }
@@ -5943,6 +6149,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const [readState, setReadState] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // { id, texte, auteur } | null
   const [highlightedId, setHighlightedId] = useState(null);
+  const [msgMenu, setMsgMenu] = useState(null); // message object | null — menu "Répondre / Supprimer"
   // Tap sur une citation "Réponse à X" : retrouve et met en évidence le
   // message original, comme WhatsApp/iMessage — sans ça, une citation reste
   // un simple aperçu texte, jamais vraiment "propre" pour retrouver le fil.
@@ -6184,8 +6391,8 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
             return (
               <div key={m.id} id={`msg-${m.id}`} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
                 {mine && (
-                  <button onClick={() => deleteMsg(m)} aria-label="Supprimer le message" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0, opacity: 0.5 }}>
-                    <Trash2 size={13} color={colors.textFaint} />
+                  <button onClick={() => setMsgMenu(m)} aria-label="Options du message" className="active:scale-90 transition-transform" style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginBottom: 4 }}>
+                    <MoreHorizontal size={13} color={colors.textFaint} />
                   </button>
                 )}
                 <div style={{ maxWidth: "78%" }}>
@@ -6222,14 +6429,25 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                     {m.reply_to && (m.reply_to.texte || m.reply_to.profiles?.username) && (
                       <div
                         onClick={(e) => { e.stopPropagation(); scrollToMessage(m.reply_to.id); }}
-                        style={{ borderLeft: `2.5px solid ${mine ? "rgba(255,255,255,0.6)" : colors.accent}`, paddingLeft: 8, marginBottom: 6, opacity: 0.8, cursor: "pointer" }}
+                        className="flex items-start gap-1.5"
+                        style={{
+                          borderLeft: `2.5px solid ${mine ? "rgba(255,255,255,0.85)" : colors.accent}`,
+                          background: mine ? "rgba(255,255,255,0.16)" : colors.accentSoft,
+                          borderRadius: 6,
+                          padding: "5px 8px",
+                          marginBottom: 6,
+                          cursor: "pointer",
+                        }}
                       >
-                        {(m.reply_to.profiles?.nom || m.reply_to.profiles?.username) && (
-                          <div style={{ fontSize: 10.5, fontWeight: 700 }}>{m.reply_to.profiles?.nom || m.reply_to.profiles?.username}</div>
-                        )}
-                        {m.reply_to.texte && (
-                          <div style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{m.reply_to.texte}</div>
-                        )}
+                        <Reply size={11} color={mine ? "#fff" : colors.accent} style={{ marginTop: 1.5, flexShrink: 0 }} />
+                        <div style={{ minWidth: 0 }}>
+                          {(m.reply_to.profiles?.nom || m.reply_to.profiles?.username) && (
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: mine ? "#fff" : colors.accent }}>{m.reply_to.profiles?.nom || m.reply_to.profiles?.username}</div>
+                          )}
+                          {m.reply_to.texte && (
+                            <div style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200, opacity: 0.9 }}>{m.reply_to.texte}</div>
+                          )}
+                        </div>
                       </div>
                     )}
                     {m.shared_post && (() => {
@@ -6268,6 +6486,11 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                     {isLastMine && (readByAll ? <span style={{ color: colors.accent, fontWeight: 600 }}> · Lu</span> : <span> · Envoyé</span>)}
                   </div>
                 </div>
+                {!mine && (
+                  <button onClick={() => setMsgMenu(m)} aria-label="Options du message" className="active:scale-90 transition-transform" style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginBottom: 4 }}>
+                    <MoreHorizontal size={13} color={colors.textFaint} />
+                  </button>
+                )}
               </div>
             );
           })
@@ -6341,6 +6564,37 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
           onDeleted={() => { setShowSettings(false); onLeave ? onLeave() : onClose(); }}
         />
       )}
+      {msgMenu && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 75 }}>
+          <div onClick={() => setMsgMenu(null)} style={{ position: "absolute", inset: 0, background: colors.overlay }} />
+          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+            <div style={{ width: "100%", maxWidth: 400, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", padding: "10px 8px", pointerEvents: "auto" }}>
+              <button
+                onClick={() => {
+                  const isMine = msgMenu.sender_id === meId;
+                  setReplyTo({ id: msgMenu.id, texte: msgMenu.texte, auteur: isMine ? "Vous" : (msgMenu.profiles?.nom || msgMenu.profiles?.username || "ce message") });
+                  setMsgMenu(null);
+                }}
+                className="flex items-center gap-2.5"
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 12px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}
+              >
+                <Reply size={16} color={colors.text} />
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Répondre</span>
+              </button>
+              {msgMenu.sender_id === meId && (
+                <button
+                  onClick={() => { deleteMsg(msgMenu); setMsgMenu(null); }}
+                  className="flex items-center gap-2.5"
+                  style={{ width: "100%", background: "none", border: "none", padding: "12px 12px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}
+                >
+                  <Trash2 size={16} color={colors.error} />
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Supprimer</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -6380,7 +6634,7 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
         {searching ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 20 }}>Recherche...</div>
         ) : results.length === 0 ? (
-          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher quelqu'un"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour trouver un compte."} />
+          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher quelqu'un"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour trouver un compte."} icon={Search} />
         ) : (
           results.map((u) => (
             <button
@@ -6508,7 +6762,7 @@ function NewConversationSheet({ onClose, onStarted }) {
         {searching ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 20 }}>Recherche...</div>
         ) : results.length === 0 ? (
-          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher un utilisateur"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour démarrer."} />
+          <EmptyState title={query.trim() ? "Aucun résultat" : "Rechercher un utilisateur"} subtitle={query.trim() ? `Personne ne correspond à « ${query} ».` : "Tapez un pseudo ou un nom pour démarrer."} icon={Search} />
         ) : (
           results.map((u) => (
             <button
@@ -6598,7 +6852,7 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
       {loading ? (
         <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
       ) : conversations.length === 0 ? (
-        <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." ctaLabel="Démarrer une conversation" onCta={() => setShowNew(true)} />
+        <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." ctaLabel="Démarrer une conversation" onCta={() => setShowNew(true)} icon={MessageCircle} />
       ) : (
         <div className="flex flex-col gap-1.5" style={{ padding: "16px 12px 4px" }}>
           {conversations.map((c) => (
@@ -6694,7 +6948,7 @@ function FollowListSheet({ userId, mode, onClose, onOpenProfile }) {
             {loading ? (
               <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
             ) : items.length === 0 ? (
-              <EmptyState title={title} subtitle={emptyText} />
+              <EmptyState title={title} subtitle={emptyText} icon={Users} />
             ) : (
               items.map((u) => (
                 <button key={u.username} onClick={() => { onClose(); onOpenProfile(u.username); }} className="flex items-center gap-3" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left" }}>
@@ -6742,7 +6996,7 @@ function FollowRequestsSheet({ onClose, onApprove, onReject }) {
             {loading ? (
               <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
             ) : items.length === 0 ? (
-              <EmptyState title="Aucune demande" subtitle="Les demandes d'abonnement à votre compte privé apparaîtront ici." />
+              <EmptyState title="Aucune demande" subtitle="Les demandes d'abonnement à votre compte privé apparaîtront ici." icon={Users} />
             ) : (
               items.map((r) => (
                 <div key={r.id} className="flex items-center gap-3" style={{ padding: "10px 8px" }}>
@@ -6819,7 +7073,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
         {loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
         ) : items.length === 0 ? (
-          <EmptyState title="Aucune notification pour le moment" subtitle="Vous serez averti ici des interactions et des nouveautés qui vous concernent." />
+          <EmptyState title="Aucune notification pour le moment" subtitle="Vous serez averti ici des interactions et des nouveautés qui vous concernent." icon={Bell} />
         ) : (
           items.map((n) => {
             const Icon = NOTIF_ICON[n.type] || Bell;
@@ -6890,7 +7144,7 @@ function ToggleRow({ label, value, onToggle }) {
 function SavedList({ posts, savedIds, onUnsave }) {
   const { colors } = useTheme();
   const saved = posts.filter((p) => savedIds.includes(p.id));
-  if (saved.length === 0) return <EmptyState title="Aucun enregistrement pour le moment" subtitle="Les publications que vous enregistrez apparaîtront ici." />;
+  if (saved.length === 0) return <EmptyState title="Aucun enregistrement pour le moment" subtitle="Les publications que vous enregistrez apparaîtront ici." icon={Bookmark} />;
   return (
     <div className="px-4 pt-3 flex flex-col gap-2">
       {saved.map((p) => (
@@ -7099,7 +7353,7 @@ function AideScreen() {
     }
   };
   if (showForm) {
-    if (sent) return <EmptyState title="Demande envoyée" subtitle="Merci — l'équipe PISTE reviendra vers vous par e-mail dès que possible." />;
+    if (sent) return <EmptyState title="Demande envoyée" subtitle="Merci — l'équipe PISTE reviendra vers vous par e-mail dès que possible." icon={Check} />;
     return (
       <div style={{ padding: "16px 20px" }}>
         <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>← Retour à l'aide</button>
@@ -7234,7 +7488,7 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
           ) : sub.key === "reglement" ? (
             <ReglementScreen />
           ) : (
-            <EmptyState title="Bientôt disponible" subtitle={sub.desc} />
+            <EmptyState title="Bientôt disponible" subtitle={sub.desc} icon={Clock} />
           )}
         </div>
       )}

@@ -153,16 +153,15 @@ export async function deleteGroupDiscussion(discussionId) {
   return true;
 }
 
-export async function fetchDiscussionMessages(discussionId) {
-  const { data: userData } = await supabase.auth.getUser();
-  const meId = userData?.user?.id || null;
-  const { data, error } = await supabase
-    .from("group_discussion_messages")
-    .select("*, profiles!group_discussion_messages_author_id_fkey(username, nom, avatar_url), group_discussion_message_likes(user_id)")
-    .eq("discussion_id", discussionId)
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  return data.map((row) => ({
+// Hints par nom de colonne (author_id / reply_to_id), jamais par nom de
+// contrainte — sinon le moindre écart avec le nom auto-généré par Postgres
+// fait échouer l'embed avec "Could not find a relationship..." (voir la
+// mésaventure vécue sur messages.reply_to_id plus tôt).
+const DISCUSSION_MESSAGE_SELECT =
+  "*, profiles!author_id(username, nom, avatar_url), group_discussion_message_likes(user_id), reply_to:group_discussion_messages!reply_to_id(id, texte, author_id, profiles!author_id(username, nom))";
+
+function mapDiscussionMessageRow(row, meId) {
+  return {
     id: row.id,
     discussionId: row.discussion_id,
     authorId: row.author_id,
@@ -173,31 +172,33 @@ export async function fetchDiscussionMessages(discussionId) {
     createdAt: row.created_at,
     likeCount: row.group_discussion_message_likes?.length || 0,
     liked: meId ? (row.group_discussion_message_likes || []).some((l) => l.user_id === meId) : false,
-  }));
+    replyTo: row.reply_to ? { id: row.reply_to.id, texte: row.reply_to.texte, auteur: row.reply_to.profiles?.nom || row.reply_to.profiles?.username } : null,
+  };
 }
 
-export async function sendDiscussionMessage(discussionId, texte) {
+export async function fetchDiscussionMessages(discussionId) {
+  const { data: userData } = await supabase.auth.getUser();
+  const meId = userData?.user?.id || null;
+  const { data, error } = await supabase
+    .from("group_discussion_messages")
+    .select(DISCUSSION_MESSAGE_SELECT)
+    .eq("discussion_id", discussionId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return data.map((row) => mapDiscussionMessageRow(row, meId));
+}
+
+export async function sendDiscussionMessage(discussionId, texte, replyToId = null) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
   const { data, error } = await supabase
     .from("group_discussion_messages")
-    .insert({ discussion_id: discussionId, author_id: userData.user.id, texte })
-    .select("*, profiles!group_discussion_messages_author_id_fkey(username, nom, avatar_url)")
+    .insert({ discussion_id: discussionId, author_id: userData.user.id, texte, reply_to_id: replyToId })
+    .select(DISCUSSION_MESSAGE_SELECT)
     .single();
   if (error) throw error;
-  return {
-    id: data.id,
-    discussionId: data.discussion_id,
-    authorId: data.author_id,
-    authorUsername: data.profiles?.username,
-    authorNom: data.profiles?.nom || data.profiles?.username,
-    authorAvatar: data.profiles?.avatar_url || null,
-    texte: data.texte,
-    createdAt: data.created_at,
-    likeCount: 0,
-    liked: false,
-  };
+  return mapDiscussionMessageRow(data, userData.user.id);
 }
 
 export async function deleteDiscussionMessage(messageId) {
