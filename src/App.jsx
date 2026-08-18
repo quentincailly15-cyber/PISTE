@@ -1709,8 +1709,12 @@ function Toast({ message }) {
    ============================================================ */
 function ContentActionSheet({ isOwn, isAdmin, onClose, onDelete, onEdit, onReport, onHide, onBlock }) {
   const { colors } = useTheme();
+  // 210, pas 62 : ce menu s'ouvre depuis des écrans "plein écran" dont le
+  // z-index dépasse largement 62 (SinglePostOverlay 66, SinglePostViewer 91,
+  // FullScreenVideoPlayer 200...) — trop bas, il restait invisible derrière
+  // eux, le "..." semblait ne rien faire tant qu'on ne refermait pas l'écran.
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 62 }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 210 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div
         style={{
@@ -2037,7 +2041,8 @@ function ReportSheet({ onClose, onSubmit }) {
   const [reason, setReason] = useState(null);
   const [sent, setSent] = useState(false);
   const Sheet = ({ children }) => (
-    <div style={{ position: "fixed", inset: 0, zIndex: 63 }}>
+    // 210, même raison que ContentActionSheet juste au-dessus.
+    <div style={{ position: "fixed", inset: 0, zIndex: 210 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div
         style={{
@@ -2253,7 +2258,8 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
     setReplyTo(null);
   };
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 61 }}>
+    // 210, même raison que ContentActionSheet.
+    <div style={{ position: "fixed", inset: 0, zIndex: 210 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div
         style={{
@@ -2476,8 +2482,10 @@ function SharePostSheet({ item, onClose }) {
   // dans une carte peut se retrouver cadré par un ancêtre transformé (ex. une
   // animation de balayage entre onglets) et sembler "à la taille du post"
   // plutôt que couvrir vraiment toute la page.
+  // 210, même raison que ContentActionSheet (voir plus haut) : ce sheet
+  // s'ouvre aussi depuis FullScreenVideoPlayer (z-index 200).
   return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 92, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 16px calc(28px + env(safe-area-inset-bottom, 0px))" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 16px calc(28px + env(safe-area-inset-bottom, 0px))" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ width: "100%", maxWidth: 420, maxHeight: "100%", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 16px 48px rgba(0,0,0,0.28)", display: "flex", flexDirection: "column", position: "relative" }}>
           <div className="flex items-center justify-between" style={{ padding: "16px 16px 10px" }}>
