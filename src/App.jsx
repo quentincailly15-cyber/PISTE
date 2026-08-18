@@ -3845,11 +3845,22 @@ const CATEGORY_GRADIENTS = {
 };
 function GroupImageArea({ group, height = 92, iconSize = 20 }) {
   const { colors } = useTheme();
-  if (group.imageUrl) {
+  // Photo choisie à la main en priorité ; à défaut (les 24 communautés
+  // prédéfinies n'en ont pas), la publication la plus récente de la
+  // communauté sert de vignette — un vrai aperçu de ce qui s'y passe plutôt
+  // qu'un aplat générique, comme sur la référence (voir groupService.fetchGroups).
+  const image = group.imageUrl || group.latestPostImage;
+  const isVideo = !group.imageUrl && group.latestPostIsVideo;
+  if (image) {
     return (
       <div style={{ width: "100%", height, position: "relative", overflow: "hidden" }}>
-        <img src={group.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0))" }} />
+        {isVideo && (
+          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: iconSize * 1.5, height: iconSize * 1.5, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Play size={iconSize * 0.6} color="#fff" fill="#fff" />
+          </div>
+        )}
       </div>
     );
   }

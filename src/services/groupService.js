@@ -4,12 +4,21 @@
 
 import { supabase } from "./supabaseClient.js";
 
-function mapGroupRow(row, myGroupIds, previewsByGroup) {
+function mapGroupRow(row, myGroupIds, previewsByGroup, latestPostByGroup) {
+  const latest = latestPostByGroup?.get(row.id) || null;
   return {
     id: row.id,
     nom: row.nom,
     description: row.description,
     imageUrl: row.image_url,
+    // Vignette dynamique tirée de la publication la plus récente de la
+    // communauté (photo, ou image de la vidéo) — utilisée seulement quand
+    // aucune photo de communauté n'a été choisie à la main (voir
+    // GroupImageArea) : sur les 24 communautés prédéfinies, qui n'ont pas de
+    // image_url, ça remplace un aplat générique par un vrai aperçu de ce qui
+    // s'y passe, plutôt que d'inventer une photo.
+    latestPostImage: latest?.image || null,
+    latestPostIsVideo: latest?.isVideo || false,
     categorie: row.categorie,
     nombreMembres: row.group_members?.[0]?.count || 0,
     joined: myGroupIds.has(row.id),
@@ -56,7 +65,30 @@ export async function fetchGroups() {
     previewsByGroup.get(r.group_id).push(r.profiles.avatar_url);
   }
 
-  return data.map((row) => mapGroupRow(row, myGroupIds, previewsByGroup));
+  // Même principe pour la vignette dynamique : une seule requête bornée,
+  // triée du plus récent au plus ancien, on garde le premier média rencontré
+  // par groupe (donc le plus récent). "normal" uniquement — jamais un
+  // contenu sensible en vignette publique, ça contournerait le flou de
+  // SensitiveGate.
+  const { data: recentPostRows } = await supabase
+    .from("posts")
+    .select("group_id, created_at, post_media(url, type, thumbnail_url, ordre)")
+    .not("group_id", "is", null)
+    .eq("content_rating", "normal")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  const latestPostByGroup = new Map();
+  for (const r of recentPostRows || []) {
+    if (latestPostByGroup.has(r.group_id)) continue;
+    const media = [...(r.post_media || [])].sort((a, b) => (a.ordre || 0) - (b.ordre || 0))[0];
+    if (!media) continue;
+    const isVideo = media.type === "video";
+    const image = isVideo ? media.thumbnail_url : media.url;
+    if (!image) continue;
+    latestPostByGroup.set(r.group_id, { image, isVideo });
+  }
+
+  return data.map((row) => mapGroupRow(row, myGroupIds, previewsByGroup, latestPostByGroup));
 }
 
 export async function createGroup({ nom, description, categorie, imageUrl }) {
@@ -73,7 +105,7 @@ export async function createGroup({ nom, description, categorie, imageUrl }) {
 
   // Le créateur rejoint automatiquement son propre groupe.
   await joinGroup(data.id);
-  return mapGroupRow(data, new Set([data.id]), new Map());
+  return mapGroupRow(data, new Set([data.id]), new Map(), new Map());
 }
 
 export async function joinGroup(groupId) {
