@@ -183,35 +183,18 @@ function ThemeProvider({ children }) {
 /* ============================================================
    3. PRIMITIVES
    ============================================================ */
-function Logo({ size = 30, background = true }) {
-  const { colors } = useTheme();
-  // Symbole PISTE : un "P" blanc simple, épuré, sur fond orange — identité réduite au
-  // strict minimum. Un seul path avec fillRule="evenodd" pour le "trou" de la lettre :
-  // fonctionne aussi bien sur le badge orange qu'en silhouette seule (monochrome).
-  const mark = (
-    <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 48 48" fill="none">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M14 8H26C33 8 38 12.5 38 19C38 25.5 33 30 26 30H20V40H14V8Z
-           M20 14H26C29 14 31.5 16 31.5 19C31.5 22 29 24 26 24H20V14Z"
-        fill="white"
-      />
-    </svg>
-  );
-  if (!background) return mark;
+function Logo({ size = 30 }) {
+  // Symbole PISTE : chien de chasse fondu dans la forme du "P" (public/
+  // logo-piste.png — recadré et carré à partir du fichier fourni,
+  // LOGO11.png). Image bitmap, pas un SVG : plus de mode "silhouette seule
+  // sans fond" (l'ancien mark blanc transparent) — le fond noir fait partie
+  // intégrante de l'image elle-même.
   return (
-    <div style={{ width: size, height: size, borderRadius: size * 0.3, position: "relative", overflow: "hidden", background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      {/* Camaïeu chasse orange/vert plutôt qu'un aplat uni : quelques taches
-          organiques superposées, comme un tissu camouflage, sans jamais
-          nuire à la lecture du "P" (toujours blanc, toujours au premier plan). */}
-      <svg width={size} height={size} viewBox="0 0 40 40" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0 }}>
-        <path d="M-4 4c9-5 13 5 23-1 9-5 17 3 21-2v13c-6 5-13-4-21 1-9 5-15-4-23 1z" fill="#5A6B3B" />
-        <path d="M-4 22c10-6 15 4 24-2 9-5 16 4 20-1v21h-44z" fill="#3C4A28" />
-        <path d="M6 12c6-3 9 3 15-1 5-3 10 2 13-1v9c-4 3-8-2-13 1-6 3-9-3-15 1z" fill="#B85A28" opacity="0.55" />
-      </svg>
-      <div style={{ position: "relative", zIndex: 1 }}>{mark}</div>
-    </div>
+    <img
+      src="/logo-piste.png"
+      alt="PISTE"
+      style={{ width: size, height: size, borderRadius: size * 0.3, overflow: "hidden", objectFit: "cover", flexShrink: 0, display: "block" }}
+    />
   );
 }
 function Wordmark({ size = 15 }) {
@@ -445,7 +428,7 @@ function EmptyState({ title, subtitle, ctaLabel, onCta, onAdd, icon: Icon }) {
         </button>
       ) : (
         <div style={{ width: 54, height: 54, borderRadius: RADIUS.md, background: colors.surface, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {Icon ? <Icon size={24} color={colors.textFaint} strokeWidth={1.6} /> : <Logo size={28} background={false} />}
+          {Icon ? <Icon size={24} color={colors.textFaint} strokeWidth={1.6} /> : <Logo size={28} />}
         </div>
       )}
       <div style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>{title}</div>
