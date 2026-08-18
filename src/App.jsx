@@ -2655,12 +2655,15 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
   // le dégradé, rien ne les encadre.
   const authorRow = (overlay) => (
     <div className="flex items-center justify-between" style={overlay ? { position: "absolute", top: 0, left: 0, right: 0, padding: "12px 14px", background: "linear-gradient(to bottom, rgba(0,0,0,0.58), rgba(0,0,0,0))", zIndex: 2 } : { padding: "0 18px 10px" }}>
-      <button onClick={onOpenAuthor} className="flex items-center gap-2.5" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-        <div style={{ width: 32, height: 32, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
+      {/* minWidth:0 sur le bouton + troncature du nom : sans ça, un nom
+          d'auteur très long pousse le bouton "..." hors de la carte
+          (déborde) au lieu de se couper proprement. */}
+      <button onClick={onOpenAuthor} className="flex items-center gap-2.5" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0 }}>
+        <div style={{ width: 32, height: 32, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none", flexShrink: 0 }}>
           <AvatarImg src={post.avatar} size={15} />
         </div>
-        <div style={{ textAlign: "left" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: overlay ? "#fff" : colors.text, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none" }}>{post.nom}</div>
+        <div style={{ textAlign: "left", minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: overlay ? "#fff" : colors.text, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.nom}</div>
           <div style={{ fontSize: 11, color: overlay ? "rgba(255,255,255,0.8)" : colors.textFaint, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none" }}>{post.date}</div>
         </div>
       </button>
@@ -2719,7 +2722,10 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
       ) : (
         authorRow(false)
       )}
-      {post.texte && <div style={{ padding: hasMedia ? "12px 18px 0" : "0 18px", fontSize: 13.5, color: colors.text, lineHeight: 1.55 }}>{renderTextWithMentions(post.texte, colors, onOpenProfile)}</div>}
+      {/* overflowWrap : sans ça, un mot très long (URL, hashtag collé, texte
+          sans espace) déborde de la carte au lieu de se couper — la marge
+          seule (18px) n'empêche pas ce cas précis. */}
+      {post.texte && <div style={{ padding: hasMedia ? "12px 18px 0" : "0 18px", fontSize: 13.5, color: colors.text, lineHeight: 1.55, overflowWrap: "anywhere" }}>{renderTextWithMentions(post.texte, colors, onOpenProfile)}</div>}
       {post.type === "sondage" && <PollCard postId={post.id} />}
       <div className="flex items-center gap-4" style={{ padding: "10px 18px 0" }}>
         <button onClick={onLike} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
@@ -6504,8 +6510,11 @@ function PublicationGridCell({ post: p, onOpen }) {
       {image ? (
         <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
-        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
-          <span style={{ fontSize: 10.5, color: colors.textFaint, textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}>{p.texte || p.titre}</span>
+        // Marge généreuse + coupure de mot forcée : sans "wordBreak", un seul
+        // mot ou hashtag trop long (pas d'espace pour couper naturellement)
+        // pouvait déborder de la cellule plutôt que de se couper proprement.
+        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 12, boxSizing: "border-box" }}>
+          <span style={{ fontSize: 10.5, lineHeight: 1.4, color: colors.textFaint, textAlign: "center", overflow: "hidden", wordBreak: "break-word", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>{p.texte || p.titre}</span>
         </div>
       )}
       {p.media?.length > 1 && (
