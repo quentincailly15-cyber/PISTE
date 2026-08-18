@@ -1635,6 +1635,11 @@ function AmbientBackground({ imageUrl: imageUrlOverride, muted = false } = {}) {
   // Messages : le flou reste, mais beaucoup plus discret pour ne jamais
   // nuire à la lisibilité des messages échangés dans une conversation.
   const darken = muted ? (resolved === "dark" ? 0.9 : 0.94) : resolved === "dark" ? 0.72 : 0.82;
+  // zIndex: 0 (pas négatif) : un z-index négatif peint cet élément derrière
+  // le fond opaque de ses propres ancêtres (ex. le conteneur racine
+  // d'AppShell), donc invisible partout. Il reste correctement derrière le
+  // contenu réel tant que ce contenu a lui-même un empilement explicite
+  // (voir les conteneurs de contenu à zIndex:1 à côté de ce composant).
   return (
     <div aria-hidden="true" style={{ position: "fixed", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none", background: colors.background }}>
       {imageUrl ? (
@@ -1806,6 +1811,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
   return (
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 64, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground imageUrl={profile?.imageCouverture} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {loading ? (
         <>
           <ScreenHeader title="Profil" onBack={onClose} />
@@ -2024,6 +2030,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
       {sheet?.type === "comments" && (
         <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={meUsername} onOpenProfile={onOpenProfile} />
       )}
+      </div>
     </div>
   );
 }
@@ -3989,7 +3996,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
   return (
     <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: "transparent", display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
-      <div onScroll={handleScroll} style={{ flex: 1, overflowY: "auto" }}>
+      <div onScroll={handleScroll} style={{ position: "relative", zIndex: 1, flex: 1, overflowY: "auto" }}>
         <ScreenHeader title={group.nom} onBack={onClose} chromeMode={localMode} />
         <div style={{ position: "relative", margin: "10px 16px 0" }}>
           {/* Halo ambiant : une copie floutée et agrandie de la photo de la
@@ -4232,8 +4239,9 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
   const swipeBack = useSwipeBack(onClose);
   return (
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 71, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
-      <AmbientBackground muted />
+      <AmbientBackground />
       <ScreenHeader title={discussion.titre} onBack={onClose} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
@@ -4315,6 +4323,7 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
         <button onClick={send} disabled={!text.trim() || sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: text.trim() ? colors.accent : colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: text.trim() ? "pointer" : "default", flexShrink: 0, boxShadow: text.trim() ? `0 2px 8px ${colors.accent}40` : "none", transition: "background 150ms ease, box-shadow 150ms ease" }}>
           <ChevronRight size={17} color={text.trim() ? "white" : colors.textFaint} />
         </button>
+      </div>
       </div>
     </div>
   );
@@ -5463,6 +5472,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
     <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: "transparent", display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
       <ScreenHeader title={dog.nom} onBack={onClose} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div className="px-5 pt-4">
         <div style={{ width: 64, height: 64, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden" }}>
           {dog.photo_url ? <img src={dog.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={26} color={colors.textFaint} />}
@@ -5540,6 +5550,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
           onOpenProfile={onOpenProfile}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -5560,7 +5571,7 @@ function SinglePostViewer({ post, autoOpenComments, onClose, onOpenProfile, meUs
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 91, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
       <ScreenHeader title="Publication" onCloseX={onClose} />
-      <div style={{ flex: 1, overflowY: "auto", paddingTop: 8 }}>
+      <div style={{ position: "relative", zIndex: 1, flex: 1, overflowY: "auto", paddingTop: 8 }}>
         <PostCard
           post={post}
           liked={liked.includes(post.id)}
@@ -6177,6 +6188,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 65, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
       <ScreenHeader title="Carnet de chasse" onBack={onClose} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div className="flex items-center gap-1.5" style={{ padding: "10px 16px 0", fontSize: 11, color: colors.textFaint }}>
         <Lock size={11} /><span>Strictement privé — visible par vous et les personnes que vous identifiez sur une sortie.</span>
       </div>
@@ -6287,6 +6299,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
           onOpenProfile={onOpenProfile}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -6364,7 +6377,7 @@ function SinglePostOverlay({ post, onClose, ...postCardProps }) {
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 66, background: "transparent", display: "flex", flexDirection: "column", animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
       <ScreenHeader title="Publication" onBack={onClose} />
-      <div style={{ flex: 1, overflowY: "auto", paddingTop: 6 }}>
+      <div style={{ position: "relative", zIndex: 1, flex: 1, overflowY: "auto", paddingTop: 6 }}>
         <PostCard post={post} {...postCardProps} />
       </div>
     </div>
@@ -7095,8 +7108,9 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
 
   return (
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
-      <AmbientBackground muted />
+      <AmbientBackground />
       <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
       <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
@@ -7333,6 +7347,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -7363,6 +7378,7 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
       <ScreenHeader title="Rechercher" onCloseX={onClose} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div style={{ padding: "14px 16px 10px" }}>
         <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
           <Search size={17} color={colors.textFaint} />
@@ -7392,6 +7408,7 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
             </button>
           ))
         )}
+      </div>
       </div>
     </div>
   );
@@ -7464,6 +7481,7 @@ function NewConversationSheet({ onClose, onStarted }) {
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
       <ScreenHeader title={groupMode ? "Nouveau groupe" : "Nouveau message"} onCloseX={onClose} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div style={{ padding: "14px 16px 10px" }}>
         <SegmentedControl
           options={[{ key: "direct", label: "Message direct" }, { key: "group", label: "Groupe" }]}
@@ -7533,6 +7551,7 @@ function NewConversationSheet({ onClose, onStarted }) {
           <Button disabled={!groupName.trim() || selected.length === 0 || creating} onClick={createGroup}>{creating ? "Création..." : "Créer le groupe"}</Button>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -7845,6 +7864,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 50, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
       <ScreenHeader title="Notifications" onBack={onClose} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {items.some((n) => !n.lu) && (
         <div style={{ padding: "0 16px 8px", textAlign: "right" }}>
           <button onClick={markAll} style={{ background: "none", border: "none", color: colors.accent, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Tout marquer comme lu</button>
@@ -7879,6 +7899,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
             </div>
           ))
         )}
+      </div>
       </div>
     </div>
   );
