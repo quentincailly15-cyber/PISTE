@@ -3268,6 +3268,11 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
 function VideoCard({ video, onOpenPlayer }) {
   const { colors } = useTheme();
   const canPlay = !!video.videoUrl;
+  // Même miniature générée que dans les grilles du profil (voir
+  // useGeneratedThumbnail) — sinon la même vidéo affiche potentiellement une
+  // image différente ici (liste Vidéos) et là (grille du profil), ce que
+  // rien ne justifie : c'est le même fichier, donc la même vignette partout.
+  const image = useGeneratedThumbnail(video.image, video.videoUrl, video.mediaId);
   // Contenu sensible : miniature floutée + avertissement tant que non révélée
   // (même principe que SensitiveGate côté Fil) — un premier tap révèle la
   // miniature, un second lance la lecture, comme n'importe quelle vignette.
@@ -3284,13 +3289,7 @@ function VideoCard({ video, onOpenPlayer }) {
         disabled={!gated && !canPlay}
         style={{ width: "100%", aspectRatio: "16/9", background: colors.surfaceAlt, position: "relative", overflow: "hidden", borderRadius: RADIUS.xl, border: "none", padding: 0, cursor: gated || canPlay ? "pointer" : "default" }}
       >
-        {/* Vraie miniature (image capturée à l'envoi) en priorité — un <video>
-            reste souvent noir tant qu'on n'a pas cliqué dessus, selon l'appareil. */}
-        {video.image ? (
-          <img src={video.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: gated ? "blur(16px)" : "none" }} />
-        ) : video.videoUrl ? (
-          <video src={video.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none", filter: gated ? "blur(16px)" : "none" }} />
-        ) : null}
+        {image && <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: gated ? "blur(16px)" : "none" }} />}
         {gated ? (
           <div style={{ position: "absolute", inset: 0, background: "rgba(20,18,16,0.55)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 10, textAlign: "center", gap: 5 }}>
             <AlertTriangle size={18} color="#fff" strokeWidth={1.8} />
@@ -3521,11 +3520,15 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
 function RepostRow({ post, onOpen }) {
   const { colors } = useTheme();
   const isInstant = post.type === "video_courte";
+  // Même image que partout ailleurs pour cette vidéo (voir VideoCard/
+  // VideoThumbCell) — génère une vraie miniature si elle manque encore,
+  // au lieu d'une simple icône de lecture.
+  const image = useGeneratedThumbnail(post.image, post.videoUrl, post.mediaId);
   return (
     <button onClick={() => onOpen(post)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "transparent", border: "none", padding: "9px 16px", cursor: "pointer", textAlign: "left" }}>
       <div style={{ position: "relative", width: 44, height: 44, borderRadius: RADIUS.sm, overflow: "hidden", background: colors.surfaceAlt, flexShrink: 0 }}>
-        {post.image ? (
-          <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: post.contentRating === "sensitive" ? "blur(8px)" : "none" }} />
+        {image ? (
+          <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: post.contentRating === "sensitive" ? "blur(8px)" : "none" }} />
         ) : post.videoUrl ? (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={14} color={colors.textFaint} /></div>
         ) : (
@@ -7404,13 +7407,20 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
         )}
       </div>
       {mediaError && <div style={{ margin: "0 12px 8px", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "8px 12px", fontSize: 11.5, color: colors.error }}>{mediaError}</div>}
+      {/* Bandeau de réponse — traité comme la citation dans la bulle une fois
+          envoyée (même bordure accent, même icône Reply) pour qu'on
+          reconnaisse tout de suite le même geste : "je réponds à X",
+          clairement visible avant l'envoi et après, côté destinataire aussi. */}
       {replyTo && (
-        <div className="flex items-center justify-between" style={{ margin: "0 12px 8px", background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: "8px 12px" }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: colors.accent }}>Réponse à {replyTo.auteur}</div>
-            {replyTo.texte && <div style={{ fontSize: 11.5, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{replyTo.texte}</div>}
+        <div className="flex items-center justify-between" style={{ margin: "0 12px 8px", background: colors.accentSoft, borderLeft: `3px solid ${colors.accent}`, borderRadius: RADIUS.lg, padding: "9px 12px" }}>
+          <div className="flex items-start gap-2" style={{ minWidth: 0 }}>
+            <Reply size={14} color={colors.accent} style={{ marginTop: 2, flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.accent }}>Réponse à {replyTo.auteur}</div>
+              {replyTo.texte && <div style={{ fontSize: 12, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{replyTo.texte}</div>}
+            </div>
           </div>
-          <button onClick={() => setReplyTo(null)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, marginLeft: 8, display: "flex" }}><X size={14} color={colors.textFaint} /></button>
+          <button onClick={() => setReplyTo(null)} aria-label="Annuler la réponse" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, marginLeft: 8, display: "flex" }}><X size={15} color={colors.textFaint} /></button>
         </div>
       )}
       <div className="flex items-end gap-2" style={{ padding: `10px 16px calc(14px + env(safe-area-inset-bottom, 0px))` }}>
