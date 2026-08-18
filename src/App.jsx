@@ -4862,7 +4862,8 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     // "Vidéo" (l'onglet Vidéo - Vidéo) uniquement — ni les Instants, ni une
     // vidéo jointe à une simple Publication de communauté : doit durer entre
     // 3 et 30 minutes, pour rester un vrai contenu long plutôt qu'un clip
-    // trop court pour ce format horizontal dédié.
+    // trop court pour ce format dédié (horizontale ou verticale, les deux
+    // sont acceptées — voir plus bas).
     const minSeconds = type === "video" ? 180 : 0;
     const valid = [];
     const durations = [];
@@ -4880,13 +4881,10 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
         setMediaError("Une vidéo doit durer au moins 3 minutes.");
         continue;
       }
-      // Un Instant filmé à l'horizontale n'est plus refusé — il s'affiche en
-      // letterbox (bandes noires en haut/bas) dans le lecteur plutôt que
-      // d'être recadré ou rejeté (voir InstantSlide).
-      if (type === "video" && meta.height >= meta.width) {
-        setMediaError("Une vidéo doit être filmée à l'horizontale.");
-        continue;
-      }
+      // Ni une vidéo verticale (ici) ni un Instant horizontal (ci-dessus) ne
+      // sont refusés : chaque lecteur affiche la vidéo entière avec des
+      // bandes noires (objectFit "contain") plutôt que de la recadrer ou de
+      // bloquer la publication — voir FullScreenVideoPlayer.
       valid.push(f);
       durations.push(Math.round(meta.durationSeconds));
     }
@@ -4976,7 +4974,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
                   : type === "publication" ? (allowVideoInPublication ? "Ajouter une photo ou une vidéo (facultatif)" : "Ajouter une photo (facultatif)") : "Choisir une ou plusieurs images/vidéos"}
               </span>
               {type === "video_courte" && <span style={{ fontSize: 11, color: colors.textFaint }}>3 minutes maximum</span>}
-              {type === "video" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format horizontal, entre 3 et 30 minutes</span>}
+              {type === "video" && <span style={{ fontSize: 11, color: colors.textFaint }}>Entre 3 et 30 minutes</span>}
             </label>
             <input
               id="piste-media-input"
