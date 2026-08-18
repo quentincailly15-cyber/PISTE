@@ -1577,7 +1577,10 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
             if (it.isCreate) {
               return (
                 <button key={it.key} onClick={onCreate} aria-label="Créer" className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>
-                  <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 16px ${colors.accent}70`, marginTop: -6 }}>
+                  {/* Plus de décalage vers le haut (marginTop négatif) : le
+                      bouton flotte maintenant centré entre le haut et le bas
+                      de la pilule, comme les autres icônes de la barre. */}
+                  <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 16px ${colors.accent}70` }}>
                     <Plus size={21} color={colors.onAccent} strokeWidth={2.4} />
                   </div>
                 </button>
