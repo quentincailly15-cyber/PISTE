@@ -710,7 +710,7 @@ function calculateScores(posts, ctx) {
     // est plus pertinent — n'a d'effet que si p.groupId existe (voir mapPostRow).
     const groupAffinity = p.groupId && myGroupIds.includes(p.groupId) ? 1 : 0;
     // Pénalité "déjà vu" : fait redescendre (sans l'exclure) un contenu déjà
-    // montré récemment dans Découvrir — voir buildDiscoverFeed().
+    // montré récemment (seenIds, alimenté par l'appelant si pertinent).
     const alreadySeen = seenIds.includes(p.id) ? 1 : 0;
     const score =
       affinity * FEED_WEIGHTS.affinity +
@@ -759,45 +759,6 @@ function buildChronologicalFeed(posts, ctx) {
   return [...ageOk].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
-// --- Découvrir : mémoire locale des contenus déjà montrés --------------------
-// Persistée dans localStorage (survit à un rafraîchissement), scindée par
-// utilisateur. Volontairement pas de table Supabase dédiée pour l'instant :
-// c'est une préférence d'affichage locale, pas une donnée sociale à partager
-// entre appareils — simple à migrer vers une vraie table plus tard si besoin.
-const DISCOVER_SEEN_LIMIT = 300;
-function getDiscoverSeenIds(userId) {
-  if (!userId) return [];
-  try {
-    return JSON.parse(window.localStorage.getItem(`piste_discover_seen_${userId}`) || "[]");
-  } catch (e) {
-    return [];
-  }
-}
-function markDiscoverSeen(userId, ids) {
-  if (!userId || ids.length === 0) return;
-  const current = getDiscoverSeenIds(userId);
-  const merged = Array.from(new Set([...current, ...ids])).slice(-DISCOVER_SEEN_LIMIT);
-  try {
-    window.localStorage.setItem(`piste_discover_seen_${userId}`, JSON.stringify(merged));
-  } catch (e) { /* quota localStorage dépassé : tant pis, pas bloquant */ }
-}
-/**
- * Pipeline "Découvrir" : réutilise buildFeed (mêmes étapes sécurité/âge/score/
- * diversité) en ajoutant deux dimensions propres à cet onglet :
- *  - affinité de groupe (myGroupIds) et pénalité "déjà vu" (seenIds), via
- *    calculateScores ;
- *  - priorité stricte au contenu jamais vu : on ne complète avec du déjà-vu
- *    que s'il n'y a pas assez de contenu frais, pour ne jamais vider le fil.
- * Aucun doublon possible : unseen et seen sont des partitions disjointes du
- * même tableau dédupliqué par id.
- */
-function buildDiscoverFeed(posts, ctx) {
-  const seenIds = ctx.seenIds || [];
-  const unseen = posts.filter((p) => !seenIds.includes(p.id));
-  const seen = posts.filter((p) => seenIds.includes(p.id));
-  const discoverCtx = { ...ctx, following: [] }; // pas de biais d'affinité : priorité récence/qualité/diversité/groupe
-  return [...buildFeed(unseen, discoverCtx), ...buildFeed(seen, discoverCtx)];
-}
 // Extraction de #hashtags et @mentions depuis le texte réellement saisi par l'auteur
 // (jamais inventés) — prépare la recherche par hashtag et les mentions futures.
 function extractHashtags(text) {
@@ -3096,11 +3057,10 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
   const { colors } = useTheme();
   const [tab, setTab] = useState("pourtoi");
   const [sheet, setSheet] = useState(null); // { type: 'actions'|'report'|'comments'|'author', post }
-  const options = [{ key: "pourtoi", label: "Pour toi" }, { key: "abonnements", label: "Abonnements" }, { key: "decouvrir", label: "Découvrir" }];
+  const options = [{ key: "pourtoi", label: "Pour toi" }, { key: "abonnements", label: "Abonnements" }];
   const copy = {
     pourtoi: "Votre fil personnalisé apparaîtra ici selon vos centres d'intérêt.",
     abonnements: "Vous ne suivez encore personne. Les publications des membres suivis apparaîtront ici.",
-    decouvrir: "Le contenu populaire de la communauté PISTE apparaîtra ici.",
   };
   // Pipeline centralisé (voir buildFeed) — même logique de sécurité/âge partout, seule la
   // pondération change selon l'onglet.
@@ -3121,21 +3081,12 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
     // Abonnements = chronologique strict (comme Vidéo - Vidéo) : on veut voir les
     // dernières publications des comptes suivis dans l'ordre, pas un classement
     // pondéré qui ferait remonter un ancien post populaire devant un tout nouveau.
-    else if (tab === "abonnements") ordered = buildChronologicalFeed(posts.filter((p) => following.includes(p.username)), ctx);
-    else ordered = buildDiscoverFeed(posts, { ...ctx, seenIds: getDiscoverSeenIds(profile.id) }); // Découvrir : pipeline dédié — voir buildDiscoverFeed()
+    else ordered = buildChronologicalFeed(posts.filter((p) => following.includes(p.username)), ctx);
     return ordered.map((p) => p.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, postIdsKey, followingKey, myGroupIdsKey, profile.id, profile.estMineur]);
   const postsById = new Map(posts.map((p) => [p.id, p]));
   const visible = orderedIds.map((id) => postsById.get(id)).filter(Boolean);
-
-  // Mémorise ce qui a été montré dans Découvrir pour ne pas le remontrer en
-  // priorité la prochaine fois (persiste dans localStorage, survit au refresh).
-  useEffect(() => {
-    if (tab !== "decouvrir" || !profile.id || visible.length === 0) return;
-    markDiscoverSeen(profile.id, visible.map((p) => p.id));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, profile.id, visible.map((p) => p.id).join(",")]);
 
   return (
     <div style={{ position: "relative" }}>
