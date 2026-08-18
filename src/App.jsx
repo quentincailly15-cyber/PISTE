@@ -5510,9 +5510,12 @@ function DogFormScreen({ dog, onClose, onSaved, onDeleted }) {
       <ScreenHeader title={isEditing ? "Modifier le chien" : "Ajouter un chien"} onCloseX={onClose} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
         <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickPhoto} style={{ display: "none" }} />
+        {/* Fond translucide (colors.surfaceAlt) + coins arrondis, comme les
+            autres sélecteurs de photo de l'app (miniature vidéo, bannière...) —
+            le contour pointillé seul, sur fond transparent, détonnait. */}
         <button
           onClick={() => photoInputRef.current?.click()}
-          style={{ width: "100%", border: `1.5px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: photoPreview ? 0 : "22px 14px", textAlign: "center", marginBottom: 16, background: "transparent", cursor: "pointer", overflow: "hidden" }}
+          style={{ width: "100%", border: photoPreview ? "none" : `1.5px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: photoPreview ? 0 : "22px 14px", textAlign: "center", marginBottom: 16, background: colors.surfaceAlt, cursor: "pointer", overflow: "hidden" }}
         >
           {photoPreview ? (
             <img src={photoPreview} alt="" style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
