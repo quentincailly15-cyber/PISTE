@@ -339,9 +339,13 @@ export async function deleteComment(commentId) {
 }
 
 export async function fetchComments(postId) {
+  // Hint de nom de colonne (author_id), pas juste "profiles(...)" — depuis
+  // que 045 a ajouté thread_owner_id (autre FK vers profiles, aujourd'hui
+  // abandonnée mais toujours en base), l'embed court est ambigu pour
+  // PostgREST et échouait silencieusement (voir 048_drop_comments_thread_owner.sql).
   const { data, error } = await supabase
     .from("comments")
-    .select("*, profiles(username, nom)")
+    .select("*, profiles!author_id(username, nom)")
     .eq("post_id", postId)
     .order("created_at", { ascending: true });
   if (error) throw error;
