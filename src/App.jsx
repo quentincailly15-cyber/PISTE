@@ -389,6 +389,19 @@ function IconButton({ icon: Icon, onClick, size = 36, active }) {
     </button>
   );
 }
+// Avatar avec repli automatique sur l'icône générique si l'image échoue à
+// charger (URL cassée, fichier supprimé du bucket...) — sans ça, une photo
+// de profil qui ne charge plus affiche l'icône "image cassée" par défaut du
+// navigateur plutôt qu'un avatar simplement vide, ce qui se lit comme
+// "l'avatar ne s'affiche pas" plutôt que "cette personne n'a pas de photo".
+function AvatarImg({ src, size, strokeWidth, fallbackIcon: FallbackIcon = User }) {
+  const { colors } = useTheme();
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return <img src={src} alt="" onError={() => setFailed(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+  }
+  return <FallbackIcon size={size} color={colors.textFaint} strokeWidth={strokeWidth || undefined} />;
+}
 // solid=true : pastille pleine (accent saturé, texte clair) pour les
 // bascules de source de contenu ("Pour toi"/"Abonnements") — comme la
 // référence, où ces pilules-là sont bien plus contrastées que les chips de
@@ -1844,13 +1857,13 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                 <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
                   <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
                     <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                      {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
+                      <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
                     </div>
                   </div>
                 </button>
               ) : (
                 <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: "4px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
+                  <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
                 </div>
               )}
             </div>
@@ -2187,7 +2200,7 @@ function MentionPickerButton({ onSelect }) {
                   results.map((u) => (
                     <button key={u.id} onClick={() => { onSelect(u); setOpen(false); setQuery(""); }} className="flex items-center gap-2 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
                       <div style={{ width: 28, height: 28, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={13} color={colors.textFaint} />}
+                        <AvatarImg src={u.avatar_url} size={13} />
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
@@ -2521,7 +2534,7 @@ function SharePostSheet({ item, onClose }) {
                       return (
                         <button key={u.id} onClick={() => toggleUser(u)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
                           <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                            <AvatarImg src={u.avatar_url} size={16} />
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
@@ -2544,7 +2557,7 @@ function SharePostSheet({ item, onClose }) {
                     return (
                       <button key={c.id} onClick={() => toggleConv(c)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left", borderRadius: RADIUS.md }}>
                         <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : c.type === "group" ? <Users size={16} color={colors.textFaint} /> : <User size={16} color={colors.textFaint} />}
+                          <AvatarImg src={c.avatar} size={16} fallbackIcon={c.type === "group" ? Users : User} />
                         </div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: colors.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nom}</div>
                         <div style={{ width: 20, height: 20, borderRadius: RADIUS.pill, border: `1.5px solid ${active ? colors.accent : colors.border}`, background: active ? colors.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -2641,10 +2654,10 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
   // pour la lisibilité, comme la référence : les icônes flottent nues sur
   // le dégradé, rien ne les encadre.
   const authorRow = (overlay) => (
-    <div className="flex items-center justify-between" style={overlay ? { position: "absolute", top: 0, left: 0, right: 0, padding: "12px 14px", background: "linear-gradient(to bottom, rgba(0,0,0,0.58), rgba(0,0,0,0))", zIndex: 2 } : { padding: "0 16px 10px" }}>
+    <div className="flex items-center justify-between" style={overlay ? { position: "absolute", top: 0, left: 0, right: 0, padding: "12px 14px", background: "linear-gradient(to bottom, rgba(0,0,0,0.58), rgba(0,0,0,0))", zIndex: 2 } : { padding: "0 18px 10px" }}>
       <button onClick={onOpenAuthor} className="flex items-center gap-2.5" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
         <div style={{ width: 32, height: 32, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
-          {post.avatar ? <img src={post.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={15} color={colors.textFaint} />}
+          <AvatarImg src={post.avatar} size={15} />
         </div>
         <div style={{ textAlign: "left" }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: overlay ? "#fff" : colors.text, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none" }}>{post.nom}</div>
@@ -2666,7 +2679,7 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
     // "dans une marge").
     <div style={{ background: colors.surface, borderRadius: RADIUS.xl, margin: "0 0 12px", overflow: "hidden", paddingBottom: 14 }}>
       {post.repostedAt && (
-        <div className="flex items-center gap-1.5" style={{ padding: "14px 16px 6px", fontSize: 11.5, color: colors.textFaint, fontWeight: 600 }}>
+        <div className="flex items-center gap-1.5" style={{ padding: "14px 18px 6px", fontSize: 11.5, color: colors.textFaint, fontWeight: 600 }}>
           <Repeat2 size={13} /> Reposté
         </div>
       )}
@@ -2706,9 +2719,9 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
       ) : (
         authorRow(false)
       )}
-      {post.texte && <div style={{ padding: hasMedia ? "12px 16px 0" : "0 16px", fontSize: 13.5, color: colors.text, lineHeight: 1.5 }}>{renderTextWithMentions(post.texte, colors, onOpenProfile)}</div>}
+      {post.texte && <div style={{ padding: hasMedia ? "12px 18px 0" : "0 18px", fontSize: 13.5, color: colors.text, lineHeight: 1.55 }}>{renderTextWithMentions(post.texte, colors, onOpenProfile)}</div>}
       {post.type === "sondage" && <PollCard postId={post.id} />}
-      <div className="flex items-center gap-4" style={{ padding: "10px 16px 0" }}>
+      <div className="flex items-center gap-4" style={{ padding: "10px 18px 0" }}>
         <button onClick={onLike} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
           <Heart size={17} color={liked ? colors.accent : colors.textSecondary} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
           <AnimatedCount value={post.likes || 0} style={{ fontSize: 12, color: liked ? colors.accent : colors.textSecondary, fontWeight: liked ? 700 : 400 }} />
@@ -2730,10 +2743,14 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
         </button>
       </div>
       {(post.animal || post.pratique || (post.hashtags && post.hashtags.length > 0)) && (
-        <div className="flex flex-wrap gap-1.5" style={{ padding: "10px 16px 0" }}>
+        <div className="flex flex-wrap gap-2" style={{ padding: "10px 18px 0" }}>
           {post.animal && post.animal !== "Aucun" && <span style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "3px 9px" }}>{post.animal}</span>}
           {post.pratique && <span style={{ fontSize: 10.5, fontWeight: 600, color: colors.textSecondary, background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "3px 9px" }}>{post.pratique}</span>}
-          {(post.hashtags || []).map((h) => <span key={h} style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent }}>{h}</span>)}
+          {/* Simples pastilles de texte (pas de pilule, contrairement à
+              animal/pratique) — un espacement dédié plus généreux que le gap
+              du conteneur évite qu'elles ne paraissent se toucher, surtout
+              en gras sur une petite taille de police. */}
+          {(post.hashtags || []).map((h) => <span key={h} style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent, marginRight: 2 }}>{h}</span>)}
         </div>
       )}
       {showShare && <SharePostSheet item={post} onClose={() => setShowShare(false)} />}
@@ -2770,7 +2787,7 @@ function TraceBar({ groups, onOpenGroup, onCreateOwn }) {
               >
                 <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.background, padding: 2, boxSizing: "border-box" }}>
                   <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {g.avatar ? <img src={g.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={22} color={colors.textFaint} />}
+                    <AvatarImg src={g.avatar} size={22} />
                   </div>
                 </div>
               </div>
@@ -2817,7 +2834,7 @@ function TraceViewersSheet({ traceId, onClose }) {
               viewers.map((v) => (
                 <div key={v.username} className="flex items-center gap-3" style={{ padding: "8px 4px" }}>
                   <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                    {v.avatar ? <img src={v.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={15} color={colors.textFaint} />}
+                    <AvatarImg src={v.avatar} size={15} />
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{v.nom}</span>
                 </div>
@@ -2987,7 +3004,7 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
         <div className="flex items-center justify-between" style={{ position: "absolute", top: "calc(20px + env(safe-area-inset-top, 0px))", left: 12, right: 12, zIndex: 3 }}>
           <button onClick={() => onOpenProfile(group.username)} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer" }}>
             <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {group.avatar ? <img src={group.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color={colors.textFaint} />}
+              <AvatarImg src={group.avatar} size={14} />
             </div>
             <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{isMine ? "Vous" : group.nom}</span>
             <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{formatRelativeDate(trace.createdAt)}</span>
@@ -3547,7 +3564,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
             plutôt qu'un aller-retour vers le texte en bas à gauche). */}
         <button onClick={onOpenAuthor} style={{ background: "none", border: "none", cursor: "pointer" }}>
           <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "1.5px solid rgba(255,255,255,0.6)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            {item.avatar ? <img src={item.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={13} color={colors.textFaint} />}
+            <AvatarImg src={item.avatar} size={13} />
           </div>
         </button>
       </div>
@@ -3934,30 +3951,35 @@ function GroupImageArea({ group, height = 92, iconSize = 20 }) {
 // Ligne horizontale plutôt qu'une tuile en grille — miniature carrée, nom +
 // nombre de membres au centre, avatars des membres empilés à droite (jamais
 // inventés : voir groupService.fetchGroups, aperçu réel plafonné à 4).
+// La photo occupe toute la tuile (pas une miniature à gauche) — un voile
+// sombre légèrement flouté par-dessus garantit que le nom reste lisible
+// quelle que soit l'image derrière, sans jamais la cacher complètement.
 function GroupCategoryTile({ group, onOpen }) {
-  const { colors } = useTheme();
   const previews = group.memberPreviews || [];
   return (
-    <button onClick={() => onOpen(group)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", textAlign: "left", background: colors.surface, borderRadius: RADIUS.lg, padding: "10px 12px", cursor: "pointer" }}>
-      <div style={{ width: 52, height: 52, borderRadius: RADIUS.md, overflow: "hidden", flexShrink: 0 }}>
-        <GroupImageArea group={group} height={52} iconSize={20} />
+    <button onClick={() => onOpen(group)} className="active:scale-[0.98] transition-transform" style={{ width: "100%", textAlign: "left", position: "relative", height: 76, borderRadius: RADIUS.lg, overflow: "hidden", cursor: "pointer", border: "none", padding: 0 }}>
+      <div style={{ position: "absolute", inset: 0 }}>
+        <GroupImageArea group={group} height={76} iconSize={24} />
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="flex items-center gap-1.5">
-          <span style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.nom}</span>
-          {group.joined && <Check size={13} color={colors.accent} strokeWidth={3} style={{ flexShrink: 0 }} />}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,11,7,0.72), rgba(10,11,7,0.4) 55%, rgba(10,11,7,0.15))", backdropFilter: "blur(1.5px)", WebkitBackdropFilter: "blur(1.5px)" }} />
+      <div className="flex items-center justify-between" style={{ position: "relative", height: "100%", padding: "0 14px" }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="flex items-center gap-1.5">
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.55)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.nom}</span>
+            {group.joined && <Check size={13} color="#fff" strokeWidth={3} style={{ flexShrink: 0 }} />}
+          </div>
+          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.85)", marginTop: 2, textShadow: "0 1px 3px rgba(0,0,0,0.55)" }}>{group.nombreMembres ?? 0} membre{(group.nombreMembres ?? 0) !== 1 ? "s" : ""}</div>
         </div>
-        <div style={{ fontSize: 11.5, color: colors.textFaint, marginTop: 1 }}>{group.nombreMembres ?? 0} membre{(group.nombreMembres ?? 0) !== 1 ? "s" : ""}</div>
+        {previews.length > 0 && (
+          <div className="flex items-center" style={{ flexShrink: 0 }}>
+            {previews.map((url, i) => (
+              <div key={i} style={{ width: 26, height: 26, borderRadius: RADIUS.pill, overflow: "hidden", border: "2px solid rgba(255,255,255,0.55)", marginLeft: i === 0 ? 0 : -8, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }}>
+                <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      {previews.length > 0 && (
-        <div className="flex items-center" style={{ flexShrink: 0 }}>
-          {previews.map((url, i) => (
-            <div key={i} style={{ width: 26, height: 26, borderRadius: RADIUS.pill, overflow: "hidden", border: `2px solid ${colors.surface}`, marginLeft: i === 0 ? 0 : -8, boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }}>
-              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            </div>
-          ))}
-        </div>
-      )}
     </button>
   );
 }
@@ -4167,7 +4189,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
               {members.map((m) => (
                 <button key={m.id} onClick={() => onOpenProfile(m.username)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ padding: "8px 4px", background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer" }}>
                   <div style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                    {m.avatar ? <img src={m.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                    <AvatarImg src={m.avatar} size={16} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{m.nom}</div>
@@ -4322,7 +4344,7 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
               <div key={m.id} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
                 {!mine && (
                   <div style={{ width: 24, height: 24, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {m.authorAvatar ? <img src={m.authorAvatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={11} color={colors.textFaint} />}
+                    <AvatarImg src={m.authorAvatar} size={11} />
                   </div>
                 )}
                 <div style={{ maxWidth: "76%" }}>
@@ -5431,7 +5453,7 @@ function ProfileEditor({ profile, onClose, onSave }) {
             onClick={() => fileInputRef.current?.click()}
             style={{ width: 72, height: 72, borderRadius: RADIUS.md, background: colors.surface, border: `3px solid ${colors.background}`, marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer", padding: 0, overflow: "hidden" }}
           >
-            {avatarPreview ? <img src={avatarPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={28} color={colors.textFaint} />}
+            <AvatarImg src={avatarPreview} size={28} />
             <div style={{ position: "absolute", bottom: -4, right: -4, width: 24, height: 24, borderRadius: 8, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Camera size={12} color={colors.onAccent} /></div>
           </button>
           <div style={{ marginTop: 16 }}>
@@ -5799,7 +5821,7 @@ function UserPickerField({ label, selected, onChange, placeholder }) {
           {selected.map((s) => (
             <span key={s.id} className="flex items-center gap-1.5" style={{ background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "3px 8px 3px 4px", fontSize: 12, fontWeight: 600, color: colors.accent }}>
               <div style={{ width: 18, height: 18, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {s.avatar ? <img src={s.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={9} color={colors.textFaint} />}
+                <AvatarImg src={s.avatar} size={9} />
               </div>
               {s.nom}
               <button onClick={() => remove(s.id)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 0 }}><X size={11} color={colors.accent} /></button>
@@ -5819,7 +5841,7 @@ function UserPickerField({ label, selected, onChange, placeholder }) {
               results.map((u) => (
                 <button key={u.id} onClick={() => add(u)} className="flex items-center gap-2 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 12px", cursor: "pointer", textAlign: "left" }}>
                   <div style={{ width: 26, height: 26, borderRadius: RADIUS.pill, background: colors.surfaceAlt, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={12} color={colors.textFaint} />}
+                    <AvatarImg src={u.avatar_url} size={12} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
@@ -6580,13 +6602,13 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
             <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
               <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, ${colors.accentSoft})` }}>
                 <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
+                  <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
                 </div>
               </div>
             </button>
           ) : (
             <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: "4px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              {profile.avatar ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} color={colors.textFaint} strokeWidth={1.6} />}
+              <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
             </div>
           )}
         </div>
@@ -7105,7 +7127,7 @@ function GroupConversationSettingsSheet({ conversationId, title, image, onClose,
                 {members.map((m) => (
                   <button key={m.id} onClick={() => { onClose(); onOpenProfile(m.username); }} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "8px 4px", cursor: "pointer", textAlign: "left" }}>
                     <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                      {m.avatar ? <img src={m.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color={colors.textFaint} />}
+                      <AvatarImg src={m.avatar} size={14} />
                     </div>
                     <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{m.nom}</span>
                   </button>
@@ -7699,7 +7721,7 @@ function UserSearchSheet({ onClose, onOpenProfile }) {
               style={{ width: "100%", background: "none", border: "none", padding: "10px 2px", cursor: "pointer", textAlign: "left" }}
             >
               <div style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                <AvatarImg src={u.avatar_url} size={16} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
@@ -7830,7 +7852,7 @@ function NewConversationSheet({ onClose, onStarted }) {
               style={{ width: "100%", background: "none", border: "none", padding: "10px 2px", cursor: "pointer", textAlign: "left" }}
             >
               <div style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                <AvatarImg src={u.avatar_url} size={16} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{u.nom || u.username}</div>
@@ -7914,11 +7936,11 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
         </div></div>
       </div>
       {!loading && quickContacts.length > 0 && !query.trim() && (
-        <div className="flex gap-3" style={{ padding: "14px 16px 4px", overflowX: "auto" }}>
+        <div className="flex gap-3" style={{ padding: "22px 16px 4px", overflowX: "auto" }}>
           {quickContacts.map((c) => (
             <button key={c.id} onClick={() => openConversation(c)} className="flex flex-col items-center gap-1 active:scale-95 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, width: 58 }}>
               <div style={{ width: 50, height: 50, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", boxShadow: c.unread ? `0 0 0 2px ${colors.accent}` : "none" }}>
-                {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={20} color={colors.textFaint} />}
+                <AvatarImg src={c.avatar} size={20} />
               </div>
               <span style={{ fontSize: 10.5, color: colors.textSecondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 56 }}>{c.nom}</span>
             </button>
@@ -7932,11 +7954,11 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
       ) : filteredConversations.length === 0 ? (
         <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Aucune conversation ne correspond à « {query} ».</div>
       ) : (
-        <div className="flex flex-col" style={{ padding: "12px 16px 4px" }}>
+        <div className="flex flex-col" style={{ padding: "18px 16px 4px" }}>
           {filteredConversations.map((c) => (
             <button key={c.id} onClick={() => openConversation(c)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 0", cursor: "pointer", textAlign: "left" }}>
               <div style={{ width: 48, height: 48, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : c.type === "group" ? <Users size={18} color={colors.textFaint} /> : <User size={18} color={colors.textFaint} />}
+                <AvatarImg src={c.avatar} size={18} fallbackIcon={c.type === "group" ? Users : User} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="flex items-center justify-between" style={{ gap: 8 }}>
@@ -8039,7 +8061,7 @@ function FollowListSheet({ userId, mode, onClose, onOpenProfile }) {
               items.map((u) => (
                 <button key={u.username} onClick={() => { onClose(); onOpenProfile(u.username); }} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 8px", cursor: "pointer", textAlign: "left" }}>
                   <div style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                    {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                    <AvatarImg src={u.avatar_url} size={16} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{u.nom || u.username}</div>
@@ -8092,7 +8114,7 @@ function FollowRequestsSheet({ onClose, onApprove, onReject, onOpenProfile }) {
                     style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: onOpenProfile ? "pointer" : "default", textAlign: "left" }}
                   >
                     <div style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                      {r.avatar ? <img src={r.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} color={colors.textFaint} />}
+                      <AvatarImg src={r.avatar} size={16} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{r.nom || r.username}</div>
