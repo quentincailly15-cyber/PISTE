@@ -2606,8 +2606,13 @@ function MediaCarousel({ media, colors }) {
           </div>
         ))}
       </div>
+      {/* pointerEvents "none" : ce badge est purement informatif, mais sa
+          position (haut-droite) coïncide avec le bouton "..." de authorRow
+          en overlay (PostCard) — sans ça, il capte le tap à sa place et le
+          bouton devient impossible à toucher tant qu'une publication a
+          plusieurs photos. */}
       {media.length > 1 && (
-        <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(0,0,0,0.5)", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: RADIUS.pill, padding: "3px 9px", zIndex: 2 }}>
+        <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(0,0,0,0.5)", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: RADIUS.pill, padding: "3px 9px", zIndex: 2, pointerEvents: "none" }}>
           {index + 1}/{media.length}
         </div>
       )}
