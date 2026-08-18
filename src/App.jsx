@@ -6719,7 +6719,13 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
       {sheet?.type === "comments" && (
         <CommentsSheet comments={commentsByPost[sheet.post.id] || []} onClose={() => setSheet(null)} onAdd={(texte, parentId) => onAddComment(sheet.post.id, texte, parentId)} onDelete={onDeleteComment ? (commentId) => onDeleteComment(sheet.post.id, commentId) : undefined} meUsername={profile.username} onOpenProfile={onOpenProfile} />
       )}
-      {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile(p); setEditing(false); }} />}
+      {/* Fusion, pas remplacement : `p` (retour brut de updateProfile, colonnes
+          snake_case) ne contient ni "statistiques", ni "localisation", ni
+          "isPrivate", ni "verificationStatus", ni "estMineur"/"age" — un
+          setProfile(p) qui remplace tout effaçait ces champs après CHAQUE
+          modification du profil (abonnés/abonnements retombaient à 0,
+          localisation disparaissait...). */}
+      {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile((prev) => ({ ...prev, ...p })); setEditing(false); }} />}
       {dogForm && (
         <DogFormScreen
           dog={typeof dogForm === "object" ? dogForm : null}
@@ -8455,7 +8461,7 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
       )}
       {editing && (
         <div style={{ position: "absolute", inset: 0, zIndex: 70 }}>
-          <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile(p); setEditing(false); }} />
+          <ProfileEditor profile={profile} onClose={() => setEditing(false)} onSave={(p) => { setProfile((prev) => ({ ...prev, ...p })); setEditing(false); }} />
         </div>
       )}
     </div>
