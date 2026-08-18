@@ -72,6 +72,92 @@ function generateVideoThumbnail(file, timeoutMs = 6000) {
   });
 }
 
+/**
+ * Même capture que generateVideoThumbnail, mais depuis une vidéo déjà
+ * hébergée (URL du bucket "posts") plutôt qu'un fichier local tout juste
+ * choisi — sert à combler après coup les vidéos publiées avant l'existence
+ * de la génération automatique (ou dont la génération avait échoué à
+ * l'envoi), quand on les croise dans une grille. "crossOrigin: anonymous" +
+ * bucket public : la capture ne "tache" pas le canvas, sinon toBlob()
+ * échouerait silencieusement.
+ */
+function generateRemoteVideoThumbnail(url, timeoutMs = 6000) {
+  return new Promise((resolve, reject) => {
+    const videoEl = document.createElement("video");
+    videoEl.preload = "auto";
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.crossOrigin = "anonymous";
+    videoEl.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;";
+    videoEl.src = url;
+    document.body.appendChild(videoEl);
+
+    let settled = false;
+    const cleanup = () => { clearTimeout(timer); videoEl.remove(); };
+    const finish = (fn, arg) => { if (settled) return; settled = true; cleanup(); fn(arg); };
+    const timer = setTimeout(() => finish(reject, new Error("Génération de la miniature trop longue.")), timeoutMs);
+
+    const capture = () => {
+      if (settled) return;
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = videoEl.videoWidth || 320;
+        canvas.height = videoEl.videoHeight || 180;
+        canvas.getContext("2d").drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) finish(resolve, blob);
+          else finish(reject, new Error("Impossible de générer une miniature."));
+        }, "image/jpeg", 0.82);
+      } catch (e) {
+        finish(reject, e); // canvas "taché" (CORS refusé côté bucket) : abandon silencieux côté appelant
+      }
+    };
+
+    videoEl.onloadedmetadata = () => {
+      try {
+        videoEl.currentTime = Math.min(0.5, (videoEl.duration || 1) / 4);
+      } catch (e) {
+        capture();
+      }
+    };
+    videoEl.onseeked = capture;
+    videoEl.onerror = () => finish(reject, new Error("Impossible de lire cette vidéo pour générer une miniature."));
+  });
+}
+
+/**
+ * Génère (depuis l'URL déjà hébergée) et sauvegarde la miniature d'une
+ * vidéo qui n'en a pas encore — appelée à l'affichage (VideoThumbCell), pas
+ * à la publication. Retourne l'URL publique de la miniature pour un affichage
+ * immédiat ; la ligne post_media n'est mise à jour que si l'appelant en est
+ * l'auteur (RLS "author manages own post_media", 001_init.sql) — pour un
+ * autre spectateur, l'update échoue silencieusement mais l'affichage local
+ * fonctionne quand même.
+ */
+export async function saveGeneratedThumbnail(mediaId, videoUrl) {
+  const blob = await generateRemoteVideoThumbnail(videoUrl);
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error("Non authentifié");
+  // La policy Storage "users upload to their own posts folder" exige que le
+  // premier segment du chemin soit l'uid de qui envoie — pas forcément
+  // l'auteur de la publication (n'importe quel spectateur peut déclencher
+  // cette génération), d'où le dossier du VIEWER ici, pas celui de l'auteur.
+  const path = `${userData.user.id}/generated/${mediaId}-${Date.now()}.jpg`;
+  const { error: uploadError } = await supabase.storage.from("posts").upload(path, blob, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: "image/jpeg",
+  });
+  if (uploadError) throw uploadError;
+  const { data: publicUrl } = supabase.storage.from("posts").getPublicUrl(path);
+  // Best-effort : pas d'auteur ou pas notre publication -> RLS refuse
+  // l'update (résout avec un champ "error", ne rejette jamais) ; on ne le
+  // vérifie même pas, l'appelant affiche de toute façon l'URL retournée.
+  await supabase.from("post_media").update({ thumbnail_url: publicUrl.publicUrl }).eq("id", mediaId);
+  return publicUrl.publicUrl;
+}
+
 export async function createPost({ texte, titre, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null, pollOptions = [] }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
@@ -272,7 +358,7 @@ export async function addComment(postId, texte, parentId = null) {
 export async function fetchCandidatePosts({ limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -284,7 +370,7 @@ export async function fetchCandidatePosts({ limit = 50 } = {}) {
 export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)")
     .eq("group_id", groupId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -296,7 +382,7 @@ export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
 export async function fetchUserPosts(userId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)")
     .eq("author_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -311,7 +397,7 @@ export async function fetchUserPosts(userId, { limit = 50 } = {}) {
 export async function fetchPostById(postId) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)")
     .eq("id", postId)
     .single();
   if (error) throw error;
@@ -324,7 +410,7 @@ export async function fetchPostById(postId) {
 export async function fetchPostsByDog(dogId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("post_dogs")
-    .select("posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds))")
+    .select("posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds))")
     .eq("dog_id", dogId)
     .order("created_at", { ascending: false, foreignTable: "posts" })
     .limit(limit);
@@ -417,7 +503,7 @@ export async function fetchMyRepostedPosts() {
   if (!userData.user) return [];
   const { data, error } = await supabase
     .from("reposts")
-    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds))")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds))")
     .eq("user_id", userData.user.id)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -429,7 +515,7 @@ export async function fetchMyRepostedPosts() {
 export async function fetchUserRepostedPosts(userId) {
   const { data, error } = await supabase
     .from("reposts")
-    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url, duration_seconds))")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds))")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;

@@ -848,6 +848,10 @@ function mapPostRow(row) {
     texte: row.texte,
     image: row.post_media?.[0]?.type === "video" ? row.post_media?.[0]?.thumbnail_url || null : row.post_media?.[0]?.url || null,
     videoUrl: row.post_media?.[0]?.type === "video" ? row.post_media[0].url : null,
+    // Id de la ligne post_media (pas celui du post) — sert à sauvegarder une
+    // miniature générée à la volée quand elle manque encore (voir
+    // VideoThumbCell / postService.saveGeneratedThumbnail).
+    mediaId: row.post_media?.[0]?.id || null,
     duree: formatVideoDuration(row.post_media?.[0]?.duration_seconds),
     // Tous les médias (pas juste le premier) — pour le carrousel d'une
     // publication à plusieurs photos/vidéos (voir MediaCarousel).
@@ -6345,58 +6349,74 @@ function ProfileTabBar({ tabs, tab, setTab }) {
 // Grille carrée 3 colonnes des publications — comme la référence, plutôt
 // qu'une liste verticale de cartes complètes. Une pastille signale les
 // publications à plusieurs médias, l'icône lecture les vidéos.
+// Un <video> posé sans lecture reste souvent noir sur mobile — pas une vraie
+// miniature (voir le commentaire de generateVideoThumbnail). Pour une vidéo
+// qui n'en a pas encore (publiée avant l'existence de la capture
+// automatique, ou capture ayant échoué à l'envoi), on en génère une vraie à
+// l'affichage — une seule fois par cellule montée — et on la sauvegarde en
+// base quand on en a le droit (l'auteur), pour ne plus jamais la
+// regénérer aux prochaines visites.
+function useGeneratedThumbnail(image, videoUrl, mediaId) {
+  const [generated, setGenerated] = useState(null);
+  const triedRef = useRef(false);
+  useEffect(() => {
+    if (image || !videoUrl || !mediaId || triedRef.current) return;
+    triedRef.current = true;
+    postService.saveGeneratedThumbnail(mediaId, videoUrl).then(setGenerated).catch(() => {});
+  }, [image, videoUrl, mediaId]);
+  return image || generated;
+}
 function PublicationsGrid({ posts, onOpen, emptyTitle, emptySubtitle, onAdd }) {
-  const { colors } = useTheme();
   if (posts.length === 0) return <EmptyState title={emptyTitle} subtitle={emptySubtitle} onAdd={onAdd} icon={Feather} />;
   return (
     <div className="grid grid-cols-3 gap-2.5">
-      {posts.map((p) => (
-        <button key={p.id} onClick={() => onOpen(p)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
-          {p.image ? (
-            <img src={p.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          ) : p.videoUrl ? (
-            <video src={p.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
-          ) : (
-            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
-              <span style={{ fontSize: 10.5, color: colors.textFaint, textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}>{p.texte || p.titre}</span>
-            </div>
-          )}
-          {p.media?.length > 1 && (
-            <span style={{ position: "absolute", top: 5, right: 5, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.5)", borderRadius: RADIUS.pill, padding: "1.5px 5px" }}>{p.media.length}</span>
-          )}
-          {p.videoUrl && <Play size={14} color="#fff" fill="#fff" style={{ position: "absolute", top: 6, right: 6, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }} />}
-        </button>
-      ))}
+      {posts.map((p) => <PublicationGridCell key={p.id} post={p} onOpen={onOpen} />)}
     </div>
+  );
+}
+function PublicationGridCell({ post: p, onOpen }) {
+  const { colors } = useTheme();
+  const image = useGeneratedThumbnail(p.image, p.videoUrl, p.mediaId);
+  return (
+    <button onClick={() => onOpen(p)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
+      {image ? (
+        <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
+          <span style={{ fontSize: 10.5, color: colors.textFaint, textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}>{p.texte || p.titre}</span>
+        </div>
+      )}
+      {p.media?.length > 1 && (
+        <span style={{ position: "absolute", top: 5, right: 5, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.5)", borderRadius: RADIUS.pill, padding: "1.5px 5px" }}>{p.media.length}</span>
+      )}
+      {p.videoUrl && <Play size={14} color="#fff" fill="#fff" style={{ position: "absolute", top: 6, right: 6, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }} />}
+    </button>
   );
 }
 // Grille carrée 3 colonnes des vidéos du profil — comme le panneau "Vidéos"
 // de la référence (miniature + durée), plutôt que la carte pleine largeur
 // du fil Vidéos général : ici on parcourt vite, on ne lit pas en scrollant.
 function VideoThumbGrid({ videos, onOpen, emptyTitle, emptySubtitle }) {
-  const { colors } = useTheme();
   if (videos.length === 0) return <EmptyState title={emptyTitle} subtitle={emptySubtitle} icon={Film} />;
   return (
     <div className="grid grid-cols-3 gap-2.5">
-      {videos.map((v) => (
-        <button key={v.id} onClick={() => onOpen(v)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
-          {v.image ? (
-            <img src={v.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          ) : v.videoUrl ? (
-            // Pas de miniature générée (vidéo publiée avant l'existence de la
-            // capture automatique, ou capture qui a échoué) — la première
-            // image du fichier vidéo lui-même sert de secours plutôt qu'une
-            // simple icône, le navigateur affiche sa première frame décodée
-            // sans avoir besoin de lecture.
-            <video src={v.videoUrl} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
-          ) : (
-            <Film size={18} color={colors.textFaint} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)" }} />
-          )}
-          <Play size={13} color="#fff" fill="#fff" style={{ position: "absolute", top: 6, right: 6, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }} />
-          {v.duree && <span style={{ position: "absolute", left: 5, bottom: 5, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "1.5px 5px" }}>{v.duree}</span>}
-        </button>
-      ))}
+      {videos.map((v) => <VideoThumbCell key={v.id} video={v} onOpen={onOpen} />)}
     </div>
+  );
+}
+function VideoThumbCell({ video: v, onOpen }) {
+  const { colors } = useTheme();
+  const image = useGeneratedThumbnail(v.image, v.videoUrl, v.mediaId);
+  return (
+    <button onClick={() => onOpen(v)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
+      {image ? (
+        <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        <Film size={18} color={colors.textFaint} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)" }} />
+      )}
+      <Play size={13} color="#fff" fill="#fff" style={{ position: "absolute", top: 6, right: 6, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }} />
+      {v.duree && <span style={{ position: "absolute", left: 5, bottom: 5, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "1.5px 5px" }}>{v.duree}</span>}
+    </button>
   );
 }
 // Ouvre une publication de la grille en plein écran — la grille ne montre
@@ -7700,10 +7720,12 @@ function NewConversationSheet({ onClose, onStarted }) {
     </div>
   );
 }
-function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversation, onOpenProfile, onBlock, onReport, onRead, onOpenSharedPost, chromeMode = "full" }) {
+function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshConversations, initialConversationId, onConsumeInitialConversation, onOpenProfile, onBlock, onReport, onRead, onOpenSharedPost, chromeMode = "full" }) {
   const { colors } = useTheme();
-  const [conversations, setConversations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Les conversations vivent dans MainApp (voir refreshConversations) —
+  // chargées une fois pour toute l'app plutôt que rechargées à chaque
+  // montage de cet écran, donc à chaque fois qu'on revient sur cet onglet.
+  const loading = !conversationsLoaded;
   const [openConv, setOpenConv] = useState(null); // { id, title }
   const [showNew, setShowNew] = useState(false);
   const [query, setQuery] = useState("");
@@ -7714,18 +7736,7 @@ function ScreenMessages({ meId, initialConversationId, onConsumeInitialConversat
   // on discute déjà, jamais un contact inventé.
   const quickContacts = conversations.filter((c) => c.type === "direct").slice(0, 10);
   const openConversation = (c) => setOpenConv({ id: c.id, title: c.nom, type: c.type, image: c.avatar, otherUser: c.type === "direct" ? c.members?.[0] || null : null });
-
-  const refresh = () => {
-    messageService.fetchConversations().then(setConversations).catch(() => {});
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    messageService.fetchConversations().then(setConversations).catch(() => {}).finally(() => setLoading(false));
-    const unsubscribe = messageService.subscribeToMyMessages(() => refresh());
-    return unsubscribe;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const refresh = onRefreshConversations;
 
   // Ouverture directe d'une conversation depuis une notification (message /
   // ajout à un groupe) — voir NotificationsPanel.
@@ -8488,6 +8499,9 @@ function MainApp({ session, onboardingData, ageInfo }) {
       if (key === "profil") {
         dogService.fetchMyDogs().then(setDogs).catch(() => {});
       }
+      if (key === "messages") {
+        refreshConversations();
+      }
     } else {
       setActive(key);
     }
@@ -8516,7 +8530,14 @@ function MainApp({ session, onboardingData, ageInfo }) {
   const [notif, setNotif] = useState(false);
   const [showUserSearch, setShowUserSearch] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [unreadConversations, setUnreadConversations] = useState(0);
+  // Les conversations vivent ici (pas dans ScreenMessages) pour ne plus être
+  // rechargées à chaque fois qu'on revient sur l'onglet Messages — avant,
+  // ScreenMessages les rechargeait à son propre montage (donc à CHAQUE
+  // changement d'onglet, puisque l'écran démonté-remonté à chaque fois),
+  // avec un "Chargement..." à chaque fois même en revenant 2 secondes après.
+  const [conversations, setConversations] = useState([]);
+  const [conversationsLoaded, setConversationsLoaded] = useState(false);
+  const unreadConversations = conversations.filter((c) => c.unread).length;
   const [pendingConversationId, setPendingConversationId] = useState(null);
   // Écran de profil public — ouvert depuis n'importe où (post, notif, message) par username.
   const [openProfileUsername, setOpenProfileUsername] = useState(null);
@@ -8742,8 +8763,11 @@ function MainApp({ session, onboardingData, ageInfo }) {
     return unsubscribe;
   }, [session, profileLoaded]);
 
-  const refreshUnreadConversations = () => {
-    messageService.fetchUnreadConversationCount().then(setUnreadConversations).catch(() => {});
+  // Un seul vrai fetch pour toute l'app — le badge "messages" (unreadConversations,
+  // dérivé plus haut) et l'onglet Messages lisent tous les deux ce même state,
+  // plus besoin d'un fetchUnreadConversationCount() séparé rien que pour le badge.
+  const refreshConversations = () => {
+    messageService.fetchConversations().then(setConversations).catch(() => {}).finally(() => setConversationsLoaded(true));
   };
   // Marque comme lue(s), en base, la ou les notifications correspondant à un
   // contenu qu'on vient d'ouvrir "en vrai" ailleurs dans l'app (messages,
@@ -8759,15 +8783,15 @@ function MainApp({ session, onboardingData, ageInfo }) {
   };
   // Ouvrir une conversation touche à la fois le badge "messages" de la barre
   // de navigation et celui de la cloche (voir ConversationThread.markRead).
-  const refreshUnread = () => { refreshUnreadConversations(); refreshUnreadCount(); };
+  const refreshUnread = () => { refreshConversations(); refreshUnreadCount(); };
   useEffect(() => {
     if (!session || !profileLoaded) return;
-    refreshUnreadConversations();
-    // Un nouveau message n'importe où peut changer le nombre de conversations
-    // non lues (une conversation déjà lue redevient non lue) — on recalcule
-    // plutôt que d'incrémenter, pour ne jamais compter 2 messages d'une même
-    // conversation comme 2 conversations non lues.
-    const unsubscribe = messageService.subscribeToMyMessages(() => refreshUnreadConversations());
+    refreshConversations();
+    // Un nouveau message n'importe où peut changer la liste (nouvelle
+    // conversation, dernier message, statut lu/non lu) — on recharge la
+    // liste entière plutôt que de raisonner message par message, aussi bien
+    // pour le badge que pour l'écran Messages si il est ouvert.
+    const unsubscribe = messageService.subscribeToMyMessages(() => refreshConversations());
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, profileLoaded]);
@@ -9088,7 +9112,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         chromeMode={chromeMode}
       />
     ),
-    messages: <ScreenMessages meId={session?.user?.id} initialConversationId={pendingConversationId} onConsumeInitialConversation={() => setPendingConversationId(null)} onOpenProfile={setOpenProfileUsername} onBlock={blockAuthor} onReport={reportContent} onRead={refreshUnread} onOpenSharedPost={openNotificationPost} chromeMode={chromeMode} />,
+    messages: <ScreenMessages meId={session?.user?.id} conversations={conversations} conversationsLoaded={conversationsLoaded} onRefreshConversations={refreshConversations} initialConversationId={pendingConversationId} onConsumeInitialConversation={() => setPendingConversationId(null)} onOpenProfile={setOpenProfileUsername} onBlock={blockAuthor} onReport={reportContent} onRead={refreshUnread} onOpenSharedPost={openNotificationPost} chromeMode={chromeMode} />,
     profil: (
       <ScreenProfil
         profile={profile}

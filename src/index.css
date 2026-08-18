@@ -19,6 +19,18 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Sans ça, certains navigateurs mobiles attendent ~300ms avant de valider un
+   tap (le temps de vérifier qu'il ne s'agit pas du début d'un double-tap de
+   zoom) — sur une app où presque tout est un bouton, ce délai se ressent sur
+   CHAQUE interaction. "manipulation" dit au navigateur de traiter tout tap
+   comme définitif tout de suite. Le flash gris par défaut au tap (utile sur
+   un site classique, pas ici où chaque bouton a déjà son propre retour
+   visuel — active:scale, changement de fond...) est aussi désactivé. */
+button, a, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* iOS Safari zoome automatiquement la page quand on touche un champ dont le
    texte fait moins de 16px — l'app restait alors "zoomée" tant qu'on ne
    dézoomait pas manuellement. On force 16px minimum sur tous les champs,
