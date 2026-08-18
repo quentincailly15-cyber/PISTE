@@ -4853,6 +4853,11 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     setMediaError("");
     if (!isVideoType && !allowVideoInPublication) { setMediaFiles(files); startCropQueue(files); return; }
     const maxSeconds = type === "video_courte" ? 60 : 1800;
+    // "Vidéo" (l'onglet Vidéo - Vidéo) uniquement — ni les Instants, ni une
+    // vidéo jointe à une simple Publication de communauté : doit durer entre
+    // 3 et 30 minutes, pour rester un vrai contenu long plutôt qu'un clip
+    // trop court pour ce format horizontal dédié.
+    const minSeconds = type === "video" ? 180 : 0;
     const valid = [];
     const durations = [];
     for (const f of files) {
@@ -4863,6 +4868,10 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
       if (!meta) { valid.push(f); durations.push(null); continue; }
       if (meta.durationSeconds > maxSeconds) {
         setMediaError(type === "video_courte" ? "Un Instant ne peut pas dépasser 1 minute." : "Une vidéo ne peut pas dépasser 30 minutes.");
+        continue;
+      }
+      if (meta.durationSeconds < minSeconds) {
+        setMediaError("Une vidéo doit durer au moins 3 minutes.");
         continue;
       }
       if (type === "video_courte" && meta.width >= meta.height) {
@@ -4962,7 +4971,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
                   : type === "publication" ? (allowVideoInPublication ? "Ajouter une photo ou une vidéo (facultatif)" : "Ajouter une photo (facultatif)") : "Choisir une ou plusieurs images/vidéos"}
               </span>
               {type === "video_courte" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format vertical, 1 minute maximum</span>}
-              {type === "video" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format horizontal, 30 minutes maximum</span>}
+              {type === "video" && <span style={{ fontSize: 11, color: colors.textFaint }}>Format horizontal, entre 3 et 30 minutes</span>}
             </label>
             <input
               id="piste-media-input"
