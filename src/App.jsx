@@ -1801,19 +1801,24 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 64, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+    // Pas de paddingTop safe-area ici sur le conteneur — ScreenHeader, plus
+    // bas, est "sticky" DANS le conteneur qui défile et applique déjà lui-
+    // même env(safe-area-inset-top) à son propre décalage. Avoir les deux
+    // ajoutait l'encoche/l'île dynamique deux fois : l'en-tête flottait
+    // avec un vide au-dessus bien trop grand sur iPhone à encoche.
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 64, background: "transparent", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground imageUrl={profile?.imageCouverture} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {loading ? (
-        <>
+        <div style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
           <ScreenHeader title="Profil" onBack={onClose} />
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 40 }}>Chargement...</div>
-        </>
+        </div>
       ) : error ? (
-        <>
+        <div style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
           <ScreenHeader title="Profil" onBack={onClose} />
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.error, marginTop: 40, padding: "0 24px" }}>{error}</div>
-        </>
+        </div>
       ) : (
         <div onScroll={handleScroll} style={{ flex: 1, overflowY: "auto" }}>
           <ScreenHeader title={`@${profile.username}`} onBack={onClose} chromeMode={localMode} />
@@ -2042,7 +2047,7 @@ function ReportSheet({ onClose, onSubmit }) {
         style={{
           width: "100%",
           maxWidth: 460,
-          maxHeight: "82vh",
+          maxHeight: "82dvh",
           background: colors.headerBg,
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
@@ -2143,7 +2148,7 @@ function MentionPickerButton({ onSelect }) {
         <div style={{ position: "fixed", inset: 0, zIndex: 95 }}>
           <div onClick={() => setOpen(false)} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
           <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-            <div style={{ width: "100%", maxWidth: 460, maxHeight: "60vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+            <div style={{ width: "100%", maxWidth: 460, maxHeight: "60dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
               <div className="flex items-center justify-between" style={{ padding: "6px 16px 8px" }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>Identifier quelqu'un</span>
@@ -2259,7 +2264,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
         style={{
           width: "100%",
           maxWidth: 460,
-          height: "78vh",
+          height: "78dvh",
           background: colors.headerBg,
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
@@ -2805,7 +2810,7 @@ function TraceViewersSheet({ traceId, onClose }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 82 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "60vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "60dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{viewers.length} vue{viewers.length !== 1 ? "s" : ""}</span>
@@ -6176,7 +6181,7 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
     <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "82vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "82dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{formatRelativeDate(log.date)}</span>
@@ -7193,7 +7198,7 @@ function GroupConversationSettingsSheet({ conversationId, title, image, onClose,
     <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "80vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "80dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Infos du groupe</span>
@@ -8166,7 +8171,7 @@ function FollowListSheet({ userId, mode, onClose, onOpenProfile }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 65 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, height: "72vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, height: "72dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{title}</span>
@@ -8214,7 +8219,7 @@ function FollowRequestsSheet({ onClose, onApprove, onReject, onOpenProfile }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 61 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "78vh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "78dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Demandes d'abonnement</span>
