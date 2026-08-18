@@ -1902,7 +1902,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                 <ProfileTabBar tabs={tabs} tab={tab} setTab={setTab} />
               </div>
               {tab === "publications" && (
-                <div className="px-4" style={{ paddingTop: 6 }}>
+                <div style={{ padding: "6px 10px 0" }}>
                   <PublicationsGrid
                     posts={posts.filter((p) => p.type !== "video" && p.type !== "video_courte")}
                     onOpen={setOpenPost}
@@ -1912,7 +1912,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                 </div>
               )}
               {tab === "videos" && (
-                <div className="px-4" style={{ paddingTop: 6 }}>
+                <div style={{ padding: "6px 10px 0" }}>
                   <VideoThumbGrid
                     videos={posts.filter((p) => p.type === "video" || p.type === "video_courte")}
                     onOpen={(v) => onOpenPlayer && onOpenPlayer(v)}
@@ -4064,7 +4064,11 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           ) : groupPosts.length === 0 ? (
             <EmptyState title="Aucune publication" subtitle="Les publications de cette communauté apparaîtront ici." icon={Feather} />
           ) : (
-            <div style={{ paddingTop: 6 }}>
+            // Contrairement au Fil (photos bord à bord, voir la référence),
+            // les publications d'une communauté restent une carte à part
+            // entière dans la page — marge latérale fine pour qu'elles ne
+            // touchent ni les bords de l'écran ni les cartes voisines.
+            <div style={{ padding: "6px 10px 0" }}>
               {groupPosts.map((p) => (
                 <PostCard
                   onOpenProfile={onOpenProfile}
@@ -5346,13 +5350,17 @@ function ProfileEditor({ profile, onClose, onSave }) {
           </div>
         </button>
         <div style={{ padding: "6px 20px 0" }}>
+          {/* Ancien chevauchement négatif de l'avatar sur cette phrase
+              (marginTop:-30, pensé pour recouvrir la bannière) la cachait en
+              partie ou en totalité une fois le texte d'explication ajouté
+              entre les deux — l'avatar reste maintenant dans le flux normal. */}
           <span style={{ fontSize: 11, color: colors.textFaint, lineHeight: 1.5 }}>Cette photo devient le fond, très flouté, de toutes vos pages PISTE.</span>
         </div>
         <div style={{ padding: "0 20px" }}>
           <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickAvatar} style={{ display: "none" }} />
           <button
             onClick={() => fileInputRef.current?.click()}
-            style={{ width: 72, height: 72, borderRadius: RADIUS.md, background: colors.surface, border: `3px solid ${colors.background}`, marginTop: -30, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer", padding: 0, overflow: "hidden" }}
+            style={{ width: 72, height: 72, borderRadius: RADIUS.md, background: colors.surface, border: `3px solid ${colors.background}`, marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer", padding: 0, overflow: "hidden" }}
           >
             {avatarPreview ? <img src={avatarPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={28} color={colors.textFaint} />}
             <div style={{ position: "absolute", bottom: -4, right: -4, width: 24, height: 24, borderRadius: 8, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Camera size={12} color={colors.onAccent} /></div>
@@ -6512,13 +6520,13 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, posts, videos, liked,
       </div>
 
       {tab === "publications" && (
-        <div className="px-4" style={{ paddingTop: 6 }}>
+        <div style={{ padding: "6px 10px 0" }}>
           <PublicationsGrid posts={posts} onOpen={setOpenPost} emptyTitle="Aucune publication" emptySubtitle="Vos publications apparaîtront ici." onAdd={onCreatePost} />
         </div>
       )}
 
       {tab === "videos" && (
-        <div className="px-4" style={{ paddingTop: 6 }}>
+        <div style={{ padding: "6px 10px 0" }}>
           <VideoThumbGrid videos={videos} onOpen={(v) => onOpenPlayer && onOpenPlayer(v)} emptyTitle="Aucune vidéo" emptySubtitle="Vos vidéos apparaîtront ici." />
         </div>
       )}
