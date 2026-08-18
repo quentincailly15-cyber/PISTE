@@ -2193,12 +2193,59 @@ function MentionPickerButton({ onSelect }) {
     </>
   );
 }
+// Rendu des commentaires seul (liste + réponses), sans la coquille modale ni
+// le champ de saisie — partagé entre CommentsSheet (modale, la plupart des
+// contenus) et FullScreenVideoPlayer (commentaires intégrés dans la page,
+// pas dans une modale, voir plus bas).
+function CommentsList({ comments, onDelete, meUsername, onOpenProfile, onReply }) {
+  const { colors } = useTheme();
+  const topLevel = comments.filter((c) => !c.parentId);
+  const repliesOf = (id) => comments.filter((c) => c.parentId === id);
+  if (comments.length === 0) {
+    return <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à réagir à cette publication." icon={MessageSquare} />;
+  }
+  return (
+    <div style={{ padding: "8px 16px" }}>
+      {topLevel.map((c) => (
+        <div key={c.id} style={{ padding: "10px 0", borderBottom: `1px solid ${colors.border}` }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 3 }}>
+            <div className="flex items-center gap-2">
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text }}>{c.auteur}</span>
+              <span style={{ fontSize: 11, color: colors.textFaint }}>{c.date}</span>
+            </div>
+            {onDelete && meUsername && c.authorUsername === meUsername && (
+              <button onClick={() => onDelete(c.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+                <Trash2 size={13.5} color={colors.textFaint} />
+              </button>
+            )}
+          </div>
+          <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(c.texte, colors, onOpenProfile)}</div>
+          <button onClick={() => onReply({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: 4, padding: 0 }}>Répondre</button>
+          {repliesOf(c.id).map((r) => (
+            <div key={r.id} style={{ marginTop: 8, marginLeft: 18, paddingLeft: 10, borderLeft: `2px solid ${colors.border}` }}>
+              <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
+                <div className="flex items-center gap-2">
+                  <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>{r.auteur}</span>
+                  <span style={{ fontSize: 10.5, color: colors.textFaint }}>{r.date}</span>
+                </div>
+                {onDelete && meUsername && r.authorUsername === meUsername && (
+                  <button onClick={() => onDelete(r.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+                    <Trash2 size={12.5} color={colors.textFaint} />
+                  </button>
+                )}
+              </div>
+              <div style={{ fontSize: 12.5, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(r.texte, colors, onOpenProfile)}</div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenProfile }) {
   const { colors } = useTheme();
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null); // { id, auteur } | null
-  const topLevel = comments.filter((c) => !c.parentId);
-  const repliesOf = (id) => comments.filter((c) => c.parentId === id);
   const submit = () => {
     if (!text.trim()) return;
     onAdd(text.trim(), replyTo?.id || null);
@@ -2241,46 +2288,8 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
           <IconButton icon={X} onClick={onClose} size={30} />
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
-        {comments.length === 0 ? (
-          <EmptyState title="Aucun commentaire" subtitle="Soyez le premier à réagir à cette publication." icon={MessageSquare} />
-        ) : (
-          <div style={{ padding: "8px 16px" }}>
-            {topLevel.map((c) => (
-              <div key={c.id} style={{ padding: "10px 0", borderBottom: `1px solid ${colors.border}` }}>
-                <div className="flex items-center justify-between" style={{ marginBottom: 3 }}>
-                  <div className="flex items-center gap-2">
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text }}>{c.auteur}</span>
-                    <span style={{ fontSize: 11, color: colors.textFaint }}>{c.date}</span>
-                  </div>
-                  {onDelete && meUsername && c.authorUsername === meUsername && (
-                    <button onClick={() => onDelete(c.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
-                      <Trash2 size={13.5} color={colors.textFaint} />
-                    </button>
-                  )}
-                </div>
-                <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(c.texte, colors, onOpenProfile)}</div>
-                <button onClick={() => setReplyTo({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: 4, padding: 0 }}>Répondre</button>
-                {repliesOf(c.id).map((r) => (
-                  <div key={r.id} style={{ marginTop: 8, marginLeft: 18, paddingLeft: 10, borderLeft: `2px solid ${colors.border}` }}>
-                    <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
-                      <div className="flex items-center gap-2">
-                        <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>{r.auteur}</span>
-                        <span style={{ fontSize: 10.5, color: colors.textFaint }}>{r.date}</span>
-                      </div>
-                      {onDelete && meUsername && r.authorUsername === meUsername && (
-                        <button onClick={() => onDelete(r.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
-                          <Trash2 size={12.5} color={colors.textFaint} />
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 12.5, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(r.texte, colors, onOpenProfile)}</div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+          <CommentsList comments={comments} onDelete={onDelete} meUsername={meUsername} onOpenProfile={onOpenProfile} onReply={setReplyTo} />
+        </div>
       {replyTo && (
         <div className="flex items-center justify-between" style={{ padding: "6px 16px", background: colors.surfaceAlt }}>
           <span style={{ fontSize: 11.5, color: colors.textSecondary }}>Réponse à {replyTo.auteur}</span>
@@ -3172,17 +3181,42 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
 /* ============================================================
    7. VIDÉO — VideoCard
    ============================================================ */
+// Façon YouTube plutôt que Reels : la vidéo occupe une zone dédiée (70% de
+// l'écran, pas le plein écran) et le reste — auteur, titre, durée, vues,
+// actions, commentaires — vit dans un panneau qui défile en dessous, pas
+// caché derrière une modale "Commentaires" séparée. Demandé explicitement
+// pour Vidéo - Vidéo, qui n'est pas un format vertical immersif comme les
+// Instants (voir InstantSlide, resté inchangé).
 function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = [], reposted = [], commentsByPost = {}, onLike, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenProfile }) {
+  const { colors } = useTheme();
   const videoRef = useRef(null);
-  const [sheet, setSheet] = useState(null); // 'comments' | 'actions' | 'report' | 'share' | null
+  const [sheet, setSheet] = useState(null); // 'actions' | 'report' | 'share' | null
+  const [commentText, setCommentText] = useState("");
+  const [replyTo, setReplyTo] = useState(null); // { id, auteur } | null
+  const commentsAnchorRef = useRef(null);
   // Fichier introuvable/corrompu/codec non supporté : sans ça, l'utilisateur
   // ne voit qu'un rectangle noir figé, sans savoir si ça charge encore ou si
   // c'est cassé.
   const [videoError, setVideoError] = useState(false);
+
+  // Les commentaires sont maintenant toujours visibles dans la page (plus de
+  // modale à ouvrir) : on les charge dès l'ouverture du lecteur, pas au tap.
+  useEffect(() => {
+    if (video?.id) onLoadComments?.(video.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [video?.id]);
+
   if (!video) return null;
   const isLiked = liked.includes(video.id);
-  const isReposted = reposted.includes(video.id);
-  const commentCount = commentsByPost[video.id] ? commentsByPost[video.id].length : (video.commentaires || 0);
+  const comments = commentsByPost[video.id] || [];
+  const commentCount = commentsByPost[video.id] ? comments.length : (video.commentaires || 0);
+
+  const submitComment = () => {
+    if (!commentText.trim()) return;
+    onAddComment?.(video.id, commentText.trim(), replyTo?.id || null);
+    setCommentText("");
+    setReplyTo(null);
+  };
 
   // "Retourner" la vidéo façon YouTube : plein écran natif du <video> lui-même
   // (webkitEnterFullscreen sur iOS Safari, requestFullscreen ailleurs), qui
@@ -3205,62 +3239,117 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#000", display: "flex", flexDirection: "column" }}>
-      {/* pointerEvents "none" sur le conteneur, "auto" remis sur chaque
-          bouton seulement : sans ça, cette bande capture aussi les taps dans
-          l'espace vide entre les deux boutons, au-dessus de la vidéo — et
-          bloque au passage les contrôles natifs du lecteur (AirPlay, volume)
-          qui peuvent s'afficher dans cette même zone haute selon l'appareil. */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "flex", justifyContent: "space-between", padding: "16px", paddingTop: "calc(16px + env(safe-area-inset-top, 0px))", pointerEvents: "none" }}>
-        <button onClick={rotate} aria-label="Plein écran / pivoter" style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-          <RotateCw size={16} color="#fff" />
-        </button>
-        <button onClick={onClose} aria-label="Fermer" style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-          <X size={18} color="#fff" />
-        </button>
-      </div>
-      {videoError ? (
-        <div style={{ width: "100%", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, textAlign: "center" }}>
-          <AlertTriangle size={28} color="rgba(255,255,255,0.6)" strokeWidth={1.6} />
-          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.75)" }}>Cette vidéo n'est pas disponible pour le moment.</span>
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: colors.background, display: "flex", flexDirection: "column" }}>
+      {/* Zone vidéo dédiée — 70% de l'écran, pas plein écran : le reste de la
+          page (auteur, titre, actions, commentaires) reste visible en dessous,
+          contrairement au lecteur plein écran des Instants. */}
+      <div style={{ position: "relative", width: "100%", height: "70vh", flexShrink: 0, background: "#000" }}>
+        {/* pointerEvents "none" sur le conteneur, "auto" remis sur chaque
+            bouton seulement : sans ça, cette bande capture aussi les taps dans
+            l'espace vide entre les deux boutons, au-dessus de la vidéo — et
+            bloque au passage les contrôles natifs du lecteur (AirPlay, volume)
+            qui peuvent s'afficher dans cette même zone haute selon l'appareil. */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "flex", justifyContent: "space-between", padding: "16px", paddingTop: "calc(16px + env(safe-area-inset-top, 0px))", pointerEvents: "none" }}>
+          <button onClick={rotate} aria-label="Plein écran / pivoter" style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <RotateCw size={16} color="#fff" />
+          </button>
+          <button onClick={onClose} aria-label="Fermer" style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <X size={18} color="#fff" />
+          </button>
         </div>
-      ) : (
-        <video
-          ref={videoRef}
-          src={video.videoUrl}
-          controls
-          controlsList="noremoteplayback"
-          disableRemotePlayback
-          x-webkit-airplay="deny"
-          autoPlay
-          playsInline
-          onError={() => setVideoError(true)}
-          style={{ width: "100%", flex: 1, minHeight: 0, objectFit: "contain" }}
-        />
+        {videoError ? (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, textAlign: "center" }}>
+            <AlertTriangle size={28} color="rgba(255,255,255,0.6)" strokeWidth={1.6} />
+            <span style={{ fontSize: 13, color: "rgba(255,255,255,0.75)" }}>Cette vidéo n'est pas disponible pour le moment.</span>
+          </div>
+        ) : (
+          <video
+            ref={videoRef}
+            src={video.videoUrl}
+            controls
+            controlsList="noremoteplayback"
+            disableRemotePlayback
+            x-webkit-airplay="deny"
+            autoPlay
+            playsInline
+            onError={() => setVideoError(true)}
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
+        )}
+      </div>
+
+      {/* Panneau sous la vidéo — titre, auteur, actions puis commentaires,
+          tout défile ensemble comme une vraie page, pas une modale à part. */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <div style={{ padding: "14px 18px 4px" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: colors.text, lineHeight: 1.35 }}>{video.titre}</div>
+          <div className="flex items-center gap-1.5" style={{ marginTop: 6, fontSize: 12, color: colors.textFaint }}>
+            <Eye size={13} />
+            <span>{formatCount(video.vues)} vues</span>
+            <span>·</span>
+            <span>{video.date}</span>
+            {video.duree && (
+              <>
+                <span>·</span>
+                <span>{video.duree}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between" style={{ padding: "14px 18px", marginTop: 8, borderTop: `1px solid ${colors.border}`, borderBottom: `1px solid ${colors.border}` }}>
+          <button onClick={() => onOpenProfile?.(video.username)} className="flex items-center gap-2.5" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0 }}>
+            <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+              <AvatarImg src={video.avatar} size={16} />
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{video.nom}</span>
+          </button>
+          <div className="flex items-center gap-4" style={{ flexShrink: 0 }}>
+            <button onClick={() => onLike?.(video.id)} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
+              <Heart size={19} color={isLiked ? "#E4634A" : colors.textSecondary} fill={isLiked ? "#E4634A" : "none"} strokeWidth={1.8} />
+              <AnimatedCount value={video.likes || 0} style={{ fontSize: 12, color: isLiked ? "#E4634A" : colors.textSecondary, fontWeight: isLiked ? 700 : 400 }} />
+            </button>
+            <button onClick={() => commentsAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} className="flex items-center gap-1.5" style={{ background: "none", border: "none", cursor: "pointer" }}>
+              <MessageSquare size={19} color={colors.textSecondary} strokeWidth={1.8} />
+              <AnimatedCount value={commentCount} style={{ fontSize: 12, color: colors.textSecondary }} />
+            </button>
+            {/* Option repost désactivée à la demande — voir PostCard. */}
+            <button onClick={() => setSheet("share")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+              <PisteGlyph type="gibier" size={17} color={colors.textSecondary} />
+            </button>
+            <button onClick={() => setSheet("actions")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+              <MoreHorizontal size={19} color={colors.textSecondary} />
+            </button>
+          </div>
+        </div>
+
+        <div ref={commentsAnchorRef} style={{ padding: "14px 18px 4px", fontSize: 13.5, fontWeight: 700, color: colors.text }}>
+          Commentaires{commentCount > 0 ? ` (${commentCount})` : ""}
+        </div>
+        <CommentsList comments={comments} onDelete={onDeleteComment ? (commentId) => onDeleteComment(video.id, commentId) : undefined} meUsername={meUsername} onOpenProfile={onOpenProfile} onReply={setReplyTo} />
+      </div>
+
+      {/* Champ de commentaire fixe en bas — toujours accessible, plutôt que
+          de devoir remonter tout en haut du panneau qui défile au-dessus. */}
+      {replyTo && (
+        <div className="flex items-center justify-between" style={{ padding: "6px 18px", background: colors.surfaceAlt }}>
+          <span style={{ fontSize: 11.5, color: colors.textSecondary }}>Réponse à {replyTo.auteur}</span>
+          <button onClick={() => setReplyTo(null)} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={13} color={colors.textFaint} /></button>
+        </div>
       )}
-      {/* Actions retirées de la liste Vidéos (voir VideoCard) — elles vivent
-          ici, une fois la vidéo réellement ouverte, plutôt que nulle part.
-          Séparées visuellement de la vidéo (léger filet) pour qu'on ne
-          confonde jamais un tap sur la barre de contrôle native (lecture,
-          volume, défilement — juste au-dessus) avec un tap sur ces actions. */}
-      <div className="flex items-center gap-5" style={{ padding: "10px 18px calc(12px + env(safe-area-inset-bottom, 0px))", background: "#000", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-        <button onClick={() => onLike?.(video.id)} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <Heart size={19} color={isLiked ? "#E4634A" : "#fff"} fill={isLiked ? "#E4634A" : "none"} strokeWidth={1.8} />
-          <AnimatedCount value={video.likes || 0} style={{ fontSize: 12.5, color: "#fff", fontWeight: 600 }} />
-        </button>
-        <button onClick={() => { setSheet("comments"); onLoadComments?.(video.id); }} className="flex items-center gap-1.5" style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <MessageSquare size={19} color="#fff" strokeWidth={1.8} />
-          <AnimatedCount value={commentCount} style={{ fontSize: 12.5, color: "#fff", fontWeight: 600 }} />
-        </button>
-        {/* Option repost désactivée à la demande — voir PostCard. */}
-        <button onClick={() => setSheet("share")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-          <PisteGlyph type="gibier" size={19} color="#fff" />
-        </button>
-        <div style={{ flex: 1 }} />
-        <button onClick={() => setSheet("actions")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-          <MoreHorizontal size={20} color="#fff" />
+      <div className="flex items-center gap-2" style={{ padding: `10px 18px calc(10px + env(safe-area-inset-bottom, 0px))`, borderTop: `1px solid ${colors.border}`, background: colors.background, flexShrink: 0 }}>
+        <MentionPickerButton onSelect={(u) => setCommentText((t) => (t && !t.endsWith(" ") ? t + " " : t) + `@${u.username} `)} />
+        <input
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder={replyTo ? `Répondre à ${replyTo.auteur}...` : "Ajouter un commentaire..."}
+          style={{ flex: 1, border: "none", borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13, color: colors.text, outline: "none", background: colors.surfaceAlt }}
+        />
+        <button onClick={submitComment} disabled={!commentText.trim()} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: commentText.trim() ? colors.accent : colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: commentText.trim() ? "pointer" : "default", flexShrink: 0, boxShadow: commentText.trim() ? `0 2px 8px ${colors.accent}40` : "none", transition: "background 150ms ease, box-shadow 150ms ease" }}>
+          <ChevronRight size={17} color={commentText.trim() ? "white" : colors.textFaint} />
         </button>
       </div>
+
       {sheet === "actions" && (
         <ContentActionSheet
           isOwn={video.username === meUsername}
@@ -3275,16 +3364,6 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
       )}
       {sheet === "report" && (
         <ReportSheet onClose={() => setSheet(null)} onSubmit={(reason) => { onReport?.({ targetId: video.id, targetType: "post", reason }); setSheet(null); }} />
-      )}
-      {sheet === "comments" && (
-        <CommentsSheet
-          comments={commentsByPost[video.id] || []}
-          onClose={() => setSheet(null)}
-          onAdd={(texte, parentId) => onAddComment?.(video.id, texte, parentId)}
-          onDelete={onDeleteComment ? (commentId) => onDeleteComment(video.id, commentId) : undefined}
-          meUsername={meUsername}
-          onOpenProfile={onOpenProfile}
-        />
       )}
       {sheet === "share" && <SharePostSheet item={video} onClose={() => setSheet(null)} />}
     </div>
