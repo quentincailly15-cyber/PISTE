@@ -1404,96 +1404,19 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
 // horizontal entre onglets : vers la gauche = onglet précédent (positionné à
 // gauche dans la barre), vers la droite = onglet suivant, exactement comme
 // pointer son doigt vers l'icône visée.
-const TAB_SWIPE_ORDER = ["fil", "video", "groupes", "messages", "profil"];
 function AppShell({ children, header, active, setActive, onCreate, unreadConversations, chromeMode = "full", refreshKey = 0 }) {
   const { colors } = useTheme();
-  const prevActiveRef = useRef(active);
-  // Sens du dernier changement d'onglet ('left' | 'right' | null) — pilote
-  // l'animation d'entrée du nouvel onglet (glissade fluide plutôt qu'un
-  // simple fondu), qu'il vienne d'un tap sur la barre ou d'un balayage.
-  const [navDir, setNavDir] = useState(null);
-  useEffect(() => {
-    if (prevActiveRef.current !== active) {
-      const curIdx = TAB_SWIPE_ORDER.indexOf(prevActiveRef.current);
-      const nextIdx = TAB_SWIPE_ORDER.indexOf(active);
-      setNavDir(curIdx !== -1 && nextIdx !== -1 && nextIdx !== curIdx ? (nextIdx > curIdx ? "right" : "left") : null);
-      prevActiveRef.current = active;
-    }
-  }, [active]);
-
-  const containerRef = useRef(null);
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    let startX = null;
-    let startY = null;
-    let blocked = false;
-    const onStart = (e) => {
-      const t = e.touches[0];
-      startX = t.clientX;
-      startY = t.clientY;
-      blocked = false;
-      // Ignoré si le geste démarre dans une zone qui défile déjà à
-      // l'horizontale (bandeau de Traces, chips...) ou dans un écran en
-      // détail ouvert par-dessus (fixed/absolute plein écran — GroupPage,
-      // DogPage, conversation...), pour ne jamais entrer en conflit avec un
-      // scroll existant ou le balayage-retour déjà en place sur ces écrans.
-      let node = e.target;
-      while (node && node !== el) {
-        if (node.scrollWidth > node.clientWidth + 2) { blocked = true; break; }
-        const cs = window.getComputedStyle(node);
-        if ((cs.position === "fixed" || cs.position === "absolute") && parseInt(cs.zIndex || "0", 10) >= 50) { blocked = true; break; }
-        node = node.parentElement;
-      }
-    };
-    const onEnd = (e) => {
-      if (startX === null || blocked) { startX = null; return; }
-      const t = e.changedTouches[0];
-      const dx = t.clientX - startX;
-      const dy = t.clientY - startY;
-      startX = null;
-      if (Math.abs(dx) < 70 || Math.abs(dy) > 80) return;
-      const curIdx = TAB_SWIPE_ORDER.indexOf(active);
-      if (curIdx === -1) return;
-      const nextIdx = dx < 0 ? curIdx - 1 : curIdx + 1;
-      if (nextIdx < 0 || nextIdx >= TAB_SWIPE_ORDER.length) return;
-      setActive(TAB_SWIPE_ORDER[nextIdx]);
-    };
-    const onCancel = () => { startX = null; };
-    el.addEventListener("touchstart", onStart, { passive: true });
-    el.addEventListener("touchend", onEnd, { passive: true });
-    el.addEventListener("touchcancel", onCancel, { passive: true });
-    return () => {
-      el.removeEventListener("touchstart", onStart);
-      el.removeEventListener("touchend", onEnd);
-      el.removeEventListener("touchcancel", onCancel);
-    };
-  }, [active, setActive]);
-
   return (
-    <div ref={containerRef} style={{ minHeight: "100dvh", background: colors.background }}>
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100dvh", position: "relative", background: colors.background, overflowX: "hidden" }}>
+    <div style={{ minHeight: "100dvh", background: colors.background }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100dvh", position: "relative", background: colors.background }}>
         {header}
         {/* refreshKey force un vrai remontage (donc un rechargement des données)
             quand on retape sur l'onglet déjà actif, pas seulement un défilement. */}
-        <div
-          key={`${active}-${refreshKey}`}
-          style={{
-            paddingBottom: NAV_HEIGHT + 12,
-            animation:
-              navDir === "right" ? "piste-slide-from-right 320ms cubic-bezier(0.22, 1, 0.36, 1)" :
-              navDir === "left" ? "piste-slide-from-left 320ms cubic-bezier(0.22, 1, 0.36, 1)" :
-              "piste-fade-in 220ms ease",
-          }}
-        >
-          {children}
-        </div>
+        <div key={`${active}-${refreshKey}`} style={{ paddingBottom: NAV_HEIGHT + 12, animation: "piste-fade-in 220ms ease" }}>{children}</div>
         <BottomNav active={active} setActive={setActive} onCreate={onCreate} unreadConversations={unreadConversations} chromeMode={chromeMode} />
       </div>
       <style>{`
         @keyframes piste-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes piste-slide-from-right { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes piste-slide-from-left { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: translateX(0); } }
         @keyframes piste-toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
