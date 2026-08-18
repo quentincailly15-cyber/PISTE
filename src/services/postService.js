@@ -405,8 +405,8 @@ export async function fetchPostById(postId) {
 }
 
 /** Publications où un chien précis a été identifié (table de jointure
- *  post_dogs, déjà utilisée par createPost) — sert à l'onglet correspondant
- *  de DogPage ("Photos"/"Vidéos"/"Publications"), jusqu'ici toujours vide. */
+ *  post_dogs, déjà utilisée par createPost) — sert à l'onglet "Publications"
+ *  de DogPage (tous types de médias confondus). */
 export async function fetchPostsByDog(dogId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("post_dogs")

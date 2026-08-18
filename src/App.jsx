@@ -5659,11 +5659,21 @@ function DogFormScreen({ dog, onClose, onSaved, onDeleted }) {
 }
 function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmin, isOwner = false, onEditDog, liked = [], saved = [], reposted = [], commentsByPost = {}, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments }) {
   const { colors } = useTheme();
-  const [tab, setTab] = useState("photos");
+  const [tab, setTab] = useState("publications");
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sheet, setSheet] = useState(null); // { type: 'actions'|'report'|'comments', post }
-  const tabs = [["photos", "Photos"], ["videos", "Vidéos"], ["publications", "Publications"]];
+  // Statistiques réservées au propriétaire : le carnet de chasse est
+  // strictement privé (voir huntingLogService), inaccessible même en lecture
+  // pour qui consulte la page d'un chien qui n'est pas le sien.
+  const [huntingLogs, setHuntingLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(isOwner);
+  // Un seul onglet "Publications" pour tout (photos, vidéos, texte) où ce
+  // chien est identifié — pas de tri par type de média, qui séparait
+  // artificiellement le même contenu en deux onglets.
+  const tabs = isOwner
+    ? [["publications", "Publications"], ["statistiques", "Statistiques"]]
+    : [["publications", "Publications"]];
 
   useEffect(() => {
     let cancelled = false;
@@ -5675,11 +5685,19 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
     return () => { cancelled = true; };
   }, [dog.id]);
 
-  const filtered = posts.filter((p) => {
-    if (tab === "videos") return p.type === "video" || p.type === "video_courte";
-    if (tab === "photos") return p.type !== "video" && p.type !== "video_courte" && !!p.image;
-    return p.type !== "video" && p.type !== "video_courte"; // publications : tout le reste, avec ou sans image
-  });
+  useEffect(() => {
+    if (!isOwner) return;
+    let cancelled = false;
+    setLogsLoading(true);
+    huntingLogService.fetchMyLogs()
+      .then((rows) => { if (!cancelled) setHuntingLogs(rows.filter((l) => l.dogId === dog.id)); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLogsLoading(false); });
+    return () => { cancelled = true; };
+  }, [dog.id, isOwner]);
+
+  const dogStats = useMemo(() => huntingLogService.computeStats(huntingLogs), [huntingLogs]);
+  const filtered = posts; // tout ce qui identifie ce chien, quel que soit le type
 
   const swipeBack = useSwipeBack(onClose);
   return (
@@ -5703,37 +5721,41 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
       <div className="px-4 pt-4">
         <SegmentedControl options={tabs.map(([k, l]) => ({ key: k, label: l }))} value={tab} onChange={setTab} />
       </div>
-      <div style={{ flex: 1, overflowY: "auto", paddingTop: 12 }}>
-        {loading ? (
+      <div style={{ flex: 1, overflowY: "auto", paddingTop: tab === "statistiques" ? 0 : 12 }}>
+        {tab === "statistiques" ? (
+          logsLoading ? (
+            <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+          ) : huntingLogs.length === 0 ? (
+            <EmptyState title="Aucune sortie enregistrée" subtitle={`Les statistiques du carnet de chasse où ${dog.nom} est identifié apparaîtront ici.`} icon={Footprints} />
+          ) : (
+            <div style={{ paddingTop: 12 }}><HuntingLogStatsView stats={dogStats} /></div>
+          )
+        ) : loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
         ) : filtered.length === 0 ? (
-          <EmptyState title="Aucun contenu" subtitle={`Les ${tabs.find((t) => t[0] === tab)[1].toLowerCase()} où ${dog.nom} est identifié apparaîtront ici.`} icon={Dog} />
-        ) : tab === "videos" ? (
-          filtered.map((v) => (
-            <VideoCard
-              key={v.id}
-              video={v}
-              onOpenPlayer={() => onOpenPlayer?.(v)}
-            />
-          ))
+          <EmptyState title="Aucune publication" subtitle={`Les photos et vidéos où ${dog.nom} est identifié apparaîtront ici.`} icon={Dog} />
         ) : (
-          filtered.map((p) => (
-            <PostCard
-              key={p.id}
-              post={p}
-              liked={liked.includes(p.id)}
-              saved={saved.includes(p.id)}
-              reposted={reposted.includes(p.id)}
-              commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
-              onLike={() => onLike?.(p.id)}
-              onSave={() => onSave?.(p.id)}
-              onRepost={() => onRepost?.(p.id)}
-              onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments?.(p.id); }}
-              onOpenActions={() => setSheet({ type: "actions", post: p })}
-              onOpenAuthor={() => onOpenProfile?.(p.username)}
-              onOpenProfile={onOpenProfile}
-            />
-          ))
+          filtered.map((p) =>
+            p.type === "video" || p.type === "video_courte" ? (
+              <VideoCard key={p.id} video={p} onOpenPlayer={() => onOpenPlayer?.(p)} />
+            ) : (
+              <PostCard
+                key={p.id}
+                post={p}
+                liked={liked.includes(p.id)}
+                saved={saved.includes(p.id)}
+                reposted={reposted.includes(p.id)}
+                commentCount={commentsByPost[p.id] ? commentsByPost[p.id].length : (p.commentaires || 0)}
+                onLike={() => onLike?.(p.id)}
+                onSave={() => onSave?.(p.id)}
+                onRepost={() => onRepost?.(p.id)}
+                onOpenComments={() => { setSheet({ type: "comments", post: p }); onLoadComments?.(p.id); }}
+                onOpenActions={() => setSheet({ type: "actions", post: p })}
+                onOpenAuthor={() => onOpenProfile?.(p.username)}
+                onOpenProfile={onOpenProfile}
+              />
+            )
+          )
         )}
       </div>
       {sheet?.type === "actions" && (
