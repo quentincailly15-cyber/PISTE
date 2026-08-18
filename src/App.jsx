@@ -1624,7 +1624,10 @@ function AmbientBackground({ imageUrl: imageUrlOverride, muted = false } = {}) {
   const imageUrl = imageUrlOverride !== undefined ? imageUrlOverride : contextUrl;
   // Messages : le flou reste, mais beaucoup plus discret pour ne jamais
   // nuire à la lisibilité des messages échangés dans une conversation.
-  const darken = muted ? (resolved === "dark" ? 0.9 : 0.94) : resolved === "dark" ? 0.72 : 0.82;
+  // Voile réduit (était 0.72/0.82) : à cette opacité, le fond peint par-dessus
+  // la photo floutée n'en laissait passer que 18 à 28% — la bannière choisie
+  // devenait quasi invisible, à peine différente du dégradé "aucune bannière".
+  const darken = muted ? (resolved === "dark" ? 0.9 : 0.94) : resolved === "dark" ? 0.58 : 0.66;
   // zIndex: 0 (pas négatif) : un z-index négatif peint cet élément derrière
   // le fond opaque de ses propres ancêtres (ex. le conteneur racine
   // d'AppShell), donc invisible partout. Il reste correctement derrière le
