@@ -171,6 +171,22 @@ export async function uploadConversationImage(conversationId, file) {
   return publicUrl.publicUrl;
 }
 
+/** Upload une photo de fond pour UNE conversation (bucket "conversations",
+ *  même bucket que la photo de groupe mais sous un préfixe distinct) — le
+ *  choix du fond lui-même reste une préférence locale à l'appareil (voir
+ *  localStorage côté ConversationThread), seule l'image doit être hébergée
+ *  quelque part de réel pour survivre au rechargement de la page. */
+export async function uploadConversationBackground(conversationId, file) {
+  const path = `${conversationId}/background/${Date.now()}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("conversations").upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (uploadError) throw uploadError;
+  const { data: publicUrl } = supabase.storage.from("conversations").getPublicUrl(path);
+  return publicUrl.publicUrl;
+}
+
 /** Quitte un groupe de discussion — marque sa propre ligne d'appartenance
  *  comme quittée (left_at) plutôt que de la supprimer, pour garder
  *  l'historique des messages déjà échangés. RLS ("member manages own

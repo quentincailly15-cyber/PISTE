@@ -6679,7 +6679,90 @@ function MessageBubble({ mine, media, colors }) {
   }
   return null;
 }
-function DirectConversationOptionsSheet({ conversationId, otherUser, onClose, onOpenProfile, onBlock, onReport, onDeleted }) {
+// Fond de conversation : préférence purement locale à l'appareil (comme le
+// fond d'écran de discussion dans la plupart des messageries), pas une
+// donnée partagée avec l'autre participant — stockée en localStorage par
+// conversation. Une photo choisie est réellement hébergée (bucket
+// "conversations") pour survivre au rechargement ; seule l'URL, légère,
+// vit en localStorage.
+const CONVERSATION_BG_PRESETS = [
+  { key: "defaut", label: "Défaut", gradient: null },
+  { key: "sombre", label: "Sombre", gradient: "linear-gradient(160deg, #14170D, #0D0F08)" },
+  { key: "foret", label: "Forêt", gradient: "linear-gradient(160deg, #1B2414, #0D0F08)" },
+  { key: "mousse", label: "Mousse", gradient: "linear-gradient(160deg, #2A3420, #14170D)" },
+  { key: "crepuscule", label: "Crépuscule", gradient: "linear-gradient(160deg, #2E2418, #12100B)" },
+  { key: "ardoise", label: "Ardoise", gradient: "linear-gradient(160deg, #232527, #101112)" },
+];
+function getConversationBackground(conversationId) {
+  try {
+    const raw = localStorage.getItem(`piste_conv_bg_${conversationId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function setConversationBackground(conversationId, value) {
+  try {
+    if (value) localStorage.setItem(`piste_conv_bg_${conversationId}`, JSON.stringify(value));
+    else localStorage.removeItem(`piste_conv_bg_${conversationId}`);
+  } catch { /* localStorage indisponible (navigation privée...) : la préférence ne persiste juste pas */ }
+}
+function ConversationBackgroundSheet({ conversationId, current, onApply, onClose }) {
+  const { colors } = useTheme();
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const fileInputRef = useRef(null);
+
+  const pickPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const url = await messageService.uploadConversationBackground(conversationId, file);
+      onApply({ type: "photo", url });
+      onClose();
+    } catch (err) {
+      setError(err.message || "Impossible d'utiliser cette photo pour le moment.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 72 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", pointerEvents: "auto", position: "relative", padding: "10px 20px 20px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "6px auto 14px" }} />
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, marginBottom: 12 }}>Fond de la conversation</div>
+          {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "10px 14px", fontSize: 12, color: colors.error, marginBottom: 10 }}>{error}</div>}
+          <div className="grid grid-cols-3 gap-2.5" style={{ marginBottom: 14 }}>
+            {CONVERSATION_BG_PRESETS.map((p) => {
+              const active = (current?.type === "preset" && current.key === p.key) || (!current && p.key === "defaut");
+              return (
+                <button
+                  key={p.key}
+                  onClick={() => { onApply(p.key === "defaut" ? null : { type: "preset", key: p.key }); onClose(); }}
+                  className="active:scale-95 transition-transform"
+                  style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: RADIUS.md, border: active ? `2px solid ${colors.accent}` : `1px solid ${colors.border}`, background: p.gradient || colors.surfaceAlt, cursor: "pointer", padding: 0, display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "hidden" }}
+                >
+                  <span style={{ fontSize: 9.5, fontWeight: 700, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.5)", padding: "4px 0" }}>{p.label}</span>
+                  {active && <Check size={13} color="#fff" style={{ position: "absolute", top: 4, right: 4, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }} />}
+                </button>
+              );
+            })}
+          </div>
+          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickPhoto} style={{ display: "none" }} />
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center justify-center gap-2 active:scale-[0.98] transition-transform" style={{ width: "100%", border: `1.5px solid ${colors.border}`, background: "transparent", borderRadius: RADIUS.pill, padding: "12px 14px", cursor: uploading ? "default" : "pointer" }}>
+            <ImageIcon size={15} color={colors.text} />
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text }}>{uploading ? "Envoi..." : "Choisir une photo"}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function DirectConversationOptionsSheet({ conversationId, otherUser, onClose, onOpenProfile, onBlock, onReport, onDeleted, onOpenBackground }) {
   const { colors } = useTheme();
   const [confirmAction, setConfirmAction] = useState(null); // 'delete' | 'block' | null
   const [busy, setBusy] = useState(false);
@@ -6745,6 +6828,9 @@ function DirectConversationOptionsSheet({ conversationId, otherUser, onClose, on
                     <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Voir le profil</span>
                   </button>
                 )}
+                <button onClick={() => { onClose(); onOpenBackground(); }} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Fond de la conversation</span>
+                </button>
                 <button onClick={() => setConfirmAction("delete")} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
                   <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Supprimer la conversation</span>
                 </button>
@@ -6766,7 +6852,7 @@ function DirectConversationOptionsSheet({ conversationId, otherUser, onClose, on
     </div>
   );
 }
-function GroupConversationSettingsSheet({ conversationId, title, image, onClose, onImageChanged, onLeave, onOpenProfile }) {
+function GroupConversationSettingsSheet({ conversationId, title, image, onClose, onImageChanged, onLeave, onOpenProfile, onOpenBackground }) {
   const { colors } = useTheme();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -6846,7 +6932,8 @@ function GroupConversationSettingsSheet({ conversationId, title, image, onClose,
                 ))}
               </div>
             )}
-            <div style={{ marginTop: 20 }}>
+            <button onClick={() => { onClose(); onOpenBackground(); }} className="active:scale-[0.98] transition-transform" style={{ width: "100%", background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", fontSize: 13, fontWeight: 700, color: colors.text, cursor: "pointer", textAlign: "left", marginTop: 16 }}>Fond de la conversation</button>
+            <div style={{ marginTop: 8 }}>
               {!confirmLeave ? (
                 <button onClick={() => setConfirmLeave(true)} style={{ width: "100%", background: colors.errorSoft, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", fontSize: 13, fontWeight: 700, color: colors.error, cursor: "pointer", textAlign: "left" }}>Quitter le groupe</button>
               ) : (
@@ -6886,6 +6973,9 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const { colors } = useTheme();
   const [groupImage, setGroupImage] = useState(image || null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showBgPicker, setShowBgPicker] = useState(false);
+  const [bgPref, setBgPref] = useState(() => getConversationBackground(conversationId));
+  const applyBgPref = (pref) => { setConversationBackground(conversationId, pref); setBgPref(pref); };
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -7108,7 +7198,13 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
 
   return (
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 70, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
-      <AmbientBackground />
+      {bgPref?.type === "photo" ? (
+        <AmbientBackground imageUrl={bgPref.url} />
+      ) : bgPref?.type === "preset" ? (
+        <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: CONVERSATION_BG_PRESETS.find((p) => p.key === bgPref.key)?.gradient || colors.background }} />
+      ) : (
+        <AmbientBackground />
+      )}
       <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
@@ -7120,9 +7216,13 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
         ) : messages.length === 0 ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Aucun message. Dites bonjour !</div>
         ) : (
-          messages.map((m) => {
+          messages.map((m, i) => {
             const mine = m.sender_id === meId;
             const media = m.message_media?.[0];
+            // Trait fin entre deux messages d'utilisateurs différents — repère
+            // visuel léger quand l'expéditeur change, surtout utile dans une
+            // conversation de groupe à plusieurs participants.
+            const changedSender = i > 0 && messages[i - 1].sender_id !== m.sender_id;
             // En groupe, "Lu" signifie lu par TOUS les autres membres.
             const isLastMine = mine && m.id === lastMineId;
             const readByAll = isLastMine && readState.length > 0 && readState.every((r) => r.last_read_at && new Date(r.last_read_at) >= new Date(m.created_at));
@@ -7141,7 +7241,9 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
               if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
             };
             return (
-              <div key={m.id} id={`msg-${m.id}`} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
+              <React.Fragment key={m.id}>
+                {changedSender && <div style={{ height: 1, background: colors.border, opacity: 0.6, margin: "6px 10px" }} />}
+                <div id={`msg-${m.id}`} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
                 {mine && (
                   <button onClick={() => setMsgMenu(m)} aria-label="Options du message" className="active:scale-90 transition-transform" style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginBottom: 4 }}>
                     <MoreHorizontal size={13} color={colors.textFaint} />
@@ -7243,7 +7345,8 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                     <MoreHorizontal size={13} color={colors.textFaint} />
                   </button>
                 )}
-              </div>
+                </div>
+              </React.Fragment>
             );
           })
         )}
@@ -7303,6 +7406,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
           onImageChanged={(url) => setGroupImage(url)}
           onLeave={() => { setShowSettings(false); onLeave ? onLeave() : onClose(); }}
           onOpenProfile={onOpenProfile}
+          onOpenBackground={() => setShowBgPicker(true)}
         />
       )}
       {showSettings && type !== "group" && (
@@ -7314,6 +7418,15 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
           onBlock={onBlock}
           onReport={onReport}
           onDeleted={() => { setShowSettings(false); onLeave ? onLeave() : onClose(); }}
+          onOpenBackground={() => setShowBgPicker(true)}
+        />
+      )}
+      {showBgPicker && (
+        <ConversationBackgroundSheet
+          conversationId={conversationId}
+          current={bgPref}
+          onApply={applyBgPref}
+          onClose={() => setShowBgPicker(false)}
         />
       )}
       {msgMenu && (
