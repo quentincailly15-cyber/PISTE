@@ -68,6 +68,7 @@ function mapLogRow(row, photos, meId) {
     nombrePrises: row.nombre_prises,
     nombreArrets: row.nombre_arrets,
     nombreLeves: row.nombre_leves,
+    nombreMenes: row.nombre_menes,
     nombreTires: row.nombre_tires,
     categorieGibier: row.categorie_gibier,
     notes: isOwner ? row.notes : null,
@@ -140,7 +141,7 @@ async function uploadLogPhotos(logId, files) {
   return uploaded;
 }
 
-function toRow({ date, lieuNom, lieuCommune, lieuLat, lieuLng, typeSortie, typeSortieAutre, avecChien, dogId, espece, observation, resultat, dureeMinutes, nombrePersonnes, meteo, temperature, terrain, terrainAutre, distanceKm, nombrePrises, nombreArrets, nombreLeves, nombreTires, categorieGibier, notes }) {
+function toRow({ date, lieuNom, lieuCommune, lieuLat, lieuLng, typeSortie, typeSortieAutre, avecChien, dogId, espece, observation, resultat, dureeMinutes, nombrePersonnes, meteo, temperature, terrain, terrainAutre, distanceKm, nombrePrises, nombreArrets, nombreLeves, nombreMenes, nombreTires, categorieGibier, notes }) {
   return {
     date,
     lieu_nom: lieuNom || null,
@@ -164,6 +165,7 @@ function toRow({ date, lieuNom, lieuCommune, lieuLat, lieuLng, typeSortie, typeS
     nombre_prises: nombrePrises === "" || nombrePrises === undefined ? null : nombrePrises,
     nombre_arrets: nombreArrets === "" || nombreArrets === undefined ? null : nombreArrets,
     nombre_leves: nombreLeves === "" || nombreLeves === undefined ? null : nombreLeves,
+    nombre_menes: nombreMenes === "" || nombreMenes === undefined ? null : nombreMenes,
     nombre_tires: nombreTires === "" || nombreTires === undefined ? null : nombreTires,
     categorie_gibier: categorieGibier || null,
     notes: notes || null,
@@ -249,6 +251,7 @@ export function computeStats(logs) {
   let avecChienCount = 0;
   let totalArrets = 0;
   let totalLeves = 0;
+  let totalMenes = 0;
   let totalTires = 0;
   const parCategorieGibier = {
     gros: { sorties: 0, prises: 0 },
@@ -262,6 +265,7 @@ export function computeStats(logs) {
     if (l.dureeMinutes) totalMinutes += l.dureeMinutes;
     totalArrets += l.nombreArrets || 0;
     totalLeves += l.nombreLeves || 0;
+    totalMenes += l.nombreMenes || 0;
     totalTires += l.nombreTires || 0;
     if (l.categorieGibier === "gros" || l.categorieGibier === "petit") {
       parCategorieGibier[l.categorieGibier].sorties++;
@@ -291,6 +295,7 @@ export function computeStats(logs) {
     parChien: Object.values(byDog).sort((a, b) => b.count - a.count),
     totalArrets,
     totalLeves,
+    totalMenes,
     totalTires,
     parCategorieGibier,
   };

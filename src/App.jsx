@@ -6204,6 +6204,7 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
   const [nombrePrises, setNombrePrises] = useState(log?.nombrePrises != null ? String(log.nombrePrises) : "");
   const [nombreArrets, setNombreArrets] = useState(log?.nombreArrets != null ? String(log.nombreArrets) : "");
   const [nombreLeves, setNombreLeves] = useState(log?.nombreLeves != null ? String(log.nombreLeves) : "");
+  const [nombreMenes, setNombreMenes] = useState(log?.nombreMenes != null ? String(log.nombreMenes) : "");
   const [nombreTires, setNombreTires] = useState(log?.nombreTires != null ? String(log.nombreTires) : "");
   const [categorieGibier, setCategorieGibier] = useState(log?.categorieGibier || null);
   const [notes, setNotes] = useState(log?.notes || "");
@@ -6239,6 +6240,7 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
       nombrePrises: nombrePrises ? parseInt(nombrePrises, 10) : null,
       nombreArrets: nombreArrets ? parseInt(nombreArrets, 10) : null,
       nombreLeves: nombreLeves ? parseInt(nombreLeves, 10) : null,
+      nombreMenes: nombreMenes ? parseInt(nombreMenes, 10) : null,
       nombreTires: nombreTires ? parseInt(nombreTires, 10) : null,
       categorieGibier,
       notes,
@@ -6333,6 +6335,9 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
         <div className="flex gap-3">
           <div style={{ flex: 1 }}><TextField label="Arrêts" value={nombreArrets} onChange={setNombreArrets} type="number" placeholder="0" /></div>
           <div style={{ flex: 1 }}><TextField label="Levés" value={nombreLeves} onChange={setNombreLeves} type="number" placeholder="0" /></div>
+        </div>
+        <div className="flex gap-3">
+          <div style={{ flex: 1 }}><TextField label="Menés" value={nombreMenes} onChange={setNombreMenes} type="number" placeholder="0" /></div>
           <div style={{ flex: 1 }}><TextField label="Tirés" value={nombreTires} onChange={setNombreTires} type="number" placeholder="0" /></div>
         </div>
         <TextField label="Nombre de prises" value={nombrePrises} onChange={setNombrePrises} type="number" placeholder="0" />
@@ -6391,6 +6396,7 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
     ["Distance", log.distanceKm != null ? `${log.distanceKm} km` : null],
     ["Arrêts", log.nombreArrets],
     ["Levés", log.nombreLeves],
+    ["Menés", log.nombreMenes],
     ["Tirés", log.nombreTires],
     ["Prises", log.nombrePrises],
   ].filter(([, v]) => v !== null && v !== undefined && v !== "");
@@ -6548,6 +6554,7 @@ function HuntingLogStatsView({ stats }) {
     ["Espèces observées", stats.especesObservees],
     ["Arrêts", stats.totalArrets],
     ["Levés", stats.totalLeves],
+    ["Menés", stats.totalMenes],
     ["Tirés", stats.totalTires],
   ];
   const gibierRows = [
