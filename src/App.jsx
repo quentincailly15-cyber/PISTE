@@ -2585,6 +2585,12 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
     lastTapRef.current = now;
   };
   const hasMedia = !!(post.videoUrl || post.image);
+  // Une vidéo affiche ses propres contrôles natifs collés en bas — leur
+  // superposer le dégradé + les icônes les rendrait à la fois illisibles et
+  // difficiles à toucher. L'overlay bas "immersif" ne s'applique donc qu'aux
+  // publications réellement photo (demande explicite : "pour que la photo
+  // soit plus immersive") ; une vidéo garde l'ancien rendu en flux normal.
+  const isVideoPost = !!post.videoUrl || (post.media || []).some((m) => m.type === "video");
   // L'auteur se lit en overlay sur la photo/vidéo plutôt que dans une ligne
   // séparée au-dessus — l'image porte le contenu, l'UI n'est qu'un halo
   // dessus (voir l'analyse de refonte) ; repli en ligne normale pour une
@@ -2619,6 +2625,60 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
       )}
     </div>
   );
+  // Même traitement "verre + dégradé" que authorRow(overlay) mais en bas :
+  // description, sondage, icônes et tags flottent directement sur la photo/
+  // vidéo (fondu du noir vers transparent en partant du bas) au lieu de
+  // vivre sous elle dans un bloc opaque séparé — la photo occupe alors toute
+  // la carte, plus immersif. En l'absence de média (overlay=false), c'est
+  // exactement l'ancien rendu en flux normal, inchangé.
+  const bottomBlock = (overlay) => (
+    <div
+      style={
+        overlay
+          ? { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,0.62), rgba(0,0,0,0))", padding: "30px 18px 14px" }
+          : undefined
+      }
+    >
+      {/* overflowWrap : sans ça, un mot très long (URL, hashtag collé, texte
+          sans espace) déborde de la carte au lieu de se couper — la marge
+          seule (18px) n'empêche pas ce cas précis. */}
+      {post.texte && (
+        <div style={{ padding: overlay ? 0 : "0 18px", marginBottom: 10, fontSize: 13.5, color: overlay ? "#fff" : colors.text, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.5)" : "none", lineHeight: 1.55, overflowWrap: "anywhere" }}>
+          {renderTextWithMentions(post.texte, colors, onOpenProfile)}
+        </div>
+      )}
+      {post.type === "sondage" && <div style={{ padding: overlay ? 0 : "0 18px", marginBottom: 10 }}><PollCard postId={post.id} /></div>}
+      <div className="flex items-center gap-4" style={{ padding: overlay ? 0 : "0 18px" }}>
+        <button onClick={onLike} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
+          <Heart size={17} color={liked ? colors.accent : overlay ? "#fff" : colors.textSecondary} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
+          <AnimatedCount value={post.likes || 0} style={{ fontSize: 12, color: liked ? colors.accent : overlay ? "#fff" : colors.textSecondary, fontWeight: liked ? 700 : 400 }} />
+        </button>
+        <button onClick={onOpenComments} className="flex items-center gap-1.5" style={{ background: "none", border: "none", cursor: "pointer", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
+          <MessageSquare size={17} color={overlay ? "#fff" : colors.textSecondary} strokeWidth={1.8} />
+          <AnimatedCount value={commentCount} style={{ fontSize: 12, color: overlay ? "#fff" : colors.textSecondary }} />
+        </button>
+        {/* Option repost désactivée à la demande — le reste (service, prop
+            onRepost, composant RepostRow...) reste en place pour pouvoir la
+            réactiver facilement plus tard, seul ce bouton disparaît. */}
+        <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}><Send size={17} color={overlay ? "#fff" : colors.textSecondary} strokeWidth={1.8} /></button>
+        <div style={{ flex: 1 }} />
+        <button onClick={onSave} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
+          <Bookmark size={17} color={saved ? colors.accent : overlay ? "#fff" : colors.textSecondary} fill={saved ? colors.accent : "none"} strokeWidth={1.8} />
+        </button>
+      </div>
+      {(post.animal || post.pratique || (post.hashtags && post.hashtags.length > 0)) && (
+        <div className="flex flex-wrap gap-2" style={{ padding: overlay ? "10px 0 0" : "10px 18px 0" }}>
+          {post.animal && post.animal !== "Aucun" && <span style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent, background: overlay ? "rgba(224,129,63,0.3)" : colors.accentSoft, borderRadius: RADIUS.pill, padding: "3px 9px" }}>{post.animal}</span>}
+          {post.pratique && <span style={{ fontSize: 10.5, fontWeight: 600, color: overlay ? "#fff" : colors.textSecondary, background: overlay ? "rgba(255,255,255,0.18)" : colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "3px 9px", textShadow: overlay ? "0 1px 2px rgba(0,0,0,0.3)" : "none" }}>{post.pratique}</span>}
+          {/* Simples pastilles de texte (pas de pilule, contrairement à
+              animal/pratique) — un espacement dédié plus généreux que le gap
+              du conteneur évite qu'elles ne paraissent se toucher, surtout
+              en gras sur une petite taille de police. */}
+          {(post.hashtags || []).map((h) => <span key={h} style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent, marginRight: 2, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.5)" : "none" }}>{h}</span>)}
+        </div>
+      )}
+    </div>
+  );
   return (
     // Marge latérale égale à l'espace entre deux publications (12px) : la
     // carte "flotte" sur le fond au lieu de toucher les bords de l'écran —
@@ -2636,7 +2696,12 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
         borderRadius: RADIUS.xl,
         margin: "0 12px 12px",
         overflow: "hidden",
-        paddingBottom: 14,
+        // Rien en flux normal sous une publication PHOTO (tout est dans
+        // l'overlay posé sur la photo) — 0 plutôt que 14 pour ne pas laisser
+        // une bande vide entre la photo et le bord bas de la carte. Une
+        // vidéo garde son padding normal : son contenu (icônes, tags) reste
+        // en flux sous elle, pas dans l'overlay (voir isVideoPost).
+        paddingBottom: hasMedia && !isVideoPost ? 0 : 14,
         border: `1px solid ${resolved === "dark" ? "rgba(255,255,255,0.13)" : "rgba(0,0,0,0.08)"}`,
         boxShadow: resolved === "dark"
           ? "0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)"
@@ -2680,43 +2745,14 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
             </SensitiveGate>
           </div>
           <HeartBurst show={burst} />
+          {!isVideoPost && bottomBlock(true)}
         </div>
-      ) : (
-        authorRow(false)
-      )}
-      {/* overflowWrap : sans ça, un mot très long (URL, hashtag collé, texte
-          sans espace) déborde de la carte au lieu de se couper — la marge
-          seule (18px) n'empêche pas ce cas précis. */}
-      {post.texte && <div style={{ padding: hasMedia ? "12px 18px 0" : "0 18px", fontSize: 13.5, color: colors.text, lineHeight: 1.55, overflowWrap: "anywhere" }}>{renderTextWithMentions(post.texte, colors, onOpenProfile)}</div>}
-      {post.type === "sondage" && <PollCard postId={post.id} />}
-      <div className="flex items-center gap-4" style={{ padding: "10px 18px 0" }}>
-        <button onClick={onLike} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <Heart size={17} color={liked ? colors.accent : colors.textSecondary} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
-          <AnimatedCount value={post.likes || 0} style={{ fontSize: 12, color: liked ? colors.accent : colors.textSecondary, fontWeight: liked ? 700 : 400 }} />
-        </button>
-        <button onClick={onOpenComments} className="flex items-center gap-1.5" style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <MessageSquare size={17} color={colors.textSecondary} strokeWidth={1.8} />
-          <AnimatedCount value={commentCount} style={{ fontSize: 12, color: colors.textSecondary }} />
-        </button>
-        {/* Option repost désactivée à la demande — le reste (service, prop
-            onRepost, composant RepostRow...) reste en place pour pouvoir la
-            réactiver facilement plus tard, seul ce bouton disparaît. */}
-        <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><Send size={17} color={colors.textSecondary} strokeWidth={1.8} /></button>
-        <div style={{ flex: 1 }} />
-        <button onClick={onSave} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-          <Bookmark size={17} color={saved ? colors.accent : colors.textSecondary} fill={saved ? colors.accent : "none"} strokeWidth={1.8} />
-        </button>
-      </div>
-      {(post.animal || post.pratique || (post.hashtags && post.hashtags.length > 0)) && (
-        <div className="flex flex-wrap gap-2" style={{ padding: "10px 18px 0" }}>
-          {post.animal && post.animal !== "Aucun" && <span style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent, background: colors.accentSoft, borderRadius: RADIUS.pill, padding: "3px 9px" }}>{post.animal}</span>}
-          {post.pratique && <span style={{ fontSize: 10.5, fontWeight: 600, color: colors.textSecondary, background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "3px 9px" }}>{post.pratique}</span>}
-          {/* Simples pastilles de texte (pas de pilule, contrairement à
-              animal/pratique) — un espacement dédié plus généreux que le gap
-              du conteneur évite qu'elles ne paraissent se toucher, surtout
-              en gras sur une petite taille de police. */}
-          {(post.hashtags || []).map((h) => <span key={h} style={{ fontSize: 10.5, fontWeight: 600, color: colors.accent, marginRight: 2 }}>{h}</span>)}
-        </div>
+      ) : null}
+      {(!hasMedia || isVideoPost) && (
+        <>
+          {!hasMedia && authorRow(false)}
+          {bottomBlock(false)}
+        </>
       )}
       {showShare && <SharePostSheet item={post} onClose={() => setShowShare(false)} />}
     </div>
