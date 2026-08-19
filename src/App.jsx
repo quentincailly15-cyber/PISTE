@@ -1759,7 +1759,7 @@ function ContentActionSheet({ isOwn, isAdmin, onClose, onDelete, onEdit, onRepor
           pointerEvents: "none",
         }}
       >
-      <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", padding: "10px 20px 20px", position: "relative", pointerEvents: "auto" }}>
+      <div style={{ width: "100%", maxWidth: 460, background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", padding: "10px 20px 20px", position: "relative", pointerEvents: "auto" }}>
         <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "6px auto 16px" }} />
         <div style={{ position: "absolute", top: 10, right: 12 }}><IconButton icon={X} onClick={onClose} size={30} /></div>
         {isOwn ? (
@@ -2197,7 +2197,7 @@ function MentionPickerButton({ onSelect }) {
         <div style={{ position: "fixed", inset: 0, zIndex: 95 }}>
           <div onClick={() => setOpen(false)} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
           <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-            <div style={{ width: "100%", maxWidth: 460, maxHeight: "60dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+            <div style={{ width: "100%", maxWidth: 460, maxHeight: "60dvh", background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
               <div className="flex items-center justify-between" style={{ padding: "6px 16px 8px" }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>Identifier quelqu'un</span>
@@ -2566,7 +2566,7 @@ function SharePostSheet({ item, onClose }) {
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 16px calc(28px + env(safe-area-inset-bottom, 0px))" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
-      <div style={{ width: "100%", maxWidth: 420, maxHeight: "100%", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 16px 48px rgba(0,0,0,0.28)", display: "flex", flexDirection: "column", position: "relative" }}>
+      <div style={{ width: "100%", maxWidth: 420, maxHeight: "100%", background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 16px 48px rgba(0,0,0,0.28)", display: "flex", flexDirection: "column", position: "relative" }}>
           <div className="flex items-center justify-between" style={{ padding: "16px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Envoyer à...</span>
             <IconButton icon={X} onClick={onClose} size={30} />
@@ -2995,7 +2995,7 @@ function TraceViewersSheet({ traceId, onClose }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 82 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "60dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "60dvh", background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{viewers.length} vue{viewers.length !== 1 ? "s" : ""}</span>
@@ -3250,7 +3250,7 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
 
         {confirmDelete && (
           <div style={{ position: "absolute", inset: 0, zIndex: 5, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <div style={{ width: "100%", maxWidth: 320, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, padding: 20, textAlign: "center" }}>
+            <div style={{ width: "100%", maxWidth: 320, background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, padding: 20, textAlign: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 6 }}>Supprimer cette Trace ?</div>
               <div style={{ fontSize: 12.5, color: colors.textSecondary, marginBottom: 16 }}>Elle disparaîtra immédiatement pour tout le monde.</div>
               <div className="flex gap-2">
@@ -4313,7 +4313,7 @@ function GroupImageArea({ group, height = 92, iconSize = 20 }) {
 function GroupCategoryTile({ group, onOpen }) {
   const previews = group.memberPreviews || [];
   return (
-    <button onClick={() => onOpen(group)} className="active:scale-[0.98] transition-transform" style={{ width: "100%", textAlign: "left", position: "relative", height: 76, borderRadius: RADIUS.lg, overflow: "hidden", cursor: "pointer", border: "none", padding: 0 }}>
+    <button onClick={() => onOpen(group)} className="active:scale-[0.98]" style={{ width: "100%", textAlign: "left", position: "relative", height: 76, borderRadius: RADIUS.lg, overflow: "hidden", cursor: "pointer", border: "1px solid rgba(255,255,255,0.08)", padding: 0, boxShadow: "0 6px 16px rgba(0,0,0,0.18)", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <div style={{ position: "absolute", inset: 0 }}>
         <GroupImageArea group={group} height={76} iconSize={24} />
       </div>
@@ -4590,7 +4590,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           ) : (
             <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
               {discussions.map((d) => (
-                <button key={d.id} onClick={() => setOpenDiscussion(d)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, padding: "12px 14px", cursor: "pointer", textAlign: "left" }}>
+                <button key={d.id} onClick={() => setOpenDiscussion(d)} className="flex items-center gap-3 active:scale-[0.98]" style={{ width: "100%", background: `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 55%), ${colors.surface}`, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, padding: "12px 14px", cursor: "pointer", textAlign: "left", boxShadow: "0 3px 10px rgba(0,0,0,0.08)", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                   <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <MessageSquare size={16} color={colors.accent} />
                   </div>
@@ -6589,7 +6589,7 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
     <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "82dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "82dvh", background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{formatRelativeDate(log.date)}</span>
@@ -7443,7 +7443,7 @@ function ConversationBackgroundSheet({ conversationId, current, onApply, onClose
     <div style={{ position: "fixed", inset: 0, zIndex: 72 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", pointerEvents: "auto", position: "relative", padding: "10px 20px 20px" }}>
+        <div style={{ width: "100%", maxWidth: 460, background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", pointerEvents: "auto", position: "relative", padding: "10px 20px 20px" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "6px auto 14px" }} />
           <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text, marginBottom: 12 }}>Fond de la conversation</div>
           {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "10px 14px", fontSize: 12, color: colors.error, marginBottom: 10 }}>{error}</div>}
@@ -7517,7 +7517,7 @@ function DirectConversationOptionsSheet({ conversationId, otherUser, onClose, on
     <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", pointerEvents: "auto", position: "relative" }}>
+        <div style={{ width: "100%", maxWidth: 460, background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", pointerEvents: "auto", position: "relative" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div style={{ position: "absolute", top: 10, right: 12 }}><IconButton icon={X} onClick={onClose} size={30} /></div>
           <div style={{ padding: "10px 20px 20px" }}>
@@ -7607,7 +7607,7 @@ function GroupConversationSettingsSheet({ conversationId, title, image, onClose,
     <div style={{ position: "fixed", inset: 0, zIndex: 71 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "80dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "80dvh", background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Infos du groupe</span>
@@ -8123,7 +8123,13 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                     onTouchCancel={onBubbleTouchCancel}
                     style={{
                       position: "relative",
-                      background: mine ? `linear-gradient(135deg, ${colors.accent}, ${colors.accent}dd)` : colors.headerBg,
+                      // Même verni glossy que Button/Chip/SegmentedControl
+                      // (dégradé blanc diagonal superposé à la couleur de
+                      // fond) — les bulles envoyées comme reçues gagnent le
+                      // même relief "verre liquide" que le reste de l'app.
+                      background: mine
+                        ? `linear-gradient(165deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 55%), linear-gradient(135deg, ${colors.accent}, ${colors.accent}dd)`
+                        : `linear-gradient(165deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
                       backdropFilter: mine ? "none" : "blur(20px)",
                       WebkitBackdropFilter: mine ? "none" : "blur(20px)",
                       color: mine ? colors.onAccent : colors.text,
@@ -8134,7 +8140,11 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                       fontSize: 13.5,
                       lineHeight: 1.4,
                       wordBreak: "break-word",
-                      boxShadow: highlightedId === m.id ? `0 0 0 2.5px ${colors.accent}` : mine ? `0 2px 8px ${colors.accent}30` : "0 1px 6px rgba(0,0,0,0.05)",
+                      boxShadow: highlightedId === m.id
+                        ? `0 0 0 2.5px ${colors.accent}`
+                        : mine
+                        ? `0 4px 14px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.3)`
+                        : "0 3px 10px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08)",
                       transition: "box-shadow 300ms ease",
                       cursor: "pointer",
                       userSelect: "none",
@@ -8271,7 +8281,19 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
           <button onClick={() => setReplyTo(null)} aria-label="Annuler la réponse" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, marginLeft: 8, display: "flex" }}><X size={15} color={colors.textFaint} /></button>
         </div>
       )}
-      <div className="flex items-end gap-2" style={{ padding: `10px 16px calc(14px + env(safe-area-inset-bottom, 0px))` }}>
+      {/* Barre de saisie en verre (fond + flou), séparée du fil de messages
+          par un filet clair en haut — même vocabulaire que BottomNav/sheets,
+          plutôt qu'un simple champ posé à même le fond de la conversation. */}
+      <div
+        className="flex items-end gap-2"
+        style={{
+          padding: `10px 16px calc(14px + env(safe-area-inset-bottom, 0px))`,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 40%), ${colors.headerBg}`,
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+        }}
+      >
         <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={pickMedia} style={{ display: "none" }} />
         {recording ? (
           <button onClick={stopRecording} className="flex items-center gap-2" style={{ flex: 1, border: `1.5px solid ${colors.error}`, background: colors.errorSoft, borderRadius: RADIUS.pill, padding: "10px 16px", cursor: "pointer" }}>
@@ -8289,18 +8311,20 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                 e.target.style.height = "auto";
                 e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
               }}
+              onFocus={(e) => { e.target.style.boxShadow = `inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 3px ${colors.accent}22`; }}
+              onBlur={(e) => { e.target.style.boxShadow = "inset 0 1px 3px rgba(0,0,0,0.05)"; }}
               rows={1}
               placeholder="Écrire un message..."
               // Entrée insère un saut de ligne (comportement par défaut d'un
               // textarea) — l'envoi ne se fait plus qu'au tap sur la flèche.
-              style={{ flex: 1, border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.xl, padding: "11px 16px", fontSize: 13.5, color: colors.text, outline: "none", resize: "none", maxHeight: 120, overflowY: "auto", lineHeight: 1.35, fontFamily: FONT }}
+              style={{ flex: 1, border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.xl, padding: "11px 16px", fontSize: 13.5, color: colors.text, outline: "none", resize: "none", maxHeight: 120, overflowY: "auto", lineHeight: 1.35, fontFamily: FONT, boxShadow: "inset 0 1px 3px rgba(0,0,0,0.05)", transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}
             />
             {text.trim() ? (
-              <button onClick={submit} disabled={sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: `0 2px 8px ${colors.accent}40` }}>
+              <button onClick={submit} disabled={sending} className="active:scale-90" style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: `0 4px 14px ${colors.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)`, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                 <ArrowLeft size={16} color={colors.onAccent} style={{ transform: "rotate(135deg)" }} />
               </button>
             ) : (
-              <button onClick={startRecording} disabled={sending} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+              <button onClick={startRecording} disabled={sending} className="active:scale-90" style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                 <Mic size={16} color={colors.textFaint} />
               </button>
             )}
@@ -8343,7 +8367,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
         <div style={{ position: "fixed", inset: 0, zIndex: 75 }}>
           <div onClick={() => setMsgMenu(null)} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
           <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-            <div style={{ width: "100%", maxWidth: 400, background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", padding: "10px 8px", pointerEvents: "auto" }}>
+            <div style={{ width: "100%", maxWidth: 400, background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", padding: "10px 8px", pointerEvents: "auto" }}>
               <button
                 onClick={() => {
                   const isMine = msgMenu.sender_id === meId;
@@ -8628,20 +8652,55 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <span style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Messages</span>
-          <button onClick={() => setShowNew(true)} aria-label="Nouvelle conversation" className="active:scale-90 transition-transform" style={{ width: 34, height: 34, border: "none", color: colors.text, background: colors.surfaceAlt, borderRadius: RADIUS.pill, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <button
+            onClick={() => setShowNew(true)}
+            aria-label="Nouvelle conversation"
+            className="active:scale-90"
+            style={{
+              width: 34,
+              height: 34,
+              border: `1px solid ${colors.border}`,
+              color: colors.text,
+              background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
+              borderRadius: RADIUS.pill,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+            }}
+          >
             <SquarePen size={16} strokeWidth={1.8} />
           </button>
         </div>
-        <div className="px-4 pb-3"><div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px" }}>
-          <Search size={16} color={colors.textFaint} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
-        </div></div>
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-2" style={{ background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "10px 14px", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.05)" }}>
+            <Search size={16} color={colors.textFaint} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher" style={{ border: "none", outline: "none", background: "transparent", fontSize: 13.5, color: colors.text, flex: 1 }} />
+          </div>
+        </div>
       </div>
       {!loading && quickContacts.length > 0 && !query.trim() && (
         <div className="flex gap-3" style={{ padding: "22px 16px 4px", overflowX: "auto" }}>
           {quickContacts.map((c) => (
             <button key={c.id} onClick={() => openConversation(c)} className="flex flex-col items-center gap-1 active:scale-95 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, width: 58 }}>
-              <div style={{ width: 50, height: 50, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", boxShadow: c.unread ? `0 0 0 2px ${colors.accent}` : "none" }}>
+              <div
+                style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: RADIUS.pill,
+                  background: colors.surfaceAlt,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  border: `2px solid ${c.unread ? colors.accent : "rgba(255,255,255,0.10)"}`,
+                  boxShadow: c.unread ? `0 0 12px ${colors.accent}40, 0 4px 10px rgba(0,0,0,0.18)` : "0 4px 10px rgba(0,0,0,0.14)",
+                }}
+              >
                 <AvatarImg src={c.avatar} size={20} />
               </div>
               <span style={{ fontSize: 10.5, color: colors.textSecondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 56 }}>{c.nom}</span>
@@ -8656,10 +8715,31 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
       ) : filteredConversations.length === 0 ? (
         <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Aucune conversation ne correspond à « {query} ».</div>
       ) : (
-        <div className="flex flex-col" style={{ padding: "18px 16px 4px" }}>
+        <div className="flex flex-col" style={{ padding: "18px 16px 4px", gap: 6 }}>
           {filteredConversations.map((c) => (
-            <button key={c.id} onClick={() => openConversation(c)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "9px 0", cursor: "pointer", textAlign: "left" }}>
-              <div style={{ width: 48, height: 48, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+            <button
+              key={c.id}
+              onClick={() => openConversation(c)}
+              className="flex items-center gap-3 active:scale-[0.98]"
+              style={{
+                width: "100%",
+                // Carte de verre légère plutôt qu'une ligne nue — même
+                // vocabulaire que le reste de l'app (Communautés, cartes de
+                // publication), la conversation non lue se détache avec un
+                // léger halo teinté à l'accent plutôt qu'un simple gras.
+                background: c.unread
+                  ? `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), ${colors.accentSoft}`
+                  : "transparent",
+                border: `1px solid ${c.unread ? "transparent" : "rgba(255,255,255,0.05)"}`,
+                boxShadow: c.unread ? `0 3px 12px ${colors.accent}22` : "none",
+                borderRadius: RADIUS.lg,
+                padding: "9px 10px",
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
+            >
+              <div style={{ width: 48, height: 48, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, boxShadow: "0 3px 8px rgba(0,0,0,0.14)" }}>
                 <AvatarImg src={c.avatar} size={18} fallbackIcon={c.type === "group" ? Users : User} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -8676,7 +8756,7 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
                       : "Aucun message"}
                   </span>
                   {c.unread && c.unreadCount > 0 && (
-                    <span style={{ flexShrink: 0, minWidth: 17, height: 17, borderRadius: RADIUS.pill, background: colors.accent, color: colors.onAccent, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>
+                    <span style={{ flexShrink: 0, minWidth: 17, height: 17, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, color: colors.onAccent, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", boxShadow: `0 2px 6px ${colors.accent}50` }}>
                       {c.unreadCount > 99 ? "99+" : c.unreadCount}
                     </span>
                   )}
@@ -8748,7 +8828,7 @@ function FollowListSheet({ userId, mode, onClose, onOpenProfile }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 65 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, height: "72dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, height: "72dvh", background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>{title}</span>
@@ -8796,7 +8876,7 @@ function FollowRequestsSheet({ onClose, onApprove, onReject, onOpenProfile }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 61 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: colors.overlay, animation: "piste-scrim-in 200ms ease" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", padding: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`, pointerEvents: "none" }}>
-        <div style={{ width: "100%", maxWidth: 460, maxHeight: "78dvh", background: colors.headerBg, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 460, maxHeight: "78dvh", background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%), ${colors.headerBg}`, backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", borderRadius: RADIUS.xl, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", animation: "piste-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: colors.border, margin: "10px auto 4px" }} />
           <div className="flex items-center justify-between" style={{ padding: "6px 16px 10px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: colors.text }}>Demandes d'abonnement</span>
@@ -8905,7 +8985,25 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
                 const nom = n.actor?.nom || n.actor?.username || "Quelqu'un";
                 const text = NOTIF_TEXT[n.type] ? NOTIF_TEXT[n.type](nom) : "Nouvelle notification.";
                 return (
-                  <button key={n.id} onClick={() => open(n)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: n.lu ? colors.surface : colors.accentSoft, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left", boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}>
+                  <button
+                    key={n.id}
+                    onClick={() => open(n)}
+                    className="flex items-center gap-3 active:scale-[0.98]"
+                    style={{
+                      width: "100%",
+                      background: n.lu
+                        ? `linear-gradient(165deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 55%), ${colors.surface}`
+                        : `linear-gradient(165deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 55%), ${colors.accentSoft}`,
+                      border: "none",
+                      borderRadius: RADIUS.lg,
+                      padding: "12px 14px",
+                      marginBottom: 8,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      boxShadow: n.lu ? "0 2px 8px rgba(0,0,0,0.06)" : `0 3px 12px ${colors.accent}22`,
+                      transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    }}
+                  >
                     <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                       {n.actor?.avatar ? <img loading="lazy" src={n.actor.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon size={16} color={colors.textFaint} />}
                     </div>
