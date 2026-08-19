@@ -888,7 +888,7 @@ const FAQ_ITEMS = [
   { q: "Comment suivre quelqu'un ?", a: "Cette fonctionnalité sera activée avec de vrais comptes utilisateurs — la structure est déjà prête côté interface." },
   { q: "Comment rejoindre une communauté ?", a: "Ouvrez l'onglet Communautés, choisissez une catégorie et appuyez sur « Rejoindre »." },
   { q: "Comment gérer mes notifications ?", a: "Dans Paramètres > Notifications, vous pouvez activer ou désactiver chaque type d'alerte." },
-  { q: "Comment supprimer mon compte ?", a: "Rendez-vous dans Paramètres > Données > Supprimer mon compte. Cette action nécessitera une confirmation une fois le backend connecté." },
+  { q: "Comment supprimer mon compte ?", a: "Rendez-vous dans Paramètres > Données > Supprimer mon compte. Une confirmation vous sera demandée avant la suppression définitive." },
   { q: "Comment signaler un contenu ?", a: "Appuyez sur les trois points d'une publication puis choisissez « Signaler » et sélectionnez un motif." },
   { q: "Comment bloquer quelqu'un ?", a: "Depuis les trois points d'une publication, choisissez « Bloquer l'auteur ». Vous pouvez gérer vos comptes bloqués dans Paramètres > Contenu." },
   { q: "Mes données sont-elles publiques ?", a: "Vous contrôlez la visibilité de votre compte et de vos informations dans Paramètres > Confidentialité." },
@@ -8728,8 +8728,12 @@ function ParametresScreen({ profile, setProfile, blockedAuthors, onUnblock, hidd
                   <button onClick={() => setDeleteConfirm(true)} style={{ background: colors.errorSoft, border: "none", borderRadius: RADIUS.sm, padding: "13px 14px", textAlign: "left", fontSize: 13, fontWeight: 600, color: colors.error, cursor: "pointer" }}>Supprimer mon compte</button>
                 ) : (
                   <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: 14, fontSize: 12.5, color: colors.error, lineHeight: 1.5 }}>
-                    La suppression réelle sera activée une fois le backend connecté. Cette action sera alors irréversible.
-                    <div style={{ marginTop: 8 }}><button onClick={() => setDeleteConfirm(false)} style={{ background: "none", border: "none", color: colors.error, textDecoration: "underline", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Fermer</button></div>
+                    Cette action est irréversible : votre compte, votre profil et vos publications seront définitivement supprimés.
+                    {deleteError && <div style={{ marginTop: 8, fontWeight: 600 }}>{deleteError}</div>}
+                    <div className="flex gap-3" style={{ marginTop: 8 }}>
+                      <button onClick={confirmDeleteAccount} disabled={deleting} style={{ background: "none", border: "none", color: colors.error, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>{deleting ? "Suppression..." : "Confirmer la suppression"}</button>
+                      <button onClick={() => setDeleteConfirm(false)} disabled={deleting} style={{ background: "none", border: "none", color: colors.error, textDecoration: "underline", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Annuler</button>
+                    </div>
                   </div>
                 )}
               </div>
