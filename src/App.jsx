@@ -3819,9 +3819,14 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
   const { colors } = useTheme();
   // Fond noir plein réservé à la lecture vidéo (format immersif type
   // Instants) — sans aucun instant à afficher, il n'y a pas de vidéo derrière
-  // l'EmptyState, donc on retombe sur le fond de thème habituel (colors.
-  // background) pour rester cohérent avec Fil et les autres écrans vides.
-  const containerBg = items.length === 0 ? colors.background : "#000";
+  // l'EmptyState. colors.background seul est presque aussi sombre que du
+  // noir pur en thème sombre (#0D0F08) : Fil et les autres écrans vides
+  // n'affichent jamais ce ton plat, mais le dégradé ambiant d'AmbientBackground
+  // (halo dégradé accent→fond) — c'est CE traitement qu'il faut reproduire
+  // ici pour que "vide" ait le même look partout, pas juste une valeur de
+  // couleur techniquement différente du noir mais visuellement identique.
+  const isEmpty = items.length === 0;
+  const containerBg = isEmpty ? "transparent" : "#000";
   // Instants a son propre conteneur de défilement (pas la fenêtre) — on
   // reproduit ici la même logique que le reste de l'app (masquer/pilule
   // flottante) pour un comportement cohérent partout, voir MainApp. Les
@@ -3877,6 +3882,7 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
     // "inset" par rapport au viewport.
     <div style={{ position: "fixed", inset: 0, top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100dvh", zIndex: 15, background: containerBg, display: "flex", justifyContent: "center" }}>
     <div onTouchStart={handleActivity} style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflow: "hidden", background: containerBg }}>
+      {isEmpty && <AmbientBackground />}
       {tabSwitcher && (
         <div
           style={{
@@ -3900,8 +3906,12 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
           <div style={{ pointerEvents: "auto" }}>{tabSwitcher}</div>
         </div>
       )}
-      {items.length === 0 ? (
-        <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
+      {isEmpty ? (
+        // position:relative + zIndex:1 : sans ça, cet état vide (non
+        // positionné) se peint AVANT AmbientBackground (position:fixed,
+        // zIndex:0) dans l'ordre CSS et se retrouve invisible sous lui —
+        // même bug que la barre "Publier" de GroupPage, voir ce commentaire.
+        <div style={{ position: "relative", zIndex: 1, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
           <EmptyState title="Aucun instant pour le moment" subtitle="Instants — le format vidéo court de PISTE — publiés par la communauté apparaîtront ici." icon={HelpCircle} />
         </div>
       ) : (
@@ -4328,7 +4338,14 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
     // réel, indépendamment du parent — même pattern déjà utilisé par la
     // plupart des écrans en pile de l'app (ConversationThread, HuntingLogScreen...).
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 45, background: "transparent", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto", animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
-      <AmbientBackground />
+      {/* imageUrl explicite : sans ça, AmbientBackground retombe sur la
+          bannière de profil de l'utilisateur connecté (AmbientContext) — sans
+          rapport avec CETTE communauté. Passé la zone du halo local de la
+          photo (qui ne déborde que de 28px autour d'elle), il n'y avait donc
+          plus aucune ambiance colorée, seulement le dégradé de repli qui
+          retombe vite sur colors.background — assez sombre pour sembler un
+          aplat noir sous la pilule translucide (SegmentedControl). */}
+      <AmbientBackground imageUrl={group.imageUrl || group.latestPostImage} />
       <div onScroll={handleScroll} style={{ position: "relative", zIndex: 1, flex: 1, overflowY: "auto" }}>
         <ScreenHeader title={group.nom} onBack={onClose} chromeMode={localMode} />
         <div style={{ position: "relative", margin: "10px 16px 0" }}>
