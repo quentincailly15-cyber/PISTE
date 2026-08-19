@@ -639,6 +639,17 @@ function SegmentedControl({ options, value, onChange }) {
             fontWeight: value === o.key ? 700 : 600,
             cursor: "pointer",
             whiteSpace: "nowrap",
+            // Sans ça (trouvé à l'audit "collisions PWA") : un libellé trop
+            // long pour sa part égale (1/n de la largeur, ex. "Discussions"
+            // dans une rangée à 3 onglets sur un iPhone étroit) débordait
+            // simplement de son propre bouton au lieu de s'y couper — le
+            // texte se retrouvait visuellement sur l'onglet voisin, en plus
+            // décalé par rapport au curseur glissant (qui suppose des parts
+            // strictement égales). La troncature garantit que chaque onglet
+            // reste dans sa propre part, quoi qu'il arrive.
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            minWidth: 0,
             transition: "color 220ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
@@ -1757,15 +1768,25 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                   <div
                     style={{
                       position: "relative",
-                      width: isHover ? 46 : 42,
-                      height: isHover ? 46 : 42,
+                      width: 42,
+                      height: 42,
                       borderRadius: RADIUS.pill,
                       background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       boxShadow: `0 6px 20px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.35)`,
-                      transition: "width 180ms cubic-bezier(0.22, 1, 0.36, 1), height 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                      // transform (pas width/height) : un vrai changement de
+                      // taille de boîte dans une rangée "space-between" aussi
+                      // serrée que celle-ci (voir le commentaire sur isHover
+                      // plus bas dans le fichier) redistribue l'espace entre
+                      // TOUS les boutons de la barre, pas seulement celui-ci —
+                      // exactement la cause des chevauchements signalés sur
+                      // iPhone étroit. Un transform ne déclenche jamais ce
+                      // recalcul : le bouton grossit visuellement sans jamais
+                      // pousser ses voisins.
+                      transform: isHover ? "scale(1.1)" : "scale(1)",
+                      transition: "transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
                   >
                     {createPulse > 0 && <span key={createPulse} aria-hidden="true" style={{ position: "absolute", inset: -8, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out forwards" }} />}
@@ -1791,7 +1812,14 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                     borderRadius: RADIUS.pill,
                     background: isActive || isHover ? `linear-gradient(165deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}` : "transparent",
                     boxShadow: isActive || isHover ? `0 2px 8px ${colors.accent}25, inset 0 1px 0 rgba(255,255,255,0.16)` : "none",
-                    transform: isHover ? "scale(1.08)" : "scale(1)",
+                    // Pas de transform:scale ici (retiré à l'audit "collisions
+                    // PWA") : sur un iPhone étroit (SE), les 6 icônes de cette
+                    // barre n'ont qu'environ 4px de marge entre elles au repos
+                    // — un agrandissement au survol, même léger, suffisait à
+                    // faire déborder visuellement une icône sur sa voisine.
+                    // L'icône elle-même grossit déjà légèrement (voir plus
+                    // bas) sans agrandir la boîte du bouton, donc sans risque
+                    // de chevauchement.
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
