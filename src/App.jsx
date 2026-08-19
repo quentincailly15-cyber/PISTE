@@ -5803,14 +5803,16 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, onDiscus
                       width: isDragHover ? 62 : 54,
                       height: isDragHover ? 62 : 54,
                       borderRadius: RADIUS.pill,
-                      background: isDragHover ? colors.accent : "rgba(255,255,255,0.1)",
+                      background: isDragHover
+                        ? `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`
+                        : `linear-gradient(165deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 55%), rgba(255,255,255,0.1)`,
                       backdropFilter: "blur(16px)",
                       WebkitBackdropFilter: "blur(16px)",
                       border: `1px solid ${isDragHover ? colors.accent : "rgba(255,255,255,0.22)"}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      boxShadow: isDragHover ? `0 8px 26px ${colors.accent}80` : "0 8px 22px rgba(0,0,0,0.35)",
+                      boxShadow: isDragHover ? `0 8px 26px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.3)` : "0 8px 22px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.14)",
                       transition: "width 140ms ease, height 140ms ease, background 140ms ease, box-shadow 140ms ease",
                     }}
                   >
@@ -5829,11 +5831,11 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, onDiscus
               width: 66,
               height: 66,
               borderRadius: RADIUS.pill,
-              background: colors.accent,
+              background: `linear-gradient(165deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: `0 8px 26px ${colors.accent}80`,
+              boxShadow: `0 8px 26px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.35)`,
               animation: "piste-radial-pop 340ms cubic-bezier(0.22, 1, 0.36, 1) both",
               pointerEvents: "none",
               transform: "translate(-50%, -50%)",
