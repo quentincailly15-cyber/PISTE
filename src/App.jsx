@@ -2963,11 +2963,15 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
   };
 
   const sendReply = async (texte) => {
-    if (!texte.trim() || !group?.authorId || sendingReply) return;
+    if (!texte.trim() || !group?.authorId || !trace || sendingReply) return;
     setSendingReply(true);
     try {
       const conversationId = await messageService.startDirectConversation(group.authorId);
-      await messageService.sendMessage(conversationId, texte.trim());
+      // sendSharedTrace (pas sendMessage) : le message référence la Trace
+      // elle-même (aperçu affiché dans la bulle, ConversationThread) — sans
+      // ça, le destinataire ne pouvait pas deviner à quoi la réponse se
+      // rapportait, juste un texte brut sans contexte.
+      await messageService.sendSharedTrace(conversationId, trace.id, texte.trim());
       setReplyText("");
       setReplySent(true);
       window.setTimeout(() => setReplySent(false), 1600);
@@ -7994,6 +7998,33 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.85 }}>{sp.type === "video" ? "Vidéo" : sp.type === "video_courte" ? "Instant" : sp.type === "sondage" ? "Sondage" : "Publication"} de {sp.profiles?.nom || sp.profiles?.username || "quelqu'un"}</div>
                             <div style={{ fontSize: 11.5, opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180 }}>{sp.titre || sp.texte || ""}</div>
+                          </div>
+                        </button>
+                      );
+                    })()}
+                    {m.shared_trace && (() => {
+                      const st = m.shared_trace;
+                      const stThumb = st.media_type === "video" ? null : st.media_url;
+                      return (
+                        // Une Trace expirée (24h) reste ouvrable ici — RLS
+                        // "auteur OU active" (024) : le destinataire (toujours
+                        // l'auteur de la Trace citée) la voit dans tous les
+                        // cas, mais TraceViewer travaille sur des Traces
+                        // actives, pas une Trace isolée retrouvée après coup —
+                        // ouvre donc le profil plutôt qu'un visionneur qui
+                        // pourrait ne plus rien avoir à montrer.
+                        <button
+                          onClick={(e) => { e.stopPropagation(); if (st.profiles?.username) onOpenProfile(st.profiles.username); }}
+                          className="flex items-center gap-2"
+                          style={{ width: "100%", background: mine ? "rgba(255,255,255,0.14)" : colors.surfaceAlt, border: "none", borderRadius: RADIUS.md, padding: 6, marginBottom: m.texte ? 6 : 0, cursor: "pointer", textAlign: "left" }}
+                        >
+                          <div style={{ position: "relative", width: 44, height: 44, borderRadius: RADIUS.sm, overflow: "hidden", background: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {stThumb ? <img loading="lazy" src={stThumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Film size={16} color="rgba(255,255,255,0.6)" />}
+                            {st.media_type === "video" && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)" }}><Play size={12} color="#fff" fill="#fff" /></div>}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.85 }}>Trace de {st.profiles?.nom || st.profiles?.username || "quelqu'un"}</div>
+                            <div style={{ fontSize: 11.5, opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180 }}>{st.texte || ""}</div>
                           </div>
                         </button>
                       );

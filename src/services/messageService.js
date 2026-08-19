@@ -7,6 +7,7 @@
 
 import { supabase } from "./supabaseClient.js";
 import { signPostMediaRows, pathFromStoredValue } from "./postService.js";
+import { withSignedTraceMedia } from "./traceService.js";
 
 async function requireUser() {
   const { data, error } = await supabase.auth.getUser();
@@ -239,7 +240,10 @@ export async function fetchConversationMembers(conversationId) {
 // répondre à un message sans texte (photo, vidéo, vocal, publication
 // partagée) affichait une citation vide — juste le nom de l'auteur, aucun
 // moyen de savoir à quel message précis la réponse renvoyait.
-const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!reply_to_id(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username), message_media(type), shared_post_id), message_reactions(user_id, emoji), shared_post:posts!shared_post_id(id, type, texte, titre, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url))";
+// shared_trace : référence à une Trace (répondre à une Trace, migration
+// 065) — même principe que shared_post, media_type/media_path pour signer
+// l'aperçu (withSignedTraceMedia, traceService.js), profiles pour "Trace de X".
+const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!reply_to_id(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username), message_media(type), shared_post_id), message_reactions(user_id, emoji), shared_post:posts!shared_post_id(id, type, texte, titre, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url)), shared_trace:traces!shared_trace_id(id, media_type, media_path, media_url, texte, profiles!traces_author_id_fkey(username, nom, avatar_url))";
 
 /**
  * Le bucket "messages" est privé (migration 056) — message_media.url ne
@@ -269,9 +273,16 @@ async function withSignedMedia(rows) {
   const sharedPostRows = rows.filter((m) => m.shared_post).map((m) => m.shared_post);
   const signedSharedPromise = sharedPostRows.length > 0 ? signPostMediaRows(sharedPostRows) : Promise.resolve([]);
 
-  const [{ data: signed }, signedShared] = await Promise.all([signedMediaPromise, signedSharedPromise]);
+  // shared_trace (répondre à une Trace, migration 065) — même bucket
+  // "posts" que shared_post, mais signé via withSignedTraceMedia
+  // (traceService.js) qui lit media_path, pas post_media.
+  const sharedTraceRows = rows.filter((m) => m.shared_trace).map((m) => m.shared_trace);
+  const signedTracePromise = sharedTraceRows.length > 0 ? withSignedTraceMedia(sharedTraceRows) : Promise.resolve([]);
+
+  const [{ data: signed }, signedShared, signedTrace] = await Promise.all([signedMediaPromise, signedSharedPromise, signedTracePromise]);
   const byPath = new Map((signed || []).filter((s) => !s.error).map((s) => [s.path, s.signedUrl]));
   let sharedIdx = 0;
+  let traceIdx = 0;
   return rows.map((m) => {
     const media = m.message_media?.[0];
     const p = media ? pathFromStoredValue("messages", media.url) : null;
@@ -279,6 +290,7 @@ async function withSignedMedia(rows) {
       ...m,
       message_media: media ? [{ ...media, path: p, url: (p && byPath.get(p)) || null }] : m.message_media,
       shared_post: m.shared_post ? signedShared[sharedIdx++] : m.shared_post,
+      shared_trace: m.shared_trace ? signedTrace[traceIdx++] : m.shared_trace,
     };
   });
 }
@@ -342,6 +354,24 @@ export async function sendSharedPost(conversationId, postId, note = null) {
   const { data, error } = await supabase
     .from("messages")
     .insert({ conversation_id: conversationId, sender_id: me.id, texte: note, shared_post_id: postId })
+    .select(MESSAGE_SELECT)
+    .single();
+  if (error) throw error;
+  const [signed] = await withSignedMedia([data]);
+  return signed;
+}
+
+/**
+ * Répond à une Trace — même principe que sendSharedPost, mais référence une
+ * Trace (shared_trace_id, migration 065) plutôt qu'une publication : sans
+ * ça, une réponse à une Trace n'était qu'un message texte ordinaire, sans
+ * aucun lien visible avec la Trace concernée pour le destinataire.
+ */
+export async function sendSharedTrace(conversationId, traceId, note = null) {
+  const me = await requireUser();
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({ conversation_id: conversationId, sender_id: me.id, texte: note, shared_trace_id: traceId })
     .select(MESSAGE_SELECT)
     .single();
   if (error) throw error;

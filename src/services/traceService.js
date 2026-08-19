@@ -48,7 +48,9 @@ function mapTraceRow(row, meId) {
  * source de vérité. Génère une URL signée (1h) par lot plutôt qu'une par
  * Trace — même principe que signPostMediaRows côté postService.js.
  */
-async function withSignedTraceMedia(rows) {
+// Exportée : aussi utilisée par messageService.js pour signer l'aperçu
+// d'une Trace référencée par un message (shared_trace_id, migration 065).
+export async function withSignedTraceMedia(rows) {
   const paths = rows.map((r) => r.media_path).filter(Boolean);
   if (paths.length === 0) return rows;
   const { data: signed } = await supabase.storage.from("posts").createSignedUrls(paths, 3600);
