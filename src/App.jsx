@@ -3816,6 +3816,12 @@ function SingleInstantViewer({ item, onClose, liked, reposted, commentCount, onL
 /** Fil plein écran vertical, défilement par slide (scroll-snap) — remplace la
  *  liste classique pour l'onglet "Instants". */
 function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost, onOpenComments, onOpenActions, onOpenAuthor, tabSwitcher, onChromeMode }) {
+  const { colors } = useTheme();
+  // Fond noir plein réservé à la lecture vidéo (format immersif type
+  // Instants) — sans aucun instant à afficher, il n'y a pas de vidéo derrière
+  // l'EmptyState, donc on retombe sur le fond de thème habituel (colors.
+  // background) pour rester cohérent avec Fil et les autres écrans vides.
+  const containerBg = items.length === 0 ? colors.background : "#000";
   // Instants a son propre conteneur de défilement (pas la fenêtre) — on
   // reproduit ici la même logique que le reste de l'app (masquer/pilule
   // flottante) pour un comportement cohérent partout, voir MainApp. Les
@@ -3869,8 +3875,8 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
     // se corriger un instant plus tard — les valeurs explicites lèvent toute
     // ambiguïté dès la première peinture plutôt que de dépendre du calcul de
     // "inset" par rapport au viewport.
-    <div style={{ position: "fixed", inset: 0, top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100dvh", zIndex: 15, background: "#000", display: "flex", justifyContent: "center" }}>
-    <div onTouchStart={handleActivity} style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflow: "hidden", background: "#000" }}>
+    <div style={{ position: "fixed", inset: 0, top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100dvh", zIndex: 15, background: containerBg, display: "flex", justifyContent: "center" }}>
+    <div onTouchStart={handleActivity} style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflow: "hidden", background: containerBg }}>
       {tabSwitcher && (
         <div
           style={{
@@ -4312,7 +4318,16 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
   const swipeBack = useSwipeBack(onClose);
 
   return (
-    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: "transparent", display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+    // position:"fixed" (pas "absolute") : ce panneau plein écran s'ouvre par-
+    // dessus ScreenGroupes, dont la racine (position:"relative", sans
+    // hauteur définie) n'a que la hauteur de sa propre liste de communautés —
+    // "absolute" + inset:0 s'y ancrait donc, pas au vrai viewport. Sur une
+    // liste courte, ce panneau se retrouvait plus court que l'écran, et le
+    // bouton "Publier dans cette communauté" en bas passait sous la barre de
+    // navigation plutôt qu'au-dessus. "fixed" s'ancre toujours au viewport
+    // réel, indépendamment du parent — même pattern déjà utilisé par la
+    // plupart des écrans en pile de l'app (ConversationThread, HuntingLogScreen...).
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 45, background: "transparent", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto", animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
       <div onScroll={handleScroll} style={{ position: "relative", zIndex: 1, flex: 1, overflowY: "auto" }}>
         <ScreenHeader title={group.nom} onBack={onClose} chromeMode={localMode} />
@@ -4375,7 +4390,11 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
             top: "calc(74px + env(safe-area-inset-top, 0px))",
             zIndex: 5,
             padding: "10px 16px",
-            background: colors.background,
+            // Pas de fond opaque ici : SegmentedControl a déjà son propre
+            // fond translucide (colors.headerBg) — un colors.background plein
+            // par-dessus le halo flouté de la communauté (AmbientBackground/
+            // photo de fond) créait un rectangle noir visible tout autour de
+            // la pilule, l'ambiance ne le traversait plus à cet endroit précis.
             opacity: localMode === "hidden" ? 0 : 1,
             transform: localMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
             transition: "opacity 220ms ease, transform 220ms ease",
@@ -5958,7 +5977,9 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
 
   const swipeBack = useSwipeBack(onClose);
   return (
-    <div ref={swipeBack} style={{ position: "absolute", inset: 0, zIndex: 45, background: "transparent", display: "flex", flexDirection: "column" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+    // position:"fixed" — même correctif que GroupPage (même pattern, même
+    // bug : "absolute" s'ancrait à la hauteur du parent, pas au viewport réel).
+    <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 45, background: "transparent", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto", animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
       <ScreenHeader title={dog.nom} onBack={onClose} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
