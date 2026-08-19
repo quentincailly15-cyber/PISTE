@@ -690,7 +690,7 @@ function ScreenHeader({ title, onBack, onCloseX, rightAction, chromeMode = "full
         // disparaître/réapparaître ; top n'a plus besoin de bouger.
         top: "calc(8px + env(safe-area-inset-top, 0px))",
         zIndex: 10,
-        background: colors.headerBg,
+        background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
         backdropFilter: "blur(24px)",
         WebkitBackdropFilter: "blur(24px)",
         borderBottom: floating ? "none" : `1px solid ${colors.border}`,
@@ -1542,7 +1542,7 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         // entièrement à le faire disparaître/réapparaître.
         top: "calc(8px + env(safe-area-inset-top, 0px))",
         zIndex: 20,
-        background: colors.headerBg,
+        background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
         backdropFilter: "blur(24px)",
         WebkitBackdropFilter: "blur(24px)",
         borderBottom: floating ? "none" : `1px solid ${colors.border}`,
@@ -2113,7 +2113,7 @@ function ReportSheet({ onClose, onSubmit }) {
           width: "100%",
           maxWidth: 460,
           maxHeight: "82dvh",
-          background: colors.headerBg,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
           borderRadius: RADIUS.xl,
@@ -2275,8 +2275,11 @@ function CommentLikeButton({ comment, size = 13 }) {
     }
   };
   return (
-    <button onClick={toggle} className="flex items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-      <Heart size={size} color={state.liked ? colors.accent : colors.textFaint} fill={state.liked ? colors.accent : "none"} strokeWidth={1.8} />
+    <button onClick={toggle} className="flex items-center gap-1 active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+      <span style={{ position: "relative", display: "inline-flex" }}>
+        {state.liked && <span aria-hidden="true" style={{ position: "absolute", inset: -6, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out forwards" }} />}
+        <Heart size={size} color={state.liked ? colors.accent : colors.textFaint} fill={state.liked ? colors.accent : "none"} strokeWidth={1.8} />
+      </span>
       {state.likeCount > 0 && <span style={{ fontSize: size - 1.5, color: state.liked ? colors.accent : colors.textFaint, fontWeight: state.liked ? 700 : 500 }}>{state.likeCount}</span>}
     </button>
   );
@@ -2291,7 +2294,7 @@ function CommentsList({ comments, onDelete, meUsername, onOpenProfile, onReply }
   return (
     <div style={{ padding: "8px 16px" }}>
       {topLevel.map((c) => (
-        <div key={c.id} style={{ padding: "10px 0", borderBottom: `1px solid ${colors.border}` }}>
+        <div key={c.id} style={{ padding: "12px 12px", marginBottom: 4, borderRadius: RADIUS.lg, background: `linear-gradient(165deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 40%), ${colors.surface}`, border: `1px solid ${colors.border}` }}>
           <div className="flex items-center justify-between" style={{ marginBottom: 3 }}>
             <div className="flex items-center gap-2">
               <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.text }}>{c.auteur}</span>
@@ -2373,7 +2376,7 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
           width: "100%",
           maxWidth: 460,
           height: "78dvh",
-          background: colors.headerBg,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
           borderRadius: RADIUS.xl,
@@ -2392,20 +2395,49 @@ function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenP
           <CommentsList comments={comments} onDelete={onDelete} meUsername={meUsername} onOpenProfile={onOpenProfile} onReply={setReplyTo} />
         </div>
       {replyTo && (
-        <div className="flex items-center justify-between" style={{ padding: "6px 16px", background: colors.surfaceAlt }}>
-          <span style={{ fontSize: 11.5, color: colors.textSecondary }}>Réponse à {replyTo.auteur}</span>
-          <button onClick={() => setReplyTo(null)} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={13} color={colors.textFaint} /></button>
+        <div className="flex items-center justify-between" style={{ padding: "7px 16px", background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}`, borderTop: `1px solid ${colors.border}` }}>
+          <span style={{ fontSize: 11.5, color: colors.accent, fontWeight: 600 }}>Réponse à {replyTo.auteur}</span>
+          <button onClick={() => setReplyTo(null)} className="active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}><X size={13} color={colors.accent} /></button>
         </div>
       )}
-      <div className="flex items-center gap-2" style={{ padding: "10px 16px 14px" }}>
+      <div
+        className="flex items-center gap-2"
+        style={{
+          padding: "10px 16px 14px",
+          background: `linear-gradient(165deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 30%), ${colors.headerBg}`,
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+      >
         <MentionPickerButton onSelect={(u) => setText((t) => (t && !t.endsWith(" ") ? t + " " : t) + `@${u.username} `)} />
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onFocus={(e) => { e.target.style.boxShadow = `inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 3px ${colors.accent}22`; }}
+          onBlur={(e) => { e.target.style.boxShadow = "inset 0 1px 3px rgba(0,0,0,0.05)"; }}
           placeholder={replyTo ? `Répondre à ${replyTo.auteur}...` : "Ajouter un commentaire..."}
-          style={{ flex: 1, border: "none", borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13, color: colors.text, outline: "none", background: colors.surfaceAlt }}
+          style={{ flex: 1, border: "none", borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13, color: colors.text, outline: "none", background: colors.surfaceAlt, boxShadow: "inset 0 1px 3px rgba(0,0,0,0.05)", transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}
         />
-        <button onClick={submit} disabled={!text.trim()} style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: text.trim() ? colors.accent : colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: text.trim() ? "pointer" : "default", flexShrink: 0, boxShadow: text.trim() ? `0 2px 8px ${colors.accent}40` : "none", transition: "background 150ms ease, box-shadow 150ms ease" }}>
+        <button
+          onClick={submit}
+          disabled={!text.trim()}
+          className="active:scale-90"
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: RADIUS.pill,
+            background: text.trim() ? `linear-gradient(165deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 24%), ${colors.accent}` : colors.surfaceAlt,
+            border: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: text.trim() ? "pointer" : "default",
+            flexShrink: 0,
+            boxShadow: text.trim() ? `0 4px 14px ${colors.accent}45, inset 0 1px 0 rgba(255,255,255,0.3)` : "none",
+            transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
           <ChevronRight size={17} color={text.trim() ? "white" : colors.textFaint} />
         </button>
       </div>
@@ -4939,7 +4971,7 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
           // Constant — voir Header/ScreenFil pour l'explication du bug évité.
           top: "calc(74px + env(safe-area-inset-top, 0px))",
           zIndex: 5,
-          background: colors.headerBg,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
           backdropFilter: "blur(24px)",
           WebkitBackdropFilter: "blur(24px)",
           margin: chromeMode !== "hidden" ? "0 8px" : 0,
@@ -5384,7 +5416,21 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
           <div style={{ marginBottom: 16 }}>
             <label
               htmlFor="piste-media-input"
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, border: `1.5px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: "22px 14px", textAlign: "center", cursor: "pointer" }}
+              className="active:scale-[0.99]"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 6,
+                border: `1.5px dashed ${colors.border}`,
+                borderRadius: RADIUS.md,
+                padding: "22px 14px",
+                textAlign: "center",
+                cursor: "pointer",
+                background: `linear-gradient(165deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 45%), ${colors.surfaceAlt}`,
+                boxShadow: "inset 0 1px 3px rgba(0,0,0,0.04)",
+                transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
             >
               <ImageIcon size={20} color={colors.textFaint} />
               <span style={{ fontSize: 12.5, color: colors.textFaint }}>
@@ -5407,7 +5453,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             {mediaFiles.length > 0 && (
               <div className="flex flex-wrap gap-2" style={{ marginTop: 10 }}>
                 {mediaFiles.map((f, i) => (
-                  <div key={i} style={{ position: "relative", width: 64, height: 64, borderRadius: RADIUS.sm, overflow: "hidden", background: colors.surfaceAlt }}>
+                  <div key={i} style={{ position: "relative", width: 64, height: 64, borderRadius: RADIUS.sm, overflow: "hidden", background: colors.surfaceAlt, boxShadow: "0 3px 8px rgba(0,0,0,0.14)", border: `1px solid ${colors.border}` }}>
                     {f.type.startsWith("image") ? (
                       <img loading="lazy" src={mediaPreviewUrls[i]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : (
@@ -5491,12 +5537,12 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
 
         {isPost && (
           <>
-            <button onClick={() => setShowDetails(!showDetails)} className="flex items-center justify-between" style={{ width: "100%", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "12px 14px", cursor: "pointer", marginBottom: showDetails ? 14 : 4 }}>
+            <button onClick={() => setShowDetails(!showDetails)} className="flex items-center justify-between active:scale-[0.99]" style={{ width: "100%", background: `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 40%), ${colors.surface}`, border: `1px solid ${colors.border}`, borderRadius: RADIUS.sm, padding: "12px 14px", cursor: "pointer", marginBottom: showDetails ? 14 : 4, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>Ajouter des détails (optionnel)</span>
-              <ChevronRight size={15} color={colors.textFaint} style={{ transform: showDetails ? "rotate(90deg)" : "none", transition: "transform 150ms ease" }} />
+              <ChevronRight size={15} color={colors.textFaint} style={{ transform: showDetails ? "rotate(90deg)" : "none", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }} />
             </button>
             {showDetails && (
-              <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: 16, marginBottom: 16 }}>
+              <div style={{ background: `linear-gradient(165deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 40%), ${colors.surface}`, border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: 16, marginBottom: 16, boxShadow: "0 3px 10px rgba(0,0,0,0.06)" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>ANIMAL</div>
                 <div className="flex flex-wrap gap-2" style={{ marginBottom: animal === "Autre" ? 10 : 16 }}>{ANIMALS.map((a) => <Chip key={a} label={a} active={animal === a} onClick={() => setAnimal(animal === a ? null : a)} />)}</div>
                 {animal === "Autre" && (
@@ -8714,7 +8760,7 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
           // Constant — voir Header/ScreenFil pour l'explication du bug évité.
           top: "calc(74px + env(safe-area-inset-top, 0px))",
           zIndex: 5,
-          background: colors.headerBg,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
           backdropFilter: "blur(24px)",
           WebkitBackdropFilter: "blur(24px)",
           margin: chromeMode !== "hidden" ? "0 8px" : 0,
@@ -9522,7 +9568,7 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
           bottom: 0,
           right: 0,
           width: "80%",
-          background: colors.headerBg,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
           boxShadow: "-8px 0 30px rgba(0,0,0,0.18)",
