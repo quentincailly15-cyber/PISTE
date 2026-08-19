@@ -4482,7 +4482,14 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           <EmptyState title="Aucun contenu" subtitle={`La section « ${tabs.find((t) => t[0] === tab)[1]} » de cette communauté est vide pour le moment.`} icon={HelpCircle} />
         )}
       </div>
-      <div style={{ padding: 16, borderTop: `1px solid ${colors.border}` }}>
+      {/* position:relative + zIndex:1 indispensables ici : AmbientBackground
+          (position:fixed, zIndex:0) forme sa propre sous-couche d'empilement
+          au sein de ce panneau — sans zIndex explicite, cette barre restait
+          en position "static" et se peignait donc AVANT elle dans l'ordre
+          CSS (les éléments non positionnés se peignent avant les éléments
+          positionnés, même à zIndex:0), la rendant invisible sous le fond
+          du thème malgré sa présence réelle dans le DOM. */}
+      <div style={{ position: "relative", zIndex: 1, padding: 16, borderTop: `1px solid ${colors.border}`, background: colors.background }}>
         {group.joined ? (
           <Button onClick={() => { onClose(); onCreatePost(group.id); }}>Publier dans cette communauté</Button>
         ) : (
