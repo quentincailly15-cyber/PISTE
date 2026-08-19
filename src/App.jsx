@@ -1559,7 +1559,6 @@ function LoginScreen({ onBack, onSignup }) {
 // les autres écrans restent toujours en "full".
 function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full" }) {
   const { colors } = useTheme();
-  const floating = chromeMode !== "hidden"; // toujours pilule flottante, sauf masqué au défilement
   return (
     <div
       style={{
@@ -1578,20 +1577,24 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
         backdropFilter: "blur(24px)",
         WebkitBackdropFilter: "blur(24px)",
-        // Filet plein tour en flottant (bord qui capte la lumière tout
-        // autour, pas seulement en haut via l'inset highlight) : sans lui,
-        // la pilule ne se détachait que par son ombre, jamais par un
-        // vrai bord de verre — moins net sur un fond clair ou peu contrasté.
-        border: floating ? "1px solid rgba(255,255,255,0.12)" : "none",
-        borderBottom: floating ? "none" : `1px solid ${colors.border}`,
-        margin: floating ? "0 8px" : 0,
-        borderRadius: floating ? RADIUS.pill : 0,
+        // Toujours une vraie pilule flottante — plus d'état "docked"
+        // plein-largeur/carré. Cet état ne servait plus qu'à chromeMode
+        // "hidden" (repli au scroll) depuis le passage au repli en scale :
+        // "floating" (var ci-dessus) valait déjà "true" pour "full" ET
+        // "floating", donc "false" arrivait UNIQUEMENT en mode compact — la
+        // barre redevenait carrée/plein-largeur pile au moment où elle se
+        // rétractait, l'exact bug signalé ("coins carrés" en repli). Même
+        // correction que BottomNav : ces propriétés ne dépendent plus de
+        // "floating" du tout.
+        border: "1px solid rgba(255,255,255,0.12)",
+        margin: "0 8px",
+        borderRadius: RADIUS.pill,
         // Sans ça, certains navigateurs (WebKit/Safari) peuvent peindre le
         // flou du backdrop-filter en rectangle et ignorer l'arrondi du
         // border-radius sur ses propres angles — la bordure/ombre reste
         // ronde mais le flou déborde dans les coins, qui semblent carrés.
         overflow: "hidden",
-        boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
         // Repli MODÉRÉ vers le centre (pas un rétrécissement extrême) — même
         // raison que BottomNav (voir ses commentaires) : au-delà d'un certain
         // point, l'icône devient illisible ou semble avoir disparu, ce qui
