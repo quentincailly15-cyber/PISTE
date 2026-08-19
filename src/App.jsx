@@ -7919,20 +7919,30 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   // ci-dessus calcule scrollHeight, l'image n'a souvent pas encore fini de
   // charger (pas de hauteur intrinsèque connue) — le calcul se fait donc sur
   // une hauteur de liste plus courte que la vraie, et la vue atterrit un peu
-  // AVANT le tout dernier message plutôt que dessus. Un ResizeObserver sur
-  // la liste réapplique le collage au bas à chaque fois que sa hauteur
-  // change (image qui charge, etc.), tant qu'on n'a pas manuellement
-  // remonté lire l'historique (stickToBottomRef, voir handleListScroll).
+  // AVANT le tout dernier message plutôt que dessus (repéré : elle "colle" au
+  // dernier média plutôt qu'au vrai dernier message).
+  // Un ResizeObserver posé directement sur ce conteneur ne sert à RIEN ici :
+  // en overflow:auto avec une hauteur fixée par le flex parent, la boîte de
+  // l'élément observé ne change jamais de taille quand seul son CONTENU
+  // scrollable grandit (c'est justement le principe d'overflow:auto) — le
+  // callback ne se déclenchait donc quasiment jamais. Les événements "load"
+  // (image/vidéo) ne remontent pas non plus par bulles normales, mais ILS
+  // SONT capturables en phase de capture sur un ancêtre : on écoute donc ici
+  // en position "capture" plutôt que d'observer une taille qui ne bouge pas.
   useEffect(() => {
     const el = listRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => {
+    if (!el) return;
+    const onMediaLoad = () => {
       if (stickToBottomRef.current && listRef.current) {
         listRef.current.scrollTop = listRef.current.scrollHeight;
       }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    };
+    el.addEventListener("load", onMediaLoad, true);
+    el.addEventListener("loadedmetadata", onMediaLoad, true);
+    return () => {
+      el.removeEventListener("load", onMediaLoad, true);
+      el.removeEventListener("loadedmetadata", onMediaLoad, true);
+    };
   }, []);
 
   const submit = async () => {
@@ -8074,7 +8084,13 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
       <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
-      <div ref={listRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* overflowAnchor:"none" : le navigateur ajuste sinon lui-même scrollTop
+          en douce quand une image au-dessus du viewport change de taille
+          (scroll anchoring natif) — ça pouvait entrer en conflit avec notre
+          propre gestion (stickToBottomRef) et laisser la vue collée près
+          d'un média plutôt qu'au vrai dernier message. On garde la seule
+          logique JS explicite ci-dessus comme unique source de vérité. */}
+      <div ref={listRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: "auto", overflowAnchor: "none", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
         ) : loadError ? (
