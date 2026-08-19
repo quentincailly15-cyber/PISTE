@@ -363,27 +363,30 @@ function PisteGlyph({ type, size = 16, color }) {
 
 function Button({ children, onClick, disabled, variant = "primary", full = true }) {
   const { colors } = useTheme();
-  // Relief à deux couches (halo doux + ombre de contact resserrée) plutôt
-  // qu'une seule ombre plate — c'est ce qui donne l'impression que le bouton
-  // "flotte" légèrement au-dessus de la page. Le filet clair en haut
-  // (inset 0 1px 0) est le repère classique du verre liquide : un bord qui
-  // capte la lumière, cohérent avec SegmentedControl/les sheets déjà glass.
+  // Relief à trois couches (halo large + ombre de contact + verni brillant en
+  // surface) plutôt qu'une seule ombre plate — le dégradé glossy en haut
+  // (2 calques de "background" superposés : le verni, puis la vraie couleur)
+  // est ce qui donne l'impression d'une surface de verre bombée plutôt qu'un
+  // simple aplat, façon "liquid glass" — bien plus marqué que juste un filet.
   const styles = {
     primary: {
-      background: disabled ? colors.border : colors.accent,
+      background: disabled
+        ? colors.border
+        : `linear-gradient(165deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`,
       color: disabled ? colors.textFaint : colors.onAccent,
       border: "none",
-      boxShadow: disabled ? "none" : `0 6px 18px ${colors.accent}3D, 0 1px 2px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.22)`,
+      boxShadow: disabled ? "none" : `0 10px 28px ${colors.accent}55, 0 2px 5px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.35)`,
     },
     secondary: {
       // Translucide + flou plutôt qu'un aplat — même langage "glass" que le
-      // reste des surfaces flottantes de l'app (headerBg, SegmentedControl).
-      background: colors.headerBg,
-      backdropFilter: "blur(16px)",
-      WebkitBackdropFilter: "blur(16px)",
+      // reste des surfaces flottantes de l'app (headerBg, SegmentedControl),
+      // + le même verni en surface que le primaire pour rester cohérent.
+      background: `linear-gradient(165deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
+      backdropFilter: "blur(20px)",
+      WebkitBackdropFilter: "blur(20px)",
       color: colors.text,
       border: `1px solid ${colors.border}`,
-      boxShadow: "0 2px 8px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.06)",
+      boxShadow: "0 4px 14px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.10)",
     },
     ghost: { background: "transparent", color: colors.accent, border: "none" },
   }[variant];
@@ -424,13 +427,15 @@ function IconButton({ icon: Icon, onClick, size = 36, active }) {
         alignItems: "center",
         justifyContent: "center",
         // Verre plutôt qu'aplat (colors.surfaceAlt était opaque) — cohérent
-        // avec le reste des pastilles flottantes de l'app, + relief léger
-        // pour que le bouton se détache de la page sans peser visuellement.
-        background: active ? colors.accentSoft : colors.headerBg,
+        // avec le reste des pastilles flottantes de l'app, + relief plus
+        // marqué (halo + verni) pour que le bouton se détache franchement.
+        background: active
+          ? `linear-gradient(165deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0) 55%), ${colors.accentSoft}`
+          : `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
         border: `1px solid ${active ? "transparent" : colors.border}`,
-        boxShadow: active ? `0 2px 8px ${colors.accent}30` : "0 1px 4px rgba(0,0,0,0.08)",
+        boxShadow: active ? `0 4px 14px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.25)` : "0 2px 8px rgba(0,0,0,0.10)",
         cursor: "pointer",
         transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
       }}
@@ -465,12 +470,14 @@ function Chip({ label, active, onClick, solid = false }) {
       style={{
         border: `1.5px solid ${active ? colors.accent : colors.border}`,
         // Verre au repos (colors.surface était un aplat opaque) — actif
-        // reste pleinement coloré (accent/accentSoft), c'est justement ce
-        // contraste verre→couleur qui rend l'état actif lisible d'un coup d'œil.
-        background: active ? (solid ? colors.accent : colors.accentSoft) : colors.headerBg,
+        // reste pleinement coloré (accent/accentSoft) mais gagne le même
+        // verni glossy que Button/Chip icône, pour un relief plus marqué.
+        background: active
+          ? `linear-gradient(165deg, rgba(255,255,255,${solid ? 0.32 : 0.22}) 0%, rgba(255,255,255,0) 55%), ${solid ? colors.accent : colors.accentSoft}`
+          : `linear-gradient(165deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
         backdropFilter: active ? "none" : "blur(12px)",
         WebkitBackdropFilter: active ? "none" : "blur(12px)",
-        boxShadow: active ? `0 2px 8px ${colors.accent}30` : "none",
+        boxShadow: active ? `0 4px 12px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.25)` : "none",
         color: active ? (solid ? colors.onAccent : colors.accent) : colors.textSecondary,
         borderRadius: RADIUS.pill,
         padding: "9px 15px",
@@ -566,8 +573,9 @@ function SegmentedControl({ options, value, onChange }) {
             flex: 1,
             border: "none",
             // Translucide, pas un aplat plein — la référence garde ce
-            // même verre légèrement teinté même sur ses pilules "actives".
-            background: value === o.key ? `${colors.accent}CC` : "transparent",
+            // même verre légèrement teinté même sur ses pilules "actives",
+            // + le même verni glossy que Button/Chip pour un relief marqué.
+            background: value === o.key ? `linear-gradient(165deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 55%), ${colors.accent}CC` : "transparent",
             backdropFilter: value === o.key ? "blur(8px)" : "none",
             WebkitBackdropFilter: value === o.key ? "blur(8px)" : "none",
             color: value === o.key ? colors.onAccent : colors.textFaint,
@@ -580,7 +588,7 @@ function SegmentedControl({ options, value, onChange }) {
             // Relief à deux couches sur la pilule active, même recette que
             // Button primary (halo + filet clair en haut) pour qu'elle se
             // détache du verre du fond plutôt que de rester à plat dessus.
-            boxShadow: value === o.key ? `0 3px 10px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.25)` : "none",
+            boxShadow: value === o.key ? `0 4px 14px ${colors.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)` : "none",
             transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
             animation: value === o.key ? "piste-pill-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
           }}
@@ -1576,7 +1584,7 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
           width: "100%",
           maxWidth: 480,
           pointerEvents: "auto",
-          background: colors.navBg,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 40%), ${colors.navBg}`,
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
           borderTop: floating ? "none" : `1px solid ${colors.border}`,
@@ -1602,7 +1610,7 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                   {/* Plus de décalage vers le haut (marginTop négatif) : le
                       bouton flotte maintenant centré entre le haut et le bas
                       de la pilule, comme les autres icônes de la barre. */}
-                  <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 16px ${colors.accent}70, inset 0 1px 0 rgba(255,255,255,0.3)`, transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                  <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 20px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.35)`, transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                     <Plus size={21} color={colors.onAccent} strokeWidth={2.4} />
                   </div>
                 </button>
@@ -1875,13 +1883,13 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
               {traceGroup && traceGroup.traces.length > 0 ? (
                 <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
                   <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, #5A6B3B)` }}>
-                    <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(255,255,255,0.14)", boxShadow: `0 8px 22px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.10)`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                       <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
                     </div>
                   </div>
                 </button>
               ) : (
-                <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: "4px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(255,255,255,0.16)", boxShadow: `0 10px 28px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.05), 0 0 22px ${colors.accent}26, inset 0 1px 0 rgba(255,255,255,0.12)`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
                 </div>
               )}
@@ -7103,13 +7111,13 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
           {traceGroup && traceGroup.traces.length > 0 ? (
             <button onClick={onOpenTrace} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: RADIUS.pill }}>
               <div style={{ width: 92, height: 92, borderRadius: RADIUS.pill, padding: 3, boxSizing: "border-box", background: traceGroup.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, #5A6B3B)` }}>
-                <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(255,255,255,0.14)", boxShadow: `0 8px 22px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.10)`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
                 </div>
               </div>
             </button>
           ) : (
-            <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: "4px solid rgba(13,15,8,0.55)", boxShadow: "0 6px 18px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            <div style={{ width: 86, height: 86, borderRadius: RADIUS.pill, background: colors.surface, border: "3px solid rgba(255,255,255,0.16)", boxShadow: `0 10px 28px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.05), 0 0 22px ${colors.accent}26, inset 0 1px 0 rgba(255,255,255,0.12)`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               <AvatarImg src={profile.avatar} size={34} strokeWidth={1.6} />
             </div>
           )}
