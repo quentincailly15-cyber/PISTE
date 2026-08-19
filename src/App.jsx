@@ -3015,7 +3015,7 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
     </div>
   );
 }
-function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, following, myGroupIds, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEdit, onReport, onHide, onBlock, onEditRequest, onLoadComments, chromeMode = "full", traceGroups = [], onOpenTraceGroup, onCreateOwnTrace }) {
+function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, following, myGroupIds, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEdit, onReport, onHide, onBlock, onEditRequest, onLoadComments, chromeMode = "full", traceGroups = [], onOpenTraceGroup, onCreateOwnTrace, justPublishedIds = [] }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("pourtoi");
   const [sheet, setSheet] = useState(null); // { type: 'actions'|'report'|'comments'|'author', post }
@@ -3036,17 +3036,33 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
   const postIdsKey = posts.map((p) => p.id).join(",");
   const followingKey = following.join(",");
   const myGroupIdsKey = (myGroupIds || []).join(",");
+  const justPublishedKey = justPublishedIds.join(",");
   const orderedIds = useMemo(() => {
     const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: profile.estMineur, following, interests: profile.interets || [], myGroupIds: myGroupIds || [], now: Date.now() };
     let ordered;
-    if (tab === "pourtoi") ordered = buildFeed(posts, ctx);
+    if (tab === "pourtoi") {
+      ordered = buildFeed(posts, ctx);
+      // Retour immédiat sur sa propre publication : l'algorithme pondéré ne
+      // la place pas forcément en tête (voulu, "Pour toi" n'est pas un flux
+      // chronologique) — on l'épingle donc devant, sans changer le classement
+      // du reste. justPublishedIds dans son propre ordre (plus récent publié
+      // en premier), suivi du reste déjà classé par buildFeed.
+      if (justPublishedIds.length > 0) {
+        const orderedIdSet = new Set(ordered.map((p) => p.id));
+        const pinned = justPublishedIds.filter((id) => orderedIdSet.has(id));
+        if (pinned.length > 0) {
+          const pinnedSet = new Set(pinned);
+          ordered = [...pinned.map((id) => ordered.find((p) => p.id === id)), ...ordered.filter((p) => !pinnedSet.has(p.id))];
+        }
+      }
+    }
     // Abonnements = chronologique strict (comme Vidéo - Vidéo) : on veut voir les
     // dernières publications des comptes suivis dans l'ordre, pas un classement
     // pondéré qui ferait remonter un ancien post populaire devant un tout nouveau.
     else ordered = buildChronologicalFeed(posts.filter((p) => following.includes(p.username)), ctx);
     return ordered.map((p) => p.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, postIdsKey, followingKey, myGroupIdsKey, profile.id, profile.estMineur]);
+  }, [tab, postIdsKey, followingKey, myGroupIdsKey, justPublishedKey, profile.id, profile.estMineur]);
   const postsById = new Map(posts.map((p) => [p.id, p]));
   const visible = orderedIds.map((id) => postsById.get(id)).filter(Boolean);
 
@@ -9234,10 +9250,20 @@ function MainApp({ session, onboardingData, ageInfo }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, profileLoaded]);
 
+  // Retour immédiat sur sa propre publication dans "Pour toi" (voir ScreenFil) :
+  // l'algorithme pondéré ne place pas forcément une publication toute fraîche
+  // en tête (c'est voulu, "Pour toi" n'est pas un flux chronologique) — sans
+  // ça, publier puis ne pas se voir en premier se lit comme "ça n'a pas
+  // marché". Volontairement non persisté : redevient un post normal, classé
+  // par l'algorithme comme les autres, dès que l'app est rechargée.
+  const [justPublishedIds, setJustPublishedIds] = useState([]);
   const handlePublished = (type, item) => {
     if (!item) return;
     if (type === "video" || type === "video_courte") setVideos((v) => [{ ...item, titre: item.titre || item.texte || "Sans titre" }, ...v]);
-    else setPosts((p) => [item, ...p]);
+    else {
+      setPosts((p) => [item, ...p]);
+      setJustPublishedIds((ids) => [item.id, ...ids].slice(0, 20));
+    }
     showToast("Publication publiée.");
   };
   const handleEdited = (updated) => {
@@ -9494,6 +9520,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
         traceGroups={traceGroups}
         onOpenTraceGroup={openTraceGroup}
         onCreateOwnTrace={createOwnTrace}
+        justPublishedIds={justPublishedIds}
       />
     ),
     video: (
