@@ -8352,7 +8352,7 @@ function FollowRequestsSheet({ onClose, onApprove, onReject, onOpenProfile }) {
     </div>
   );
 }
-function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenPost, onGoToFeed, onUnreadChange }) {
+function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenPost, onOpenTraceByAuthor, onGoToFeed, onUnreadChange }) {
   const { colors } = useTheme();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -8379,6 +8379,10 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
     // pour like/comment/repost/mention/new_post.
     if (n.type === "message" || n.type === "group_invite" || n.targetType === "conversation") onOpenConversation(n.targetId);
     else if (n.targetType === "post") onOpenPost(n.targetId, n.type);
+    // "trace" amène directement sur la Trace elle-même (comme post/
+    // conversation), pas seulement sur le profil de son auteur — avant,
+    // ce cas retombait dans la branche follow/profil ci-dessous.
+    else if (n.targetType === "trace" && n.actor?.username && onOpenTraceByAuthor?.(n.actor.username)) { /* déjà géré */ }
     else if (n.type === "follow" || n.actor?.username) onOpenAuthor(n.actor.username);
     else onGoToFeed();
     onClose();
@@ -9574,6 +9578,12 @@ function MainApp({ session, onboardingData, ageInfo }) {
           onOpenConversation={(conversationId) => { setPendingConversationId(conversationId); setActive("messages"); }}
           onOpenAuthor={setOpenProfileUsername}
           onOpenPost={openNotificationPost}
+          onOpenTraceByAuthor={(username) => {
+            const idx = traceGroups.findIndex((g) => g.username === username);
+            if (idx < 0) return false; // Trace expirée depuis — repli sur le profil de l'auteur
+            openTraceGroup(idx);
+            return true;
+          }}
           onGoToFeed={() => setActive("fil")}
         />
       )}
