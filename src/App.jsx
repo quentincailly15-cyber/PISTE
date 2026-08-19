@@ -8600,17 +8600,24 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
           <button onClick={() => setReplyTo(null)} aria-label="Annuler la réponse" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, marginLeft: 8, display: "flex" }}><X size={15} color={colors.textFaint} /></button>
         </div>
       )}
-      {/* Barre de saisie en verre (fond + flou), séparée du fil de messages
-          par un filet clair en haut — même vocabulaire que BottomNav/sheets,
-          plutôt qu'un simple champ posé à même le fond de la conversation. */}
+      {/* Bulle flottante (pas un bandeau rectangulaire plein-largeur collé au
+          bord) — même vocabulaire que BottomNav : marge, coins arrondis,
+          bord de verre et ombre, détachée du fil plutôt que soudée dessous. */}
       <div
         className="flex items-end gap-2"
         style={{
-          padding: `10px 16px calc(14px + env(safe-area-inset-bottom, 0px))`,
-          background: `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 40%), ${colors.headerBg}`,
+          padding: "10px 14px",
+          margin: `0 10px calc(10px + env(safe-area-inset-bottom, 0px))`,
+          borderRadius: RADIUS.xl,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
           backdropFilter: "blur(24px)",
           WebkitBackdropFilter: "blur(24px)",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          // overflow:hidden : garantit que le flou respecte bien l'arrondi
+          // (voir le même correctif ailleurs — WebKit peut sinon peindre le
+          // flou en rectangle et ignorer le border-radius dans les coins).
+          overflow: "hidden",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.10)",
         }}
       >
         <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={pickMedia} style={{ display: "none" }} />
