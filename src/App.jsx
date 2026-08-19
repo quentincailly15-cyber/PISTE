@@ -7459,7 +7459,23 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
       if (cancelled || updated.user_id === meId) return;
       setReadState((rs) => rs.map((r) => (r.user_id === updated.user_id ? { ...r, last_read_at: updated.last_read_at } : r)));
     });
-    return () => { cancelled = true; unsubscribe(); unsubscribeRead(); };
+    // Filet de sécurité : le socket Realtime peut se couper silencieusement
+    // quand le téléphone se verrouille ou qu'on change d'appli un instant
+    // (comportement normal des navigateurs mobiles) — sans reconnexion
+    // automatique fiable, un message reçu pendant cette coupure n'apparaît
+    // jamais tant qu'on ne quitte pas la conversation pour la rouvrir (le
+    // symptôme exact remonté). On force donc un rechargement à chaque retour
+    // au premier plan, qu'il y ait vraiment eu une coupure ou non.
+    const onVisible = () => { if (!cancelled && document.visibilityState === "visible") { refetch(); markRead(); } };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      unsubscribeRead();
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
