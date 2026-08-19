@@ -6,6 +6,7 @@
 // realtime.
 
 import { supabase } from "./supabaseClient.js";
+import { signPostMediaRows } from "./postService.js";
 
 async function requireUser() {
   const { data, error } = await supabase.auth.getUser();
@@ -247,16 +248,32 @@ const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avata
  * en un seul appel groupé plutôt qu'un par média. `path` reste accessible
  * à côté de `url` (signée) pour que deleteMessage() puisse supprimer le
  * fichier sans avoir à re-parser une URL.
+ *
+ * Un message peut aussi porter une publication partagée (shared_post,
+ * migration 041) dont les médias vivent dans le bucket "posts" — lui aussi
+ * privé (migration 059). signPostMediaRows() (postService.js) fait exactement
+ * le même travail pour ce bucket-là ; on la réutilise plutôt que dupliquer
+ * la logique de signature.
  */
 async function withSignedMedia(rows) {
   const paths = rows.map((m) => m.message_media?.[0]?.url).filter(Boolean);
-  if (paths.length === 0) return rows;
-  const { data: signed } = await supabase.storage.from("messages").createSignedUrls(paths, 3600);
+  const signedMediaPromise = paths.length > 0
+    ? supabase.storage.from("messages").createSignedUrls(paths, 3600)
+    : Promise.resolve({ data: [] });
+
+  const sharedPostRows = rows.filter((m) => m.shared_post).map((m) => m.shared_post);
+  const signedSharedPromise = sharedPostRows.length > 0 ? signPostMediaRows(sharedPostRows) : Promise.resolve([]);
+
+  const [{ data: signed }, signedShared] = await Promise.all([signedMediaPromise, signedSharedPromise]);
   const byPath = new Map((signed || []).filter((s) => !s.error).map((s) => [s.path, s.signedUrl]));
+  let sharedIdx = 0;
   return rows.map((m) => {
     const media = m.message_media?.[0];
-    if (!media) return m;
-    return { ...m, message_media: [{ ...media, path: media.url, url: byPath.get(media.url) || null }] };
+    return {
+      ...m,
+      message_media: media ? [{ ...media, path: media.url, url: byPath.get(media.url) || null }] : m.message_media,
+      shared_post: m.shared_post ? signedShared[sharedIdx++] : m.shared_post,
+    };
   });
 }
 
@@ -277,6 +294,24 @@ export async function fetchMessages(conversationId, { limit = 300 } = {}) {
     .limit(limit);
   if (error) throw error;
   return withSignedMedia([...data].reverse());
+}
+
+/**
+ * Un message précis par id — sert de secours quand on tape sur une citation
+ * "Réponse à X" dont l'original est hors des `limit` messages les plus
+ * récents chargés par fetchMessages (voir scrollToMessage, App.jsx) : sans
+ * ça, cliquer sur une vieille citation ne faisait rien, sans retour visuel.
+ */
+export async function fetchMessageById(messageId) {
+  const { data, error } = await supabase
+    .from("messages")
+    .select(MESSAGE_SELECT)
+    .eq("id", messageId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const [signed] = await withSignedMedia([data]);
+  return signed;
 }
 
 export async function sendMessage(conversationId, texte, replyToId = null) {
@@ -304,7 +339,8 @@ export async function sendSharedPost(conversationId, postId, note = null) {
     .select(MESSAGE_SELECT)
     .single();
   if (error) throw error;
-  return data;
+  const [signed] = await withSignedMedia([data]);
+  return signed;
 }
 
 /**

@@ -3,6 +3,7 @@
 // voir 001_init.sql, qui contient déjà les 24 groupes prédéfinis de PISTE).
 
 import { supabase } from "./supabaseClient.js";
+import { signPostMediaRows } from "./postService.js";
 
 function mapGroupRow(row, myGroupIds, previewsByGroup, latestPostByGroup) {
   const latest = latestPostByGroup?.get(row.id) || null;
@@ -77,8 +78,11 @@ export async function fetchGroups() {
     .eq("content_rating", "normal")
     .order("created_at", { ascending: false })
     .limit(500);
+  // Bucket "posts" privé (migration 059) — url/thumbnail_url ne sont plus
+  // des URLs publiques directement affichables.
+  const signedRecentPostRows = await signPostMediaRows(recentPostRows || []);
   const latestPostByGroup = new Map();
-  for (const r of recentPostRows || []) {
+  for (const r of signedRecentPostRows) {
     if (latestPostByGroup.has(r.group_id)) continue;
     const media = [...(r.post_media || [])].sort((a, b) => (a.ordre || 0) - (b.ordre || 0))[0];
     if (!media) continue;
@@ -226,16 +230,20 @@ function mapDiscussionMessageRow(row, meId) {
   };
 }
 
-export async function fetchDiscussionMessages(discussionId) {
+// limit : aucune borne jusqu'ici — même défaut que fetchMessages/fetchComments
+// (déjà corrigé ailleurs), oublié sur les discussions de groupe. Mêmes
+// `limit` PLUS RÉCENTS repris dans l'ordre chronologique attendu par l'affichage.
+export async function fetchDiscussionMessages(discussionId, { limit = 300 } = {}) {
   const { data: userData } = await supabase.auth.getUser();
   const meId = userData?.user?.id || null;
   const { data, error } = await supabase
     .from("group_discussion_messages")
     .select(DISCUSSION_MESSAGE_SELECT)
     .eq("discussion_id", discussionId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
-  return data.map((row) => mapDiscussionMessageRow(row, meId));
+  return [...data].reverse().map((row) => mapDiscussionMessageRow(row, meId));
 }
 
 export async function sendDiscussionMessage(discussionId, texte, replyToId = null) {

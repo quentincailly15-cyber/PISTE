@@ -191,12 +191,47 @@ export async function saveGeneratedThumbnail(mediaId, videoUrl) {
     contentType: "image/jpeg",
   });
   if (uploadError) throw uploadError;
-  const { data: publicUrl } = supabase.storage.from("posts").getPublicUrl(path);
+  // Chemin brut stocké (pas d'URL publique — le bucket est privé, migration
+  // 059) : une URL signée est générée à la demande, ici pour l'affichage
+  // immédiat, et à chaque fetch de publications ensuite (voir signPostMediaRows).
   // Best-effort : pas d'auteur ou pas notre publication -> RLS refuse
   // l'update (résout avec un champ "error", ne rejette jamais) ; on ne le
   // vérifie même pas, l'appelant affiche de toute façon l'URL retournée.
-  await supabase.from("post_media").update({ thumbnail_url: publicUrl.publicUrl }).eq("id", mediaId);
-  return publicUrl.publicUrl;
+  await supabase.from("post_media").update({ thumbnail_url: path }).eq("id", mediaId);
+  const { data: signed } = await supabase.storage.from("posts").createSignedUrl(path, 3600);
+  return signed?.signedUrl || null;
+}
+
+/**
+ * Le bucket "posts" est privé (migration 059) — post_media.url et
+ * .thumbnail_url ne contiennent plus une URL publique mais le chemin
+ * Storage brut. Génère ici des URLs signées (1h) pour tous les médias d'un
+ * lot de publications en un seul appel groupé (pas un par média/par post) —
+ * même principe que withSignedMedia côté messageService.js. Exportée : aussi
+ * utilisée par messageService.js (publication partagée en message) et
+ * groupService.js (vignette dynamique d'une communauté).
+ */
+export async function signPostMediaRows(rows) {
+  const paths = new Set();
+  for (const row of rows) {
+    for (const media of row.post_media || []) {
+      if (media.url) paths.add(media.url);
+      if (media.thumbnail_url) paths.add(media.thumbnail_url);
+    }
+  }
+  if (paths.size === 0) return rows;
+  const { data: signed } = await supabase.storage.from("posts").createSignedUrls([...paths], 3600);
+  const byPath = new Map((signed || []).filter((s) => !s.error).map((s) => [s.path, s.signedUrl]));
+  return rows.map((row) => ({
+    ...row,
+    post_media: (row.post_media || []).map((media) => ({
+      ...media,
+      path: media.url || null,
+      url: media.url ? byPath.get(media.url) || null : null,
+      thumbnailPath: media.thumbnail_url || null,
+      thumbnail_url: media.thumbnail_url ? byPath.get(media.thumbnail_url) || null : null,
+    })),
+  }));
 }
 
 export async function createPost({ texte, titre, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null, pollOptions = [] }) {
@@ -239,7 +274,7 @@ export async function createPost({ texte, titre, type, animal, pratique, dogId, 
     if (pollError) throw pollError;
   }
 
-  // Upload média réel vers Supabase Storage (bucket "posts" à créer côté Dashboard).
+  // Upload média réel vers Supabase Storage (bucket "posts" — privé, migration 059).
   const uploadedMedia = [];
   for (let i = 0; i < mediaFiles.length; i++) {
     const rawFile = mediaFiles[i];
@@ -254,43 +289,43 @@ export async function createPost({ texte, titre, type, animal, pratique, dogId, 
       upsert: false,
     });
     if (uploadError) throw uploadError;
-    const { data: publicUrl } = supabase.storage.from("posts").getPublicUrl(path);
 
-    let thumbnailUrl = null;
+    let thumbPath = null;
     if (mediaType === "video") {
       try {
         // Miniature choisie manuellement en priorité, sinon extraite
         // automatiquement d'une image de la vidéo.
         const thumbBlob = thumbnailFile && i === 0 ? thumbnailFile : await generateVideoThumbnail(file);
         const thumbExt = thumbnailFile && i === 0 ? thumbnailFile.name : "thumb.jpg";
-        const thumbPath = `${userData.user.id}/${post.id}/${i}-thumb-${thumbExt}`;
-        const { error: thumbUploadError } = await supabase.storage.from("posts").upload(thumbPath, thumbBlob, {
+        const candidatePath = `${userData.user.id}/${post.id}/${i}-thumb-${thumbExt}`;
+        const { error: thumbUploadError } = await supabase.storage.from("posts").upload(candidatePath, thumbBlob, {
           cacheControl: "3600",
           upsert: false,
           contentType: thumbnailFile && i === 0 ? thumbnailFile.type : "image/jpeg",
         });
-        if (!thumbUploadError) {
-          thumbnailUrl = supabase.storage.from("posts").getPublicUrl(thumbPath).data.publicUrl;
-        }
+        if (!thumbUploadError) thumbPath = candidatePath;
       } catch (e) {
         // Pas bloquant : la vidéo est publiée même si la miniature échoue
         // (ex: format vidéo non décodable par le navigateur).
       }
     }
 
+    // Chemin brut stocké (pas d'URL publique) — signé juste avant de
+    // retourner la publication à l'appelant, voir signPostMediaRows.
     const { error: mediaError } = await supabase.from("post_media").insert({
       post_id: post.id,
-      url: publicUrl.publicUrl,
+      url: path,
       ordre: i,
       type: mediaType,
-      thumbnail_url: thumbnailUrl,
+      thumbnail_url: thumbPath,
       duration_seconds: mediaType === "video" ? mediaDurations[i] || null : null,
     });
     if (mediaError) throw mediaError;
-    uploadedMedia.push({ url: publicUrl.publicUrl, type: mediaType, thumbnail_url: thumbnailUrl });
+    uploadedMedia.push({ url: path, ordre: i, type: mediaType, thumbnail_url: thumbPath });
   }
 
-  return { ...post, mediaUrls: uploadedMedia.map((m) => m.url), media: uploadedMedia };
+  const [{ post_media: signedMedia }] = await signPostMediaRows([{ post_media: uploadedMedia }]);
+  return { ...post, mediaUrls: signedMedia.map((m) => m.url), media: signedMedia };
 }
 
 export async function updatePost(postId, fields) {
@@ -416,7 +451,7 @@ export async function searchVideos(query, { limit = 30 } = {}) {
   if (byAuthor.error) throw byAuthor.error;
   const merged = new Map();
   for (const row of [...(byText.data || []), ...(byAuthor.data || [])]) merged.set(row.id, row);
-  return [...merged.values()];
+  return signPostMediaRows([...merged.values()]);
 }
 
 /** Fil personnalisé : récupère les posts visibles puis applique le pipeline
@@ -429,7 +464,7 @@ export async function fetchCandidatePosts({ limit = 50 } = {}) {
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return data;
+  return signPostMediaRows(data);
 }
 
 /** Publications rattachées à un groupe précis (colonne group_id — voir
@@ -442,7 +477,7 @@ export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return data;
+  return signPostMediaRows(data);
 }
 
 /** Publications d'un utilisateur précis — pour l'écran de profil public. */
@@ -454,7 +489,7 @@ export async function fetchUserPosts(userId, { limit = 50 } = {}) {
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return data;
+  return signPostMediaRows(data);
 }
 
 /** Un post précis par id — sert à ouvrir la bonne cible en tapant une
@@ -468,7 +503,8 @@ export async function fetchPostById(postId) {
     .eq("id", postId)
     .single();
   if (error) throw error;
-  return data;
+  const [signed] = await signPostMediaRows([data]);
+  return signed;
 }
 
 /** Publications où un chien précis a été identifié (table de jointure
@@ -482,7 +518,7 @@ export async function fetchPostsByDog(dogId, { limit = 50 } = {}) {
     .order("created_at", { ascending: false, foreignTable: "posts" })
     .limit(limit);
   if (error) throw error;
-  return data.map((r) => r.posts).filter(Boolean);
+  return signPostMediaRows(data.map((r) => r.posts).filter(Boolean));
 }
 
 export async function deleteComment(commentId) {
@@ -579,7 +615,8 @@ export async function fetchMyRepostedPosts() {
     .eq("user_id", userData.user.id)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data.filter((r) => r.posts).map((r) => ({ ...r.posts, repostedAt: r.created_at }));
+  const rows = data.filter((r) => r.posts).map((r) => ({ ...r.posts, repostedAt: r.created_at }));
+  return signPostMediaRows(rows);
 }
 
 /** Publications repostées par un utilisateur précis — pour l'onglet Reposts
@@ -591,6 +628,7 @@ export async function fetchUserRepostedPosts(userId) {
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data.filter((r) => r.posts).map((r) => ({ ...r.posts, repostedAt: r.created_at }));
+  const rows = data.filter((r) => r.posts).map((r) => ({ ...r.posts, repostedAt: r.created_at }));
+  return signPostMediaRows(rows);
 }
 

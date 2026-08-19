@@ -38,6 +38,21 @@ function mapTraceRow(row, meId) {
   };
 }
 
+/**
+ * Le bucket "posts" (réutilisé par Trace) est privé (migration 059) —
+ * media_url ne contient plus une URL publique valable, media_path (le
+ * chemin Storage brut, déjà stocké séparément depuis l'origine) est la
+ * source de vérité. Génère une URL signée (1h) par lot plutôt qu'une par
+ * Trace — même principe que signPostMediaRows côté postService.js.
+ */
+async function withSignedTraceMedia(rows) {
+  const paths = rows.map((r) => r.media_path).filter(Boolean);
+  if (paths.length === 0) return rows;
+  const { data: signed } = await supabase.storage.from("posts").createSignedUrls(paths, 3600);
+  const byPath = new Map((signed || []).filter((s) => !s.error).map((s) => [s.path, s.signedUrl]));
+  return rows.map((r) => ({ ...r, media_url: r.media_path ? byPath.get(r.media_path) || null : r.media_url }));
+}
+
 /** Traces actives (non expirées) visibles par l'utilisateur connecté — RLS
  *  filtre déjà les comptes privés non approuvés (voir migration 024). Le
  *  filtre d'expiration est fait ici en plus de la RLS : une Trace expirée ne
@@ -51,7 +66,8 @@ export async function fetchActiveTraces() {
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: true });
   if (error) throw error;
-  return data.map((row) => mapTraceRow(row, me.id));
+  const signed = await withSignedTraceMedia(data);
+  return signed.map((row) => mapTraceRow(row, me.id));
 }
 
 /** Trace(s) actives d'un utilisateur précis — pour l'affichage "Trace active"
@@ -65,7 +81,8 @@ export async function fetchUserActiveTraces(userId) {
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: true });
   if (error) throw error;
-  return data.map((row) => mapTraceRow(row, me.id));
+  const signed = await withSignedTraceMedia(data);
+  return signed.map((row) => mapTraceRow(row, me.id));
 }
 
 /** Sonde la vraie durée d'une vidéo côté navigateur avant l'envoi — sert à
@@ -107,15 +124,17 @@ export async function createTrace({ file, texte }) {
     upsert: false,
   });
   if (uploadError) throw uploadError;
-  const { data: publicUrl } = supabase.storage.from("posts").getPublicUrl(path);
 
   const durationSeconds = mediaType === "video" ? await probeVideoDuration(file) : 6;
 
+  // media_url stocke désormais le même chemin brut que media_path (bucket
+  // privé, migration 059) — une URL signée est générée juste après pour
+  // l'affichage immédiat, et à chaque fetch ensuite (withSignedTraceMedia).
   const { data: trace, error } = await supabase
     .from("traces")
     .insert({
       author_id: me.id,
-      media_url: publicUrl.publicUrl,
+      media_url: path,
       media_path: path,
       media_type: mediaType,
       duration_seconds: durationSeconds,
@@ -128,7 +147,8 @@ export async function createTrace({ file, texte }) {
     await supabase.storage.from("posts").remove([path]).catch(() => {});
     throw error;
   }
-  return mapTraceRow(trace, me.id);
+  const { data: signed } = await supabase.storage.from("posts").createSignedUrl(path, 3600);
+  return mapTraceRow({ ...trace, media_url: signed?.signedUrl || null }, me.id);
 }
 
 /** Enregistre une vue — clé primaire (trace_id, viewer_id) empêche tout
