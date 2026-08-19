@@ -445,7 +445,12 @@ function IconButton({ icon: Icon, onClick, size = 36, active }) {
         transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
       }}
     >
-      <Icon size={18} color={active ? colors.accent : colors.textSecondary} strokeWidth={2} />
+      {/* Trait plus fin au repos, plus épais actif — le poids qui varie
+          plutôt qu'un simple changement de couleur donne aux icônes plus de
+          présence à l'état actif sans qu'elles paraissent "grasses" au
+          repos (l'ancien strokeWidth fixe à 2 était un compromis entre les
+          deux, jamais tout à fait l'un ni l'autre). */}
+      <Icon size={18} color={active ? colors.accent : colors.textSecondary} strokeWidth={active ? 2.15 : 1.75} style={{ transition: "stroke-width 220ms ease" }} />
     </button>
   );
 }
@@ -1575,23 +1580,29 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         margin: floating ? "0 8px" : 0,
         borderRadius: floating ? RADIUS.pill : 0,
         boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
-        transform: chromeMode === "hidden" ? "translateY(-130%)" : "translateY(0)",
-        transition: "transform 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+        // Même rétraction vers un petit galet central que BottomNav (voir ses
+        // commentaires) — origine "50% 0%" (haut-centre) cette fois puisque
+        // cette barre est ancrée en haut plutôt qu'en bas.
+        transformOrigin: "50% 0%",
+        transform: chromeMode === "hidden" ? "scale(0.32)" : "scale(1)",
+        transition: "transform 380ms cubic-bezier(0.34, 1.4, 0.4, 1), margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+        pointerEvents: chromeMode === "hidden" ? "none" : "auto",
       }}
-      className="flex items-center justify-between px-4 py-3"
     >
-      <div className="flex items-center gap-2"><Logo size={28} /><Wordmark /><BetaBadge /></div>
-      <div className="flex items-center gap-1">
-        <IconButton icon={Search} onClick={onSearch} />
-        <div style={{ position: "relative" }}>
-          <IconButton icon={Bell} onClick={onBell} />
-          {unreadCount > 0 && (
-            <span style={{ position: "absolute", top: 2, right: 2, minWidth: 15, height: 15, borderRadius: 8, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, boxShadow: `0 2px 6px ${colors.accent}50`, color: colors.onAccent, fontSize: 9.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
+      <div className="flex items-center justify-between px-4 py-3" style={{ opacity: chromeMode === "hidden" ? 0 : 1, transition: "opacity 180ms ease" }}>
+        <div className="flex items-center gap-2"><Logo size={28} /><Wordmark /><BetaBadge /></div>
+        <div className="flex items-center gap-1">
+          <IconButton icon={Search} onClick={onSearch} />
+          <div style={{ position: "relative" }}>
+            <IconButton icon={Bell} onClick={onBell} />
+            {unreadCount > 0 && (
+              <span style={{ position: "absolute", top: 2, right: 2, minWidth: 15, height: 15, borderRadius: 8, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, boxShadow: `0 2px 6px ${colors.accent}50`, color: colors.onAccent, fontSize: 9.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </div>
+          <IconButton icon={Menu} onClick={onMenu} />
         </div>
-        <IconButton icon={Menu} onClick={onMenu} />
       </div>
     </div>
   );
@@ -1618,7 +1629,6 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
         style={{
           width: "100%",
           maxWidth: 480,
-          pointerEvents: "auto",
           background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 24%), ${colors.navBg}`,
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
@@ -1631,12 +1641,33 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
           // Button/SegmentedControl, appliqué à la barre la plus visible et
           // la plus manipulée de l'app.
           boxShadow: floating ? "0 8px 28px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.10)" : "none",
-          transform: chromeMode === "hidden" ? "translateY(130%)" : "translateY(0)",
-          transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+          // Se rétracte vers un petit galet central au lieu de glisser hors
+          // de l'écran — le point d'origine "50% 100%" (bas-centre) fait que
+          // la pilule "coule" dans ce petit repère plutôt que de sembler
+          // s'envoler ; remonter d'un cran suffit à la faire regonfler au
+          // même endroit exact, jamais besoin de la voir revenir de nulle
+          // part comme avec un simple slide vertical.
+          transformOrigin: "50% 100%",
+          transform: chromeMode === "hidden" ? "scale(0.32)" : "scale(1)",
+          transition: "transform 380ms cubic-bezier(0.34, 1.4, 0.4, 1), margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+          pointerEvents: chromeMode === "hidden" ? "none" : "auto",
           paddingBottom: floating ? 4 : "env(safe-area-inset-bottom, 0px)",
         }}
       >
-        <div className="flex items-center justify-between" style={{ paddingTop: 8, paddingBottom: 8, paddingLeft: 10, paddingRight: 10 }}>
+        <div
+          className="flex items-center justify-between"
+          style={{
+            paddingTop: 8,
+            paddingBottom: 8,
+            paddingLeft: 10,
+            paddingRight: 10,
+            // Le contenu s'efface un peu avant que le galet finisse de se
+            // rétracter (durée plus courte) : on ne voit jamais d'icônes
+            // écrasées à mi-rétraction, seulement le verre qui rapetisse.
+            opacity: chromeMode === "hidden" ? 0 : 1,
+            transition: "opacity 180ms ease",
+          }}
+        >
           {items.map((it) => {
             const Icon = it.icon;
             const isActive = active === it.key;
