@@ -10909,12 +10909,51 @@ function Root() {
   );
 }
 
+// Filet de sécurité au sommet de l'arbre : sans lui, une erreur de rendu
+// n'importe où dans l'app (donnée inattendue, accès à une propriété
+// manquante...) faisait disparaître TOUTE l'interface derrière un écran
+// blanc silencieux — le pire résultat possible pour un bêta-testeur, sans
+// aucun moyen de comprendre ce qui s'est passé ni de continuer. Couleurs en
+// dur (pas useTheme, un component-classe n'a pas accès aux Hooks) sur le
+// thème sombre, identité par défaut de PISTE.
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    // Pas de service de reporting distant branché pour l'instant — au moins
+    // visible dans la console plutôt que silencieusement perdu.
+    console.error("PISTE — erreur non interceptée :", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: "100dvh", background: "#0D0F08", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32, textAlign: "center", fontFamily: FONT }}>
+          <Logo size={48} />
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#F4F2EF" }}>Un problème est survenu</div>
+          <div style={{ fontSize: 13, color: "#A8A8A4", maxWidth: 280, lineHeight: 1.5 }}>PISTE a rencontré une erreur inattendue. Réessayez — si ça persiste, dites-nous ce que vous faisiez juste avant.</div>
+          <button onClick={() => window.location.reload()} className="active:scale-95" style={{ marginTop: 4, background: "#E0813F", color: "#14170D", border: "none", borderRadius: 999, padding: "12px 26px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", boxShadow: "0 6px 18px rgba(224,129,63,0.4)" }}>
+            Recharger PISTE
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <ThemeProvider>
-      <div style={{ fontFamily: FONT }}>
-        <Root />
-      </div>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <div style={{ fontFamily: FONT }}>
+          <Root />
+        </div>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
