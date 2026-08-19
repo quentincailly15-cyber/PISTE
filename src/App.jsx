@@ -406,6 +406,12 @@ function Button({ children, onClick, disabled, variant = "primary", full = true 
         // Garantit que le flou (variant "secondary") respecte bien l'arrondi
         // au lieu d'être peint en rectangle par-dessus par certains moteurs.
         overflow: "hidden",
+        // "overflow:hidden" désactive la largeur minimale automatique d'un
+        // enfant flex (spec CSS) — sans ce flexShrink:0, un Button full=false
+        // posé à côté d'un autre élément dans une rangée étroite pourrait se
+        // faire compresser et tronquer son propre texte au lieu de rester
+        // lisible (voir le même correctif sur Chip).
+        flexShrink: 0,
         padding: "14px 22px",
         fontSize: 14.5,
         fontWeight: 700,
@@ -497,6 +503,15 @@ function Chip({ label, active, onClick, solid = false }) {
         color: active ? (solid ? colors.onAccent : colors.accent) : colors.textSecondary,
         borderRadius: RADIUS.pill,
         overflow: "hidden",
+        // Indispensable dès qu'un Chip vit dans une rangée qui défile
+        // horizontalement (catégories, filtres...) : par la spec flexbox,
+        // "overflow: hidden" (juste au-dessus, pour l'arrondi du flou)
+        // annule la protection "largeur minimale = largeur du contenu" —
+        // sans flexShrink:0, les pilules pouvaient alors être compressées en
+        // dessous de la largeur de leur propre texte et le TRONQUER (caché
+        // par l'overflow, pas juste débordant) au lieu de rester lisibles et
+        // de laisser la rangée défiler comme prévu.
+        flexShrink: 0,
         padding: "9px 15px",
         fontSize: 12.5,
         fontWeight: 600,
