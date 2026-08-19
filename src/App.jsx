@@ -403,6 +403,9 @@ function Button({ children, onClick, disabled, variant = "primary", full = true 
       style={{
         width: full ? "100%" : "auto",
         borderRadius: RADIUS.pill,
+        // Garantit que le flou (variant "secondary") respecte bien l'arrondi
+        // au lieu d'être peint en rectangle par-dessus par certains moteurs.
+        overflow: "hidden",
         padding: "14px 22px",
         fontSize: 14.5,
         fontWeight: 700,
@@ -440,6 +443,9 @@ function IconButton({ icon: Icon, onClick, size = 36, active }) {
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         border: `1px solid ${active ? "transparent" : colors.border}`,
+        // overflow:hidden : garantit que le flou du backdrop-filter respecte
+        // bien l'arrondi (certains moteurs le peignent sinon en rectangle).
+        overflow: "hidden",
         boxShadow: active ? `0 4px 14px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.25)` : "0 2px 8px rgba(0,0,0,0.10)",
         cursor: "pointer",
         transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
@@ -490,6 +496,7 @@ function Chip({ label, active, onClick, solid = false }) {
         boxShadow: active ? `0 4px 12px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.25)` : "none",
         color: active ? (solid ? colors.onAccent : colors.accent) : colors.textSecondary,
         borderRadius: RADIUS.pill,
+        overflow: "hidden",
         padding: "9px 15px",
         fontSize: 12.5,
         fontWeight: 600,
@@ -580,7 +587,7 @@ function SegmentedControl({ options, value, onChange }) {
     // segmented control moderne (iOS) plutôt qu'une simple pilule qui
     // "pop" sur place à chaque tap. Le calcul en % (pas de mesure DOM)
     // fonctionne tant que padding/gap restent fixes ci-dessous.
-    <div className="flex" style={{ position: "relative", background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, boxShadow: "0 4px 16px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+    <div className="flex" style={{ position: "relative", background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
       <div
         aria-hidden="true"
         style={{
@@ -1579,6 +1586,11 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         borderBottom: floating ? "none" : `1px solid ${colors.border}`,
         margin: floating ? "0 8px" : 0,
         borderRadius: floating ? RADIUS.pill : 0,
+        // Sans ça, certains navigateurs (WebKit/Safari) peuvent peindre le
+        // flou du backdrop-filter en rectangle et ignorer l'arrondi du
+        // border-radius sur ses propres angles — la bordure/ombre reste
+        // ronde mais le flou déborde dans les coins, qui semblent carrés.
+        overflow: "hidden",
         boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
         // Repli MODÉRÉ vers le centre (pas un rétrécissement extrême) — même
         // raison que BottomNav (voir ses commentaires) : au-delà d'un certain
@@ -1646,6 +1658,12 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
           border: "1px solid rgba(255,255,255,0.12)",
           margin: "0 8px calc(8px + env(safe-area-inset-bottom, 0px))",
           borderRadius: RADIUS.pill,
+          // Sans ça, certains navigateurs (WebKit/Safari en particulier)
+          // peuvent peindre le flou du backdrop-filter en rectangle et
+          // ignorer l'arrondi du border-radius sur ses propres angles — la
+          // pilule reste ronde "en apparence" (bordure/ombre) mais le flou
+          // déborde dans les coins, qui semblent alors carrés.
+          overflow: "hidden",
           // Halo d'ombre élargi + filet clair en haut de la pilule (bord qui
           // capte la lumière) : le même vocabulaire "verre liquide" que
           // Button/SegmentedControl, appliqué à la barre la plus visible et
