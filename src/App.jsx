@@ -7542,9 +7542,25 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
+  // Défilement automatique vers le message le plus récent — à l'ouverture
+  // d'une conversation ET à l'arrivée d'un nouveau message. Se base sur
+  // l'id du DERNIER message (pas messages.length, voir bug ci-dessous) et
+  // le compare au dernier connu : un simple changement de longueur ne se
+  // déclenchait pas de façon fiable en passant d'une conversation à une
+  // autre ayant, par coïncidence, le même nombre de messages — la vue
+  // restait alors à l'ancienne position de défilement. Un message ancien
+  // inséré via une citation hors fenêtre (scrollToMessage) ne touche jamais
+  // le dernier élément du tableau (toujours trié chronologiquement), donc
+  // ne redéclenche jamais ce défilement — n'entre pas en conflit avec le
+  // scroll+surbrillance dédié à la citation.
+  const lastMessageIdRef = useRef(null);
   useEffect(() => {
-    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages.length]);
+    const last = messages[messages.length - 1];
+    if (last && last.id !== lastMessageIdRef.current) {
+      lastMessageIdRef.current = last.id;
+      if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const submit = async () => {
     const texte = text.trim();
