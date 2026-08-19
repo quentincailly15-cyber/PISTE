@@ -8425,7 +8425,7 @@ const APP_ITEMS = [
   { key: "apparence", label: "Apparence", icon: Moon, appearance: true },
   { key: "aide", label: "Aide", icon: HelpCircle, real: true },
   { key: "reglement", label: "Règlement PISTE", icon: BookOpen, real: true },
-  { key: "signaler", label: "Signaler un problème", icon: AlertTriangle, desc: "Faites-nous remonter un bug ou un souci." },
+  { key: "signaler", label: "Signaler un problème", icon: AlertTriangle, real: true, desc: "Faites-nous remonter un bug ou un souci." },
 ];
 function PlusRow({ item, onOpen }) {
   const { colors } = useTheme();
@@ -8723,6 +8723,65 @@ function AideScreen() {
     </div>
   );
 }
+/**
+ * Point d'entrée unique pour les retours pendant la bêta (bug, amélioration,
+ * ou tout autre retour) — réutilise exactement le même backend que
+ * "Contacter PISTE" dans AideScreen (submitHelpRequest / table
+ * support_requests, migration 019), juste avec un cadrage et des catégories
+ * pensés pour la bêta plutôt que pour du support générique, et sans détour
+ * par la FAQ : on tape "Signaler un problème" et le formulaire est déjà là.
+ */
+function SignalerScreen() {
+  const { colors } = useTheme();
+  const [type, setType] = useState(null);
+  const [subject, setSubject] = useState("");
+  const [description, setDescription] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [sent, setSent] = useState(false);
+  const TYPES = [
+    { key: "Bug", label: "Bug / erreur", icon: AlertTriangle },
+    { key: "Amélioration", label: "Amélioration", icon: SquarePen },
+    { key: "Autre", label: "Autre", icon: MessageSquare },
+  ];
+  const submit = async () => {
+    setSending(true);
+    setSendError("");
+    try {
+      await socialService.submitHelpRequest({ category: type, subject, description });
+      setSent(true);
+    } catch (e) {
+      setSendError(e.message || "Impossible d'envoyer votre message pour le moment.");
+    } finally {
+      setSending(false);
+    }
+  };
+  if (sent) return <EmptyState title="Message envoyé" subtitle="Merci — c'est noté, l'équipe PISTE le traitera." icon={Check} />;
+  return (
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12.5, color: colors.textSecondary, marginBottom: 16, lineHeight: 1.5 }}>
+        Un bug, une idée d'amélioration, quelque chose qui vous a gêné — tout nous intéresse pendant la bêta.
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>TYPE</div>
+      <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
+        {TYPES.map((t) => (
+          <Chip key={t.key} label={t.label} active={type === t.key} onClick={() => setType(t.key)} />
+        ))}
+      </div>
+      <TextField label="Sujet" value={subject} onChange={setSubject} placeholder="Résumez en une phrase" />
+      <TextField
+        label="Description"
+        value={description}
+        onChange={setDescription}
+        placeholder="Décrivez ce qui s'est passé, ce à quoi vous vous attendiez, et comment le reproduire si possible."
+        textarea
+        rows={6}
+      />
+      {sendError && <div style={{ fontSize: 12.5, color: colors.error, marginBottom: 12 }}>{sendError}</div>}
+      <Button disabled={!type || !subject || !description || sending} onClick={submit}>{sending ? "Envoi..." : "Envoyer"}</Button>
+    </div>
+  );
+}
 function ReglementScreen() {
   const { colors } = useTheme();
   return (
@@ -8834,6 +8893,8 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
             <ParametresScreen profile={profile} setProfile={setProfile} blockedAuthors={blockedAuthors} onUnblock={onUnblockAuthor} hiddenCount={hiddenPostIds.length} reports={reports} notifPrefs={notifPrefs} setNotifPrefs={setNotifPrefs} privacy={privacy} setPrivacy={setPrivacy} />
           ) : sub.key === "aide" ? (
             <AideScreen />
+          ) : sub.key === "signaler" ? (
+            <SignalerScreen />
           ) : sub.key === "reglement" ? (
             <ReglementScreen />
           ) : (
