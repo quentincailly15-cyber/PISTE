@@ -5060,6 +5060,11 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
   const joined = groups.filter((g) => g.joined);
   const searched = query.trim() ? groups.filter((g) => g.nom.toLowerCase().includes(query.trim().toLowerCase())) : groups;
   const filtered = categoryFilter === "Toutes" ? searched : searched.filter((g) => g.categorie === categoryFilter);
+  // Une communauté déjà rejointe ne doit pas réapparaître dans "Découvrir" —
+  // elle est déjà visible juste au-dessus dans "Rejointes". Sans cette
+  // exclusion, chaque communauté rejointe s'affichait deux fois d'affilée,
+  // ce qui rendait la liste bien plus dense/tassée qu'elle ne l'est vraiment.
+  const discoverList = filtered.filter((g) => !g.joined);
   // La sélection ouverte doit refléter l'état à jour (ex. après un "Rejoindre").
   const currentOpen = openGroup ? groups.find((g) => g.id === openGroup.id) : null;
   return (
@@ -5098,16 +5103,25 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
       </div>
 
       {joined.length > 0 && (
-        <div className="px-4" style={{ paddingTop: 22, paddingBottom: 8 }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>COMMUNAUTÉS REJOINTES</div>
+        <div className="px-4" style={{ paddingTop: 24, paddingBottom: 10 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5 }}>COMMUNAUTÉS REJOINTES</div>
         </div>
       )}
-      {joined.length > 0 && <div className="flex flex-col gap-2 px-4 pb-4">{joined.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>}
+      {joined.length > 0 && <div className="flex flex-col px-4 pb-2" style={{ gap: 12 }}>{joined.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>}
+
+      {/* Séparation nette entre "rejointes" et le reste — sans elle, les deux
+          listes de tuiles pleine-largeur s'enchaînaient directement, sans
+          respiration ni repère, et donnaient l'impression d'un seul tas. */}
+      {joined.length > 0 && discoverList.length > 0 && (
+        <div className="px-4" style={{ paddingTop: 22, paddingBottom: 10 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5 }}>DÉCOUVRIR</div>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <EmptyState title="Aucune communauté trouvée" subtitle="Essayez un autre mot-clé ou créez votre propre communauté." ctaLabel="Créer une communauté" onCta={() => setCreating(true)} icon={HelpCircle} />
-      ) : (
-        <div className="flex flex-col gap-2 px-4 pb-4" style={{ paddingTop: joined.length > 0 ? 12 : 22 }}>{filtered.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
+      ) : discoverList.length > 0 && (
+        <div className="flex flex-col px-4 pb-4" style={{ gap: 12, paddingTop: joined.length > 0 ? 0 : 22 }}>{discoverList.map((g) => <GroupCategoryTile key={g.id} group={g} onOpen={setOpenGroup} />)}</div>
       )}
 
       {currentOpen && (
