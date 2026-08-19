@@ -9,6 +9,7 @@ import {
   Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud,
   RotateCw, Smartphone, AtSign, Feather, Reply,
   Backpack, Shirt, Truck, Scale, GraduationCap, SquarePen, Crop, Send,
+  Loader2,
 } from "lucide-react";
 import * as authService from "./services/authService.js";
 import * as traceService from "./services/traceService.js";
@@ -535,13 +536,13 @@ function EmptyState({ title, subtitle, ctaLabel, onCta, onAdd, icon: Icon }) {
       {onAdd ? (
         <button
           onClick={onAdd}
-          className="active:scale-95 transition-transform"
-          style={{ width: 54, height: 54, borderRadius: RADIUS.md, background: colors.surface, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+          className="active:scale-95"
+          style={{ width: 56, height: 56, borderRadius: RADIUS.lg, background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 40%), ${colors.surface}`, border: `1px solid ${colors.border}`, boxShadow: "0 4px 14px rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}
         >
           <Plus size={24} color={colors.accent} strokeWidth={2.2} />
         </button>
       ) : (
-        <div style={{ width: 54, height: 54, borderRadius: RADIUS.md, background: colors.surface, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 56, height: 56, borderRadius: RADIUS.lg, background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 40%), ${colors.surface}`, border: `1px solid ${colors.border}`, boxShadow: "0 4px 14px rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {Icon ? <Icon size={24} color={colors.textFaint} strokeWidth={1.6} /> : <Logo size={28} />}
         </div>
       )}
@@ -1830,6 +1831,8 @@ function AppShell({ children, header, active, setActive, onCreate, unreadConvers
            visuel "quelque chose vient de se passer" (like, envoi, action
            réussie) sans dépendre d'un composant dédié par cas d'usage. */
         @keyframes piste-halo-pulse { 0% { opacity: 0.65; transform: scale(0.5); } 100% { opacity: 0; transform: scale(2.2); } }
+        @keyframes piste-spin { to { transform: rotate(360deg); } }
+        @keyframes piste-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
         }
@@ -1973,7 +1976,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
       {loading ? (
         <div style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
           <ScreenHeader title="Profil" onBack={onClose} />
-          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 40 }}>Chargement...</div>
+          <Spinner />
         </div>
       ) : error ? (
         <div style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
@@ -2594,6 +2597,65 @@ function HeartBurst({ show }) {
 function AnimatedCount({ value, style }) {
   return <span key={value} style={{ ...style, display: "inline-block", animation: "piste-count-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" }}>{value}</span>;
 }
+// Remplace le texte "Chargement..." brut utilisé partout jusqu'ici — un
+// simple anneau qui tourne, dans l'accent de l'app plutôt qu'un gris neutre,
+// lit tout de suite comme "PISTE charge quelque chose" plutôt que comme un
+// placeholder générique de bibliothèque.
+function Spinner({ size = 20, label }) {
+  const { colors } = useTheme();
+  return (
+    <div className="flex flex-col items-center" style={{ gap: 10, padding: 24 }}>
+      <Loader2 size={size} color={colors.accent} strokeWidth={2.2} style={{ animation: "piste-spin 800ms linear infinite" }} />
+      {label && <span style={{ fontSize: 12, color: colors.textFaint, fontWeight: 500 }}>{label}</span>}
+    </div>
+  );
+}
+// Silhouette du contenu à venir (dégradé qui balaie de gauche à droite) au
+// lieu d'un espace vide ou d'un spinner central pour les listes — la forme
+// du contenu final se devine déjà pendant le chargement, la mise en page ne
+// "saute" pas non plus une fois les vraies données arrivées.
+function SkeletonBlock({ width = "100%", height = 14, radius, style }) {
+  const { colors, resolved } = useTheme();
+  const base = resolved === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)";
+  const sheen = resolved === "dark" ? "rgba(255,255,255,0.13)" : "rgba(0,0,0,0.09)";
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width,
+        height,
+        borderRadius: radius ?? RADIUS.sm,
+        background: `linear-gradient(90deg, ${base} 25%, ${sheen} 50%, ${base} 75%)`,
+        backgroundSize: "200% 100%",
+        animation: "piste-shimmer 1.6s ease-in-out infinite",
+        ...style,
+      }}
+    />
+  );
+}
+// Une carte de publication "fantôme" — même gabarit que PostCard (avatar +
+// nom + image + ligne d'actions) — le temps que le vrai fil charge. Voir
+// SkeletonBlock ci-dessus pour le principe.
+function PostCardSkeleton() {
+  const { colors } = useTheme();
+  return (
+    <div style={{ background: colors.surface, borderRadius: RADIUS.xl, margin: "0 12px 12px", overflow: "hidden", border: `1px solid ${colors.border}`, padding: 14 }}>
+      <div className="flex items-center gap-2.5" style={{ marginBottom: 12 }}>
+        <SkeletonBlock width={32} height={32} radius={RADIUS.pill} />
+        <div style={{ flex: 1 }}>
+          <SkeletonBlock width="40%" height={11} style={{ marginBottom: 6 }} />
+          <SkeletonBlock width="25%" height={9} />
+        </div>
+      </div>
+      <SkeletonBlock height={280} radius={RADIUS.lg} style={{ marginBottom: 12 }} />
+      <div className="flex items-center gap-4">
+        <SkeletonBlock width={17} height={17} radius={RADIUS.pill} />
+        <SkeletonBlock width={17} height={17} radius={RADIUS.pill} />
+        <SkeletonBlock width={17} height={17} radius={RADIUS.pill} />
+      </div>
+    </div>
+  );
+}
 // Sondage réel (voir migration 036) — options et votes chargés à l'ouverture
 // du post, pas préchargés dans le fil (même principe que les commentaires).
 // Un vote change simplement l'option choisie (poll_votes a une seule ligne
@@ -2782,7 +2844,7 @@ function SharePostSheet({ item, onClose }) {
                     })
                   )
                 ) : loading ? (
-                  <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Chargement...</div>
+                  <Spinner size={16} />
                 ) : conversations.length === 0 ? (
                   <div style={{ textAlign: "center", fontSize: 12, color: colors.textFaint, padding: 16 }}>Recherchez un pseudo pour commencer une conversation.</div>
                 ) : (
@@ -2997,17 +3059,20 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
           </span>
           <AnimatedCount value={post.likes || 0} style={{ fontSize: 12, color: liked ? colors.accent : overlay ? "#fff" : colors.textSecondary, fontWeight: liked ? 700 : 400 }} />
         </button>
-        <button onClick={onOpenComments} className="flex items-center gap-1.5" style={{ background: "none", border: "none", cursor: "pointer", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
+        <button onClick={onOpenComments} className="flex items-center gap-1.5 active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
           <MessageSquare size={17} color={overlay ? "#fff" : colors.textSecondary} strokeWidth={1.8} />
           <AnimatedCount value={commentCount} style={{ fontSize: 12, color: overlay ? "#fff" : colors.textSecondary }} />
         </button>
         {/* Option repost désactivée à la demande — le reste (service, prop
             onRepost, composant RepostRow...) reste en place pour pouvoir la
             réactiver facilement plus tard, seul ce bouton disparaît. */}
-        <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}><Send size={17} color={overlay ? "#fff" : colors.textSecondary} strokeWidth={1.8} /></button>
+        <button onClick={() => setShowShare(true)} className="active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}><Send size={17} color={overlay ? "#fff" : colors.textSecondary} strokeWidth={1.8} /></button>
         <div style={{ flex: 1 }} />
-        <button onClick={onSave} className="active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
-          <Bookmark size={17} color={saved ? colors.accent : overlay ? "#fff" : colors.textSecondary} fill={saved ? colors.accent : "none"} strokeWidth={1.8} />
+        <button onClick={onSave} className="active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+          <span style={{ position: "relative", display: "inline-flex" }}>
+            {saved && <span aria-hidden="true" style={{ position: "absolute", inset: -7, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out forwards" }} />}
+            <Bookmark size={17} color={saved ? colors.accent : overlay ? "#fff" : colors.textSecondary} fill={saved ? colors.accent : "none"} strokeWidth={1.8} />
+          </span>
         </button>
       </div>
       {(post.animal || post.pratique || (post.hashtags && post.hashtags.length > 0)) && (
@@ -3128,6 +3193,11 @@ function TraceBar({ groups, onOpenGroup, onCreateOwn }) {
                   padding: 2.5,
                   boxSizing: "border-box",
                   background: empty ? colors.border : g.allViewed ? colors.border : `linear-gradient(135deg, ${colors.accent}, #5A6B3B)`,
+                  // Relief léger sur l'anneau lui-même (pas seulement la
+                  // pastille "+") : sans lui, la barre de Traces restait à
+                  // plat sur le fond ambiant, alors que le reste de l'app a
+                  // gagné du relief partout ailleurs cette session.
+                  boxShadow: empty || g.allViewed ? "0 3px 8px rgba(0,0,0,0.14)" : `0 4px 12px ${colors.accent}35`,
                 }}
               >
                 <div style={{ width: "100%", height: "100%", borderRadius: RADIUS.pill, background: colors.background, padding: 2, boxSizing: "border-box" }}>
@@ -3137,7 +3207,7 @@ function TraceBar({ groups, onOpenGroup, onCreateOwn }) {
                 </div>
               </div>
               {g.isMe && empty && (
-                <div style={{ position: "absolute", bottom: -2, right: -2, width: 20, height: 20, borderRadius: RADIUS.pill, background: colors.accent, border: `2px solid ${colors.background}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ position: "absolute", bottom: -2, right: -2, width: 20, height: 20, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, border: `2px solid ${colors.background}`, boxShadow: `0 2px 6px ${colors.accent}50`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Plus size={11} color={colors.onAccent} strokeWidth={3} />
                 </div>
               )}
@@ -3172,7 +3242,7 @@ function TraceViewersSheet({ traceId, onClose }) {
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
             {loading ? (
-              <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+              <Spinner />
             ) : viewers.length === 0 ? (
               <EmptyState title="Aucune vue pour l'instant" subtitle="Les personnes qui regardent votre Trace apparaîtront ici." icon={HelpCircle} />
             ) : (
@@ -3472,7 +3542,7 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
     </div>
   );
 }
-function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, following, myGroupIds, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEdit, onReport, onHide, onBlock, onEditRequest, onLoadComments, chromeMode = "full", traceGroups = [], onOpenTraceGroup, onCreateOwnTrace, justPublishedIds = [] }) {
+function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, following, myGroupIds, bellUsernames, onToggleFollow, onToggleBell, onOpenProfile, onLike, onSave, onRepost, onAddComment, onDelete, onDeleteComment, onEdit, onReport, onHide, onBlock, onEditRequest, onLoadComments, chromeMode = "full", traceGroups = [], onOpenTraceGroup, onCreateOwnTrace, justPublishedIds = [], loading = false }) {
   const { colors } = useTheme();
   const [tab, setTab] = useState("pourtoi");
   const [sheet, setSheet] = useState(null); // { type: 'actions'|'report'|'comments'|'author', post }
@@ -3548,7 +3618,12 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
         </div>
       </div>
       <div style={{ marginTop: 14 }}><TraceBar groups={traceGroups} onOpenGroup={onOpenTraceGroup} onCreateOwn={onCreateOwnTrace} /></div>
-      {visible.length === 0 ? (
+      {loading && visible.length === 0 ? (
+        // Silhouettes du fil (voir PostCardSkeleton) le temps du tout premier
+        // chargement — seulement tant qu'il n'y a encore aucun post à
+        // montrer, jamais lors d'un simple rafraîchissement en arrière-plan.
+        <div style={{ paddingTop: 14 }}>{[0, 1, 2].map((i) => <PostCardSkeleton key={i} />)}</div>
+      ) : visible.length === 0 ? (
         <EmptyState title="Aucun contenu pour le moment" subtitle={copy[tab]} icon={HelpCircle} />
       ) : (
         <div style={{ paddingTop: 14 }}>
@@ -4702,7 +4777,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
         </div>
         {tab === "publications" ? (
           loading ? (
-            <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
+            <Spinner />
           ) : groupPosts.length === 0 ? (
             <EmptyState title="Aucune publication" subtitle="Les publications de cette communauté apparaîtront ici." icon={HelpCircle} />
           ) : (
@@ -4730,7 +4805,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           )
         ) : tab === "membres" ? (
           membersLoading ? (
-            <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
+            <Spinner />
           ) : members.length === 0 ? (
             <EmptyState title="Aucun membre" subtitle="Les membres de cette communauté apparaîtront ici." icon={HelpCircle} />
           ) : (
@@ -4753,7 +4828,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           )
         ) : tab === "discussions" ? (
           discussionsLoading ? (
-            <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: colors.textFaint }}>Chargement...</div>
+            <Spinner />
           ) : discussions.length === 0 ? (
             <EmptyState title="Aucune discussion" subtitle="Lancez la première discussion de cette communauté." icon={HelpCircle} />
           ) : (
@@ -4921,7 +4996,7 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
       )}
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
-          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
+          <Spinner />
         ) : loadError ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.error, marginTop: 24 }}>{loadError}</div>
         ) : messages.length === 0 ? (
@@ -6339,14 +6414,14 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
       <div style={{ flex: 1, overflowY: "auto", paddingTop: tab === "statistiques" ? 0 : 12 }}>
         {tab === "statistiques" ? (
           logsLoading ? (
-            <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+            <Spinner />
           ) : huntingLogs.length === 0 ? (
             <EmptyState title="Aucune sortie enregistrée" subtitle={`Les statistiques du carnet de chasse où ${dog.nom} est identifié apparaîtront ici.`} icon={HelpCircle} />
           ) : (
             <div style={{ paddingTop: 12 }}><HuntingLogStatsView stats={dogStats} /></div>
           )
         ) : loading ? (
-          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+          <Spinner />
         ) : (
           // Même DA que Profil - Publications : grille carrée 3 colonnes,
           // pas une liste de cartes pleine largeur — on parcourt vite, on ne
@@ -7057,7 +7132,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {loading ? (
-          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 40 }}>Chargement...</div>
+          <Spinner />
         ) : tab === "stats" ? (
           <div style={{ paddingTop: 12 }}><HuntingLogStatsView stats={stats} /></div>
         ) : (
@@ -7823,7 +7898,7 @@ function GroupConversationSettingsSheet({ conversationId, title, image, onClose,
             {error && <div style={{ background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "10px 14px", fontSize: 12, color: colors.error, marginBottom: 12 }}>{error}</div>}
             <div style={{ fontSize: 11.5, fontWeight: 700, color: colors.textFaint, letterSpacing: 0.5, marginBottom: 8 }}>MEMBRES</div>
             {loading ? (
-              <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 16 }}>Chargement...</div>
+              <Spinner size={16} />
             ) : (
               <div className="flex flex-col gap-1">
                 {members.map((m) => (
@@ -8260,7 +8335,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
           logique JS explicite ci-dessus comme unique source de vérité. */}
       <div ref={listRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: "auto", overflowAnchor: "none", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
-          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
+          <Spinner />
         ) : loadError ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.error, marginTop: 24, padding: "0 20px" }}>{loadError}</div>
         ) : messages.length === 0 ? (
@@ -8953,7 +9028,7 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
         </div>
       )}
       {loading ? (
-        <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
+        <Spinner />
       ) : conversations.length === 0 ? (
         <EmptyState title="Aucun message pour le moment" subtitle="Vos conversations avec les autres membres de PISTE apparaîtront ici." ctaLabel="Démarrer une conversation" onCta={() => setShowNew(true)} icon={HelpCircle} />
       ) : filteredConversations.length === 0 ? (
@@ -9081,7 +9156,7 @@ function FollowListSheet({ userId, mode, onClose, onOpenProfile }) {
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
             {loading ? (
-              <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+              <Spinner />
             ) : items.length === 0 ? (
               <EmptyState title={title} subtitle={emptyText} icon={Users} />
             ) : (
@@ -9129,7 +9204,7 @@ function FollowRequestsSheet({ onClose, onApprove, onReject, onOpenProfile }) {
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
             {loading ? (
-              <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, padding: 24 }}>Chargement...</div>
+              <Spinner />
             ) : items.length === 0 ? (
               <EmptyState title="Aucune demande" subtitle="Les demandes d'abonnement à votre compte privé apparaîtront ici." icon={HelpCircle} />
             ) : (
@@ -9218,7 +9293,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
       )}
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 12px 12px" }}>
         {loading ? (
-          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
+          <Spinner />
         ) : items.length === 0 ? (
           <EmptyState title="Aucune notification pour le moment" subtitle="Vous serez averti ici des interactions et des nouveautés qui vous concernent." icon={HelpCircle} />
         ) : (
@@ -9938,6 +10013,10 @@ function MainApp({ session, onboardingData, ageInfo }) {
   // personne n'a réellement rejoint (le compteur ne reflète que de vraies actions).
   const [groups, setGroups] = useState([]);
   const [posts, setPosts] = useState([]);
+  // Ne passe à true qu'une seule fois (premier chargement réel) — sert
+  // uniquement à afficher les silhouettes de PostCard le temps de ce tout
+  // premier chargement, jamais lors d'un rafraîchissement en arrière-plan.
+  const [postsLoaded, setPostsLoaded] = useState(false);
   const [videos, setVideos] = useState([]);
   const [traces, setTraces] = useState([]);
   const [viewingTraces, setViewingTraces] = useState(null); // { groups, startGroupIndex } | null
@@ -9995,10 +10074,14 @@ function MainApp({ session, onboardingData, ageInfo }) {
   // Chargement initial des vraies publications + de mes likes/enregistrements,
   // une fois qu'on sait qui est connecté (voir profileLoaded plus haut).
   const refreshPosts = async () => {
-    const rows = await postService.fetchCandidatePosts();
-    const mapped = rows.map(mapPostRow);
-    setPosts(mapped.filter((p) => p.type === "publication" || p.type === "photo" || p.type === "discussion" || p.type === "sondage"));
-    setVideos(mapped.filter((p) => p.type === "video" || p.type === "video_courte"));
+    try {
+      const rows = await postService.fetchCandidatePosts();
+      const mapped = rows.map(mapPostRow);
+      setPosts(mapped.filter((p) => p.type === "publication" || p.type === "photo" || p.type === "discussion" || p.type === "sondage"));
+      setVideos(mapped.filter((p) => p.type === "video" || p.type === "video_courte"));
+    } finally {
+      setPostsLoaded(true);
+    }
   };
   useEffect(() => {
     if (!session || !profileLoaded) return;
@@ -10363,6 +10446,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
     fil: (
       <ScreenFil
         posts={visiblePosts}
+        loading={!postsLoaded}
         profile={profile}
         liked={likedIds}
         saved={savedPostIds}
@@ -10488,8 +10572,9 @@ function MainApp({ session, onboardingData, ageInfo }) {
 
   if (!profileLoaded) {
     return (
-      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.background }}>
-        <div style={{ fontSize: 13, color: colors.textSecondary }}>Chargement de votre profil...</div>
+      <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18, background: colors.background }}>
+        <Logo size={48} />
+        <Loader2 size={20} color={colors.accent} strokeWidth={2.2} style={{ animation: "piste-spin 800ms linear infinite" }} />
       </div>
     );
   }
@@ -10721,8 +10806,9 @@ function Root() {
   // 1. Encore en train de vérifier s'il existe déjà une session (au tout premier rendu).
   if (session === undefined) {
     return (
-      <div style={{ minHeight: "100dvh", background: colors.background, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT }}>
-        <div style={{ fontSize: 13, color: colors.textSecondary }}>Chargement...</div>
+      <div style={{ minHeight: "100dvh", background: colors.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18, fontFamily: FONT }}>
+        <Logo size={48} />
+        <Loader2 size={20} color={colors.accent} strokeWidth={2.2} style={{ animation: "piste-spin 800ms linear infinite" }} />
       </div>
     );
   }
