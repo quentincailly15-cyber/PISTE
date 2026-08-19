@@ -16,14 +16,24 @@ async function requireUser() {
 
 /** Liste des conversations de l'utilisateur connecté, avec les autres membres
  *  (pour l'affichage nom/avatar en direct) et le dernier message. */
-export async function fetchConversations() {
+// limit sur les adhésions (donc sur le nombre de conversations listées) et
+// sur recentMessages (borné à ce volume plutôt que "tous les messages de
+// toutes mes conversations depuis toujours", juste pour afficher un aperçu
+// et un compteur non-lu par conversation) — un compte avec beaucoup de
+// conversations très actives ne doit pas charger un historique complet
+// rien que pour peupler la liste. Une conversation dont le dernier message
+// est plus vieux que ce volume n'affichera simplement pas d'aperçu, sans
+// que la requête elle-même explose.
+export async function fetchConversations({ limit = 100, recentMessagesLimit = 500 } = {}) {
   const me = await requireUser();
 
   const { data: myMemberships, error: memberError } = await supabase
     .from("conversation_members")
     .select("conversation_id, last_read_at, conversations(id, type, nom, image_url, created_at)")
     .eq("user_id", me.id)
-    .is("left_at", null);
+    .is("left_at", null)
+    .order("joined_at", { ascending: false })
+    .limit(limit);
   if (memberError) throw memberError;
   if (!myMemberships || myMemberships.length === 0) return [];
 
@@ -40,7 +50,8 @@ export async function fetchConversations() {
     .from("messages")
     .select("id, conversation_id, texte, sender_id, created_at")
     .in("conversation_id", conversationIds)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(recentMessagesLimit);
   if (messagesError) throw messagesError;
 
   const lastMessageByConv = {};
@@ -249,14 +260,23 @@ async function withSignedMedia(rows) {
   });
 }
 
-export async function fetchMessages(conversationId) {
+// limit : chargeait jusqu'ici l'historique COMPLET d'une conversation, sans
+// aucune borne — une conversation active depuis des mois transforme
+// l'ouverture de l'écran en requête énorme. On prend les `limit` messages
+// les PLUS RÉCENTS (tri descendant côté requête) puis on les remet dans
+// l'ordre chronologique attendu par l'interface — pas de vraie pagination
+// "charger plus" pour l'instant, juste un plafond qui empêche l'explosion ;
+// une conversation avec plus de `limit` messages perd simplement le tout
+// début de son historique, comme le fait déjà le Fil pour les publications.
+export async function fetchMessages(conversationId, { limit = 300 } = {}) {
   const { data, error } = await supabase
     .from("messages")
     .select(MESSAGE_SELECT)
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
-  return withSignedMedia(data);
+  return withSignedMedia([...data].reverse());
 }
 
 export async function sendMessage(conversationId, texte, replyToId = null) {

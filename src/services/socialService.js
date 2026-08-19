@@ -128,21 +128,28 @@ export async function fetchMyFollowing() {
 
 /** Liste des abonnés d'un utilisateur précis — pour l'écran "Abonnés" ouvert
  *  depuis n'importe quel profil (le sien ou un profil public). */
-export async function fetchFollowers(userId) {
+// limit : aucune borne jusqu'ici — un compte avec beaucoup d'abonnés
+// chargeait la table entière rien que pour ouvrir la liste. Les plus
+// récents en premier, plutôt qu'un ordre arbitraire tronqué au hasard.
+export async function fetchFollowers(userId, { limit = 500 } = {}) {
   const { data, error } = await supabase
     .from("follows")
     .select("profiles!follows_follower_id_fkey(username, nom, avatar_url)")
-    .eq("followed_id", userId);
+    .eq("followed_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
   return data.map((r) => r.profiles).filter(Boolean);
 }
 
 /** Liste des abonnements d'un utilisateur précis — pour l'écran "Abonnements". */
-export async function fetchFollowingList(userId) {
+export async function fetchFollowingList(userId, { limit = 500 } = {}) {
   const { data, error } = await supabase
     .from("follows")
     .select("profiles!follows_followed_id_fkey(username, nom, avatar_url)")
-    .eq("follower_id", userId);
+    .eq("follower_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
   return data.map((r) => r.profiles).filter(Boolean);
 }

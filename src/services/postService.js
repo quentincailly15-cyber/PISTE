@@ -446,7 +446,11 @@ export async function deleteComment(commentId) {
   return true;
 }
 
-export async function fetchComments(postId) {
+// limit : aucune borne jusqu'ici — une publication avec des milliers de
+// commentaires chargeait la table entière. Prend les `limit` PLUS RÉCENTS
+// (tri descendant côté requête) puis les remet dans l'ordre chronologique
+// attendu par l'affichage, même principe que fetchMessages.
+export async function fetchComments(postId, { limit = 200 } = {}) {
   // Hint de nom de colonne (author_id), pas juste "profiles(...)" — depuis
   // que 045 a ajouté thread_owner_id (autre FK vers profiles, aujourd'hui
   // abandonnée mais toujours en base), l'embed court est ambigu pour
@@ -455,9 +459,10 @@ export async function fetchComments(postId) {
     .from("comments")
     .select("*, profiles!author_id(username, nom)")
     .eq("post_id", postId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
-  return data;
+  return [...data].reverse();
 }
 
 /**

@@ -274,12 +274,15 @@ export async function toggleDiscussionMessageLike(messageId, shouldLike) {
 /** Vrais membres d'un groupe (jointure group_members → profiles), avec leur
  *  rôle au sein du groupe ('member' | 'admin' — colonne group_members.role,
  *  distincte du rôle plateforme profiles.role). */
-export async function fetchGroupMembers(groupId) {
+// limit : aucune borne jusqu'ici — une communauté nombreuse chargeait la
+// liste complète de ses membres d'un coup.
+export async function fetchGroupMembers(groupId, { limit = 300 } = {}) {
   const { data, error } = await supabase
     .from("group_members")
     .select("role, joined_at, profiles(id, username, nom, avatar_url)")
     .eq("group_id", groupId)
-    .order("joined_at", { ascending: true });
+    .order("joined_at", { ascending: true })
+    .limit(limit);
   if (error) throw error;
   return data
     .filter((r) => r.profiles)
