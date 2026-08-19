@@ -2570,7 +2570,7 @@ function MediaCarousel({ media, colors }) {
   );
 }
 function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, onRepost, onOpenComments, onOpenActions, onOpenAuthor, onOpenProfile }) {
-  const { colors } = useTheme();
+  const { colors, resolved } = useTheme();
   const [showShare, setShowShare] = useState(false);
   const [burst, setBurst] = useState(false);
   const [videoError, setVideoError] = useState(false);
@@ -2623,7 +2623,26 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
     // Marge latérale égale à l'espace entre deux publications (12px) : la
     // carte "flotte" sur le fond au lieu de toucher les bords de l'écran —
     // plus immersif qu'un bord à bord qui colle à la bordure du téléphone.
-    <div style={{ background: colors.surface, borderRadius: RADIUS.xl, margin: "0 12px 12px", overflow: "hidden", paddingBottom: 14 }}>
+    // Fine bordure "verre" + ombre portée : la carte se détache légèrement
+    // du fond au lieu d'un aplat plat contre AmbientBackground — un bord
+    // clair semi-transparent lit comme un reflet de verre sur fond sombre
+    // (l'effet inverse, un bord sombre, ne ressortirait pas). L'ombre reste
+    // discrète : un vrai flou de fond (backdrop-filter) sur chaque carte
+    // d'un fil qui en affiche beaucoup coûterait cher en performance pour
+    // un gain visuel marginal ici.
+    <div
+      style={{
+        background: colors.surface,
+        borderRadius: RADIUS.xl,
+        margin: "0 12px 12px",
+        overflow: "hidden",
+        paddingBottom: 14,
+        border: `1px solid ${resolved === "dark" ? "rgba(255,255,255,0.13)" : "rgba(0,0,0,0.08)"}`,
+        boxShadow: resolved === "dark"
+          ? "0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)"
+          : "0 6px 18px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6)",
+      }}
+    >
       {post.repostedAt && (
         <div className="flex items-center gap-1.5" style={{ padding: "14px 18px 6px", fontSize: 11.5, color: colors.textFaint, fontWeight: 600 }}>
           <Repeat2 size={13} /> Reposté
