@@ -8490,7 +8490,16 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
         ) : loadError ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.error, marginTop: 24, padding: "0 20px" }}>{loadError}</div>
         ) : messages.length === 0 ? (
-          <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Aucun message. Dites bonjour !</div>
+          // Centré verticalement dans l'espace disponible (pas juste calé en
+          // haut) + une icône légère plutôt qu'une simple ligne de texte gris
+          // — c'est le premier écran vu en démarrant une toute nouvelle
+          // conversation, ça mérite un peu plus qu'un texte de placeholder.
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, textAlign: "center", padding: "0 32px" }}>
+            <div style={{ width: 44, height: 44, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <MessageCircle size={20} color={colors.textFaint} strokeWidth={1.6} />
+            </div>
+            <span style={{ fontSize: 12.5, color: colors.textFaint }}>Aucun message. Dites bonjour !</span>
+          </div>
         ) : (
           messages.map((m, i) => {
             const mine = m.sender_id === meId;
