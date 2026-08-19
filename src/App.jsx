@@ -2939,10 +2939,28 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
   const [sendingReply, setSendingReply] = useState(false);
   const [replySent, setReplySent] = useState(false);
   const replyInputRef = useRef(null);
+  // Like réel et persistant (table trace_likes, migration 064) — distinct de
+  // "répondre" : le cœur bascule un état visible/compté, il n'envoie plus
+  // "❤️" comme un simple message privé éphémère. Overrides locaux (comme
+  // CommentLikeButton) plutôt que remontés plus haut : n'affecte que la
+  // Trace affichée, pas besoin de faire voyager un callback.
+  const [likeOverrides, setLikeOverrides] = useState({});
 
   const group = groups[groupIndex];
   const trace = group?.traces?.[traceIndex];
   const isMine = !!trace && trace.username === meUsername;
+  const likeState = trace ? likeOverrides[trace.id] || { liked: trace.liked, likeCount: trace.likeCount } : { liked: false, likeCount: null };
+  const toggleTraceLike = async () => {
+    if (!trace) return;
+    const previous = likeState;
+    const next = { liked: !previous.liked, likeCount: previous.likeCount != null ? Math.max(0, previous.likeCount + (previous.liked ? -1 : 1)) : null };
+    setLikeOverrides((o) => ({ ...o, [trace.id]: next }));
+    try {
+      await traceService.toggleTraceLike(trace.id, next.liked);
+    } catch (e) {
+      setLikeOverrides((o) => ({ ...o, [trace.id]: previous }));
+    }
+  };
 
   const sendReply = async (texte) => {
     if (!texte.trim() || !group?.authorId || sendingReply) return;
@@ -3098,12 +3116,20 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
           </div>
         )}
 
-        {/* Vues (propriétaire uniquement) */}
+        {/* Vues + likes (propriétaire uniquement) */}
         {isMine && (
-          <button onClick={() => setShowViewers(true)} className="flex items-center gap-1.5" style={{ position: "absolute", left: 16, bottom: "calc(22px + env(safe-area-inset-bottom, 0px))", zIndex: 3, background: "rgba(0,0,0,0.4)", border: "none", borderRadius: RADIUS.pill, padding: "7px 12px", cursor: "pointer" }}>
-            <Eye size={14} color="#fff" />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{trace.viewCount ?? 0} vue{(trace.viewCount ?? 0) !== 1 ? "s" : ""}</span>
-          </button>
+          <div className="flex items-center gap-2" style={{ position: "absolute", left: 16, bottom: "calc(22px + env(safe-area-inset-bottom, 0px))", zIndex: 3 }}>
+            <button onClick={() => setShowViewers(true)} className="flex items-center gap-1.5" style={{ background: "rgba(0,0,0,0.4)", border: "none", borderRadius: RADIUS.pill, padding: "7px 12px", cursor: "pointer" }}>
+              <Eye size={14} color="#fff" />
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{trace.viewCount ?? 0} vue{(trace.viewCount ?? 0) !== 1 ? "s" : ""}</span>
+            </button>
+            {(likeState.likeCount ?? 0) > 0 && (
+              <div className="flex items-center gap-1.5" style={{ background: "rgba(0,0,0,0.4)", borderRadius: RADIUS.pill, padding: "7px 12px" }}>
+                <Heart size={14} color={colors.accent} fill={colors.accent} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{likeState.likeCount}</span>
+              </div>
+            )}
+          </div>
         )}
 
         {paused && (
@@ -3141,13 +3167,12 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
               style={{ flex: 1, minWidth: 0, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(20,20,20,0.35)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13, color: "#fff", outline: "none" }}
             />
             <button
-              onClick={() => sendReply("❤️")}
-              disabled={sendingReply}
-              aria-label="Réagir avec un cœur"
+              onClick={toggleTraceLike}
+              aria-label={likeState.liked ? "Retirer le like" : "Aimer cette Trace"}
               className="active:scale-90 transition-transform"
               style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.35)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
             >
-              <Heart size={18} color="#fff" />
+              <Heart size={18} color={likeState.liked ? colors.accent : "#fff"} fill={likeState.liked ? colors.accent : "none"} />
             </button>
           </div>
         )}

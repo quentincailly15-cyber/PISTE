@@ -14,7 +14,7 @@ async function requireUser() {
   return data.user;
 }
 
-const TRACE_SELECT = "id, author_id, media_url, media_path, media_type, duration_seconds, texte, created_at, expires_at, profiles!traces_author_id_fkey(username, nom, avatar_url, is_private), trace_views(viewer_id)";
+const TRACE_SELECT = "id, author_id, media_url, media_path, media_type, duration_seconds, texte, created_at, expires_at, profiles!traces_author_id_fkey(username, nom, avatar_url, is_private), trace_views(viewer_id), trace_likes(viewer_id)";
 
 function mapTraceRow(row, meId) {
   return {
@@ -35,6 +35,9 @@ function mapTraceRow(row, meId) {
     // correctement si MOI j'ai déjà vu cette Trace.
     viewed: (row.trace_views || []).some((v) => v.viewer_id === meId),
     viewCount: row.author_id === meId ? (row.trace_views || []).length : null,
+    // Même principe que les vues (trace_likes, migration 064) — togglable.
+    liked: (row.trace_likes || []).some((l) => l.viewer_id === meId),
+    likeCount: row.author_id === meId ? (row.trace_likes || []).length : null,
   };
 }
 
@@ -160,6 +163,21 @@ export async function recordTraceView(traceId) {
     .from("trace_views")
     .upsert({ trace_id: traceId, viewer_id: me.id }, { onConflict: "trace_id,viewer_id", ignoreDuplicates: true });
   if (error) throw error;
+  return true;
+}
+
+/** Bascule le like d'une Trace (table trace_likes, migration 064) — une
+ *  seule ligne par personne et par Trace (clé primaire (trace_id,
+ *  viewer_id)), togglable contrairement à une vue. */
+export async function toggleTraceLike(traceId, shouldLike) {
+  const me = await requireUser();
+  if (shouldLike) {
+    const { error } = await supabase.from("trace_likes").insert({ trace_id: traceId, viewer_id: me.id });
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("trace_likes").delete().eq("trace_id", traceId).eq("viewer_id", me.id);
+    if (error) throw error;
+  }
   return true;
 }
 
