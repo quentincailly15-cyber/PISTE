@@ -8,15 +8,24 @@ html, body, #root {
   /* Filet de sécurité : sans viewport-fit=cover, ce fond ne se voyait jamais.
      Avec, la page s'étend maintenant sous l'encoche/la barre d'accueil en
      PWA plein écran sur iPhone — évite un bord blanc/noir hors thème tant
-     que React n'a pas encore posé le fond réel (colors.background). */
-  background: #EBEDDF;
-}
-@media (prefers-color-scheme: dark) {
-  html, body, #root { background: #0D0F08; }
+     que React n'a pas encore posé le fond réel (colors.background).
+     Fixe en dur sur le fond sombre (pas conditionné à prefers-color-scheme) :
+     ThemeProvider (App.jsx) démarre TOUJOURS en mode sombre, quel que soit le
+     réglage Apparence d'iOS — un fond de secours qui suit le système clair
+     restait clair pendant que React peignait l'app en sombre par-dessus,
+     candidat identifié pour le bloc blanc en bas de l'écran de connexion. */
+  background: #0D0F08;
 }
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Sans ça, le rebond élastique du scroll iOS Safari expose brièvement ce
+     fond de secours en haut/bas de l'écran — exactement "en bas de l'écran"
+     du bug rapporté. */
+  overscroll-behavior: none;
+}
+body {
+  overscroll-behavior: none;
 }
 
 /* Sans ça, certains navigateurs mobiles attendent ~300ms avant de valider un
