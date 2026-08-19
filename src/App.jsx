@@ -4344,8 +4344,13 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           photo (qui ne déborde que de 28px autour d'elle), il n'y avait donc
           plus aucune ambiance colorée, seulement le dégradé de repli qui
           retombe vite sur colors.background — assez sombre pour sembler un
-          aplat noir sous la pilule translucide (SegmentedControl). */}
-      <AmbientBackground imageUrl={group.imageUrl || group.latestPostImage} />
+          aplat noir sous la pilule translucide (SegmentedControl).
+          "|| undefined" à la fin est indispensable : group.imageUrl vaut
+          `null` (pas `undefined`) côté Supabase quand la communauté n'a pas
+          de photo — passer `null` court-circuitait quand même le repli sur
+          contextUrl (AmbientBackground ne teste que "!== undefined"), privant
+          alors la page de TOUTE couleur, même celle de l'utilisateur. */}
+      <AmbientBackground imageUrl={group.imageUrl || group.latestPostImage || undefined} />
       <div onScroll={handleScroll} style={{ position: "relative", zIndex: 1, flex: 1, overflowY: "auto" }}>
         <ScreenHeader title={group.nom} onBack={onClose} chromeMode={localMode} />
         <div style={{ position: "relative", margin: "10px 16px 0" }}>
@@ -4505,8 +4510,11 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           en position "static" et se peignait donc AVANT elle dans l'ordre
           CSS (les éléments non positionnés se peignent avant les éléments
           positionnés, même à zIndex:0), la rendant invisible sous le fond
-          du thème malgré sa présence réelle dans le DOM. */}
-      <div style={{ position: "relative", zIndex: 1, padding: 16, borderTop: `1px solid ${colors.border}`, background: colors.background }}>
+          du thème malgré sa présence réelle dans le DOM. PAS de background
+          opaque ici (colors.background y ressemble à un aplat noir en thème
+          sombre) : le zIndex seul suffit à rendre la barre visible, elle
+          doit laisser transparaître l'ambiance de la page comme le reste. */}
+      <div style={{ position: "relative", zIndex: 1, padding: 16, borderTop: `1px solid ${colors.border}` }}>
         {group.joined ? (
           <Button onClick={() => { onClose(); onCreatePost(group.id); }}>Publier dans cette communauté</Button>
         ) : (
