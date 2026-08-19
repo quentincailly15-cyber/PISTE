@@ -3690,7 +3690,15 @@ function InstantsFeed({ items, liked, reposted, commentsByPost, onLike, onRepost
     scheduleAutoHide();
   };
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 15, background: "#000", display: "flex", justifyContent: "center" }}>
+    // top/left/right/bottom explicites + largeur/hauteur en plus du
+    // raccourci "inset" : repéré sur enregistrement d'écran réel, en
+    // arrivant sur Instants depuis un autre onglet, ce conteneur ne
+    // recouvrait pas encore tout l'écran le tout premier instant (l'écran
+    // précédent restait visible autour d'un petit rectangle noir), avant de
+    // se corriger un instant plus tard — les valeurs explicites lèvent toute
+    // ambiguïté dès la première peinture plutôt que de dépendre du calcul de
+    // "inset" par rapport au viewport.
+    <div style={{ position: "fixed", inset: 0, top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100dvh", zIndex: 15, background: "#000", display: "flex", justifyContent: "center" }}>
     <div onTouchStart={handleActivity} style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflow: "hidden", background: "#000" }}>
       {tabSwitcher && (
         <div
