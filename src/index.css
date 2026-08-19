@@ -27,6 +27,16 @@ html {
 body {
   overscroll-behavior: none;
 }
+/* overscroll-behavior ne se transmet PAS aux enfants : le fixer sur html/body
+   ne désactive pas le rebond des ~36 conteneurs overflow-y:auto internes de
+   l'app (un par écran défilant). "contain" (pas "none") : empêche le rebond
+   de se propager au conteneur parent — donc de révéler un autre écran — sans
+   supprimer l'élasticité locale elle-même. Sélecteur universel volontaire :
+   inerte sur tout élément non scrollable, plus sûr que de retoucher chacun
+   des 36 endroits un par un. */
+* {
+  overscroll-behavior: contain;
+}
 
 /* Sans ça, certains navigateurs mobiles attendent ~300ms avant de valider un
    tap (le temps de vérifier qu'il ne s'agit pas du début d'un double-tap de
