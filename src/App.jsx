@@ -567,22 +567,43 @@ function TextField({ label, value, onChange, placeholder, type = "text", error, 
 // décliné avec les couleurs du thème pour rester lisible sur fond normal.
 function SegmentedControl({ options, value, onChange }) {
   const { colors } = useTheme();
+  const n = options.length;
+  const activeIndex = Math.max(0, options.findIndex((o) => o.key === value));
   return (
-    <div className="flex" style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, gap: 2, boxShadow: "0 4px 16px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+    // Vrai curseur glissant (un seul calque animé en transform, pas une
+    // couleur indépendante par bouton) — c'est le repère visuel d'un
+    // segmented control moderne (iOS) plutôt qu'une simple pilule qui
+    // "pop" sur place à chaque tap. Le calcul en % (pas de mesure DOM)
+    // fonctionne tant que padding/gap restent fixes ci-dessous.
+    <div className="flex" style={{ position: "relative", background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, boxShadow: "0 4px 16px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          top: 3,
+          bottom: 3,
+          left: 3,
+          width: `calc((100% - 6px) / ${n})`,
+          transform: `translateX(${activeIndex * 100}%)`,
+          borderRadius: RADIUS.pill,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 24%), ${colors.accent}CC`,
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          boxShadow: `0 4px 14px ${colors.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)`,
+          transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      />
       {options.map((o) => (
         <button
           key={o.key}
           onClick={() => onChange(o.key)}
           className="active:scale-[0.96]"
           style={{
+            position: "relative",
+            zIndex: 1,
             flex: 1,
             border: "none",
-            // Translucide, pas un aplat plein — la référence garde ce
-            // même verre légèrement teinté même sur ses pilules "actives",
-            // + le même verni glossy que Button/Chip pour un relief marqué.
-            background: value === o.key ? `linear-gradient(165deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 24%), ${colors.accent}CC` : "transparent",
-            backdropFilter: value === o.key ? "blur(8px)" : "none",
-            WebkitBackdropFilter: value === o.key ? "blur(8px)" : "none",
+            background: "transparent",
             color: value === o.key ? colors.onAccent : colors.textFaint,
             borderRadius: RADIUS.pill,
             padding: "7px 13px",
@@ -590,12 +611,7 @@ function SegmentedControl({ options, value, onChange }) {
             fontWeight: value === o.key ? 700 : 600,
             cursor: "pointer",
             whiteSpace: "nowrap",
-            // Relief à deux couches sur la pilule active, même recette que
-            // Button primary (halo + filet clair en haut) pour qu'elle se
-            // détache du verre du fond plutôt que de rester à plat dessus.
-            boxShadow: value === o.key ? `0 4px 14px ${colors.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)` : "none",
-            transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
-            animation: value === o.key ? "piste-pill-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
+            transition: "color 220ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
           {o.label}
@@ -693,6 +709,11 @@ function ScreenHeader({ title, onBack, onCloseX, rightAction, chromeMode = "full
         background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
         backdropFilter: "blur(24px)",
         WebkitBackdropFilter: "blur(24px)",
+        // Filet plein tour en flottant (bord qui capte la lumière tout
+        // autour, pas seulement en haut via l'inset highlight) : sans lui,
+        // la pilule ne se détachait que par son ombre, jamais par un
+        // vrai bord de verre — moins net sur un fond clair ou peu contrasté.
+        border: floating ? "1px solid rgba(255,255,255,0.12)" : "none",
         borderBottom: floating ? "none" : `1px solid ${colors.border}`,
         margin: floating ? "0 8px" : 0,
         borderRadius: floating ? RADIUS.pill : 0,
@@ -1545,6 +1566,11 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
         backdropFilter: "blur(24px)",
         WebkitBackdropFilter: "blur(24px)",
+        // Filet plein tour en flottant (bord qui capte la lumière tout
+        // autour, pas seulement en haut via l'inset highlight) : sans lui,
+        // la pilule ne se détachait que par son ombre, jamais par un
+        // vrai bord de verre — moins net sur un fond clair ou peu contrasté.
+        border: floating ? "1px solid rgba(255,255,255,0.12)" : "none",
         borderBottom: floating ? "none" : `1px solid ${colors.border}`,
         margin: floating ? "0 8px" : 0,
         borderRadius: floating ? RADIUS.pill : 0,
@@ -1560,7 +1586,7 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         <div style={{ position: "relative" }}>
           <IconButton icon={Bell} onClick={onBell} />
           {unreadCount > 0 && (
-            <span style={{ position: "absolute", top: 2, right: 2, minWidth: 15, height: 15, borderRadius: 8, background: colors.accent, color: colors.onAccent, fontSize: 9.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+            <span style={{ position: "absolute", top: 2, right: 2, minWidth: 15, height: 15, borderRadius: 8, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, boxShadow: `0 2px 6px ${colors.accent}50`, color: colors.onAccent, fontSize: 9.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
@@ -1593,9 +1619,10 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
           width: "100%",
           maxWidth: 480,
           pointerEvents: "auto",
-          background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 40%), ${colors.navBg}`,
+          background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 24%), ${colors.navBg}`,
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
+          border: floating ? "1px solid rgba(255,255,255,0.12)" : "none",
           borderTop: floating ? "none" : `1px solid ${colors.border}`,
           margin: floating ? "0 8px calc(8px + env(safe-area-inset-bottom, 0px))" : 0,
           borderRadius: floating ? RADIUS.pill : 0,
@@ -1649,7 +1676,7 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                 >
                   <Icon size={21} strokeWidth={isActive ? 2.3 : 1.8} color={isActive ? colors.accent : colors.textFaint} />
                   {it.key === "messages" && unreadConversations > 0 && (
-                    <span style={{ position: "absolute", top: -2, right: 2, minWidth: 14, height: 14, borderRadius: 7, background: colors.accent, color: colors.onAccent, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+                    <span style={{ position: "absolute", top: -2, right: 2, minWidth: 14, height: 14, borderRadius: 7, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, boxShadow: `0 2px 6px ${colors.accent}50`, color: colors.onAccent, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
                       {unreadConversations > 9 ? "9+" : unreadConversations}
                     </span>
                   )}
@@ -1915,7 +1942,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
               <div style={{ fontSize: 13, color: colors.textFaint }}>@{profile.username}</div>
               <div className="flex justify-center"><BadgeRow badges={profile.badges} /></div>
               {profile.localisation && (
-                <div className="flex items-center justify-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px" }}>
+                <div className="flex items-center justify-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 24%), ${colors.surfaceAlt}`, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
                   <MapPin size={12} color={colors.textFaint} /><span style={{ fontSize: 12, color: colors.textSecondary }}>{profile.localisation}</span>
                 </div>
               )}
@@ -1951,7 +1978,25 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                   <button
                     onClick={onToggleBell}
                     aria-label={bellOn ? "Désactiver les notifications" : "Activer les notifications"}
-                    style={{ width: 38, height: 38, borderRadius: RADIUS.pill, border: `1.5px solid ${bellOn ? colors.accent : colors.border}`, background: bellOn ? colors.accentSoft : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                    className="active:scale-90"
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: RADIUS.pill,
+                      border: `1.5px solid ${bellOn ? colors.accent : colors.border}`,
+                      background: bellOn
+                        ? `linear-gradient(165deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}`
+                        : `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
+                      backdropFilter: "blur(14px)",
+                      WebkitBackdropFilter: "blur(14px)",
+                      boxShadow: bellOn ? `0 3px 10px ${colors.accent}30` : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    }}
                   >
                     <Bell size={16} color={bellOn ? colors.accent : colors.textFaint} fill={bellOn ? colors.accent : "none"} />
                   </button>
@@ -7038,20 +7083,13 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
 // Barre d'onglets texte plat + soulignement — comme la référence (pas de
 // pilule segmentée) : réutilisée par le profil personnel et celui des
 // autres utilisateurs pour rester cohérent.
+// Pilule glissante (SegmentedControl) plutôt qu'un soulignement plat — même
+// langage que Communautés/Instants, pour que le Profil ne reste pas le seul
+// écran encore aux onglets "texte + trait" façon 2015.
 function ProfileTabBar({ tabs, tab, setTab }) {
-  const { colors } = useTheme();
   return (
-    <div className="flex" style={{ borderBottom: `1px solid ${colors.border}` }}>
-      {tabs.map(([key, label]) => (
-        <button
-          key={key}
-          onClick={() => setTab(key)}
-          className="flex-1 active:scale-[0.98] transition-transform"
-          style={{ textAlign: "center", padding: "11px 4px", background: "none", border: "none", cursor: "pointer", borderBottom: `2px solid ${tab === key ? colors.accent : "transparent"}`, marginBottom: -1 }}
-        >
-          <span style={{ fontSize: 12.5, fontWeight: tab === key ? 700 : 600, color: tab === key ? colors.text : colors.textFaint }}>{label}</span>
-        </button>
-      ))}
+    <div style={{ padding: "0 16px" }}>
+      <SegmentedControl options={tabs.map(([key, label]) => ({ key, label }))} value={tab} onChange={setTab} />
     </div>
   );
 }
@@ -7198,7 +7236,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
           <div style={{ fontSize: 13, color: colors.textFaint }}>@{profile.username || "handle"}</div>
           <div className="flex justify-center"><BadgeRow badges={profile.badges} /></div>
           {profile.localisation && (
-            <div className="flex items-center justify-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px" }}>
+            <div className="flex items-center justify-center gap-1" style={{ marginTop: 6, display: "inline-flex", background: `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 24%), ${colors.surfaceAlt}`, borderRadius: RADIUS.pill, padding: "4px 10px 4px 8px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
               <MapPin size={12} color={colors.textFaint} /><span style={{ fontSize: 12, color: colors.textSecondary }}>{profile.localisation}</span>
             </div>
           )}
@@ -7242,8 +7280,9 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
       {showRequests && <FollowRequestsSheet onClose={() => setShowRequests(false)} onApprove={onApproveRequest} onReject={onRejectRequest} onOpenProfile={onOpenProfile} />}
       {showCarnet && <HuntingLogScreen onClose={() => setShowCarnet(false)} dogs={dogs} onOpenProfile={onOpenProfile} />}
 
-      {/* Vrais onglets — texte + soulignement — comme la référence, plutôt
-          que des panneaux compacts empilés. */}
+      {/* Onglets en pilule glissante (voir ProfileTabBar) — plutôt que des
+          panneaux compacts empilés, et cohérent avec le même composant
+          utilisé par Communautés/Instants. */}
       <div style={{ marginTop: 20 }}>
         <ProfileTabBar tabs={profileTabs} tab={tab} setTab={setTab} />
       </div>
