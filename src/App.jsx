@@ -1649,6 +1649,42 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
   // change à chaque clic, ce qui force le <span> à se remonter et donc
   // rejouer l'animation, même en tapant plusieurs fois de suite.
   const [createPulse, setCreatePulse] = useState(0);
+  // Glisser le doigt sur la barre (au lieu de taper précisément chaque
+  // icône) — même principe que le menu radial "+" (voir CreateFlow) :
+  // survoler une icône la met en évidence, relâcher là où on est active
+  // exactement comme un tap dessus. elementFromPoint + data-nav-key évite
+  // de recalculer des rectangles à la main (pas de géométrie en cercle ici,
+  // juste une rangée, donc plus simple que le menu radial).
+  const [dragKey, setDragKey] = useState(null);
+  const draggingRef = useRef(false);
+  const keyAtPoint = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    return el?.closest("[data-nav-key]")?.getAttribute("data-nav-key") || null;
+  };
+  const commitKey = (key) => {
+    if (!key) return;
+    const it = items.find((i) => i.key === key);
+    if (!it) return;
+    if (it.isCreate) { setCreatePulse((n) => n + 1); onCreate(); }
+    else setActive(key);
+  };
+  const onRowTouchStart = (e) => {
+    draggingRef.current = true;
+    const t = e.touches[0];
+    setDragKey(keyAtPoint(t.clientX, t.clientY));
+  };
+  const onRowTouchMove = (e) => {
+    if (!draggingRef.current) return;
+    const t = e.touches[0];
+    setDragKey(keyAtPoint(t.clientX, t.clientY));
+  };
+  const onRowTouchEnd = () => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    commitKey(dragKey);
+    setDragKey(null);
+  };
+  const onRowTouchCancel = () => { draggingRef.current = false; setDragKey(null); };
   const items = [
     { key: "fil", label: "Fil", icon: Home },
     { key: "video", label: "Vidéo", icon: Film },
@@ -1697,23 +1733,42 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
       >
         <div
           className="flex items-center justify-between"
+          onTouchStart={onRowTouchStart}
+          onTouchMove={onRowTouchMove}
+          onTouchEnd={onRowTouchEnd}
+          onTouchCancel={onRowTouchCancel}
           style={{
             paddingTop: 8,
             paddingBottom: 8,
             paddingLeft: 10,
             paddingRight: 10,
+            touchAction: "none",
           }}
         >
           {items.map((it) => {
             const Icon = it.icon;
             const isActive = active === it.key;
+            const isHover = dragKey === it.key;
             if (it.isCreate) {
               return (
-                <button key={it.key} onClick={() => { setCreatePulse((n) => n + 1); onCreate(); }} aria-label="Créer" className="flex flex-col items-center gap-1 active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                <button key={it.key} data-nav-key={it.key} onClick={() => { setCreatePulse((n) => n + 1); onCreate(); }} aria-label="Créer" className="flex flex-col items-center gap-1 active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                   {/* Plus de décalage vers le haut (marginTop négatif) : le
                       bouton flotte maintenant centré entre le haut et le bas
                       de la pilule, comme les autres icônes de la barre. */}
-                  <div style={{ position: "relative", width: 42, height: 42, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 20px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.35)`, transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: isHover ? 46 : 42,
+                      height: isHover ? 46 : 42,
+                      borderRadius: RADIUS.pill,
+                      background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: `0 6px 20px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.35)`,
+                      transition: "width 180ms cubic-bezier(0.22, 1, 0.36, 1), height 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    }}
+                  >
                     {createPulse > 0 && <span key={createPulse} aria-hidden="true" style={{ position: "absolute", inset: -8, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out forwards" }} />}
                     <Plus size={21} color={colors.onAccent} strokeWidth={2.4} />
                   </div>
@@ -1723,21 +1778,25 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
             // Icônes seules, sans label — la référence n'accroche aucun
             // texte sous ses icônes de nav, l'état actif (pilule pleine +
             // icône pleine) suffit à se repérer, plus proche d'un vrai
-            // environnement que d'un menu d'app classique.
+            // environnement que d'un menu d'app classique. isHover (survol
+            // pendant un glissé, voir onRowTouchMove) reçoit le même
+            // traitement que isActive — retour visuel immédiat AVANT même
+            // de relâcher le doigt.
             return (
-              <button key={it.key} onClick={() => setActive(it.key)} aria-label={it.label} className="active:scale-[0.98] transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>
+              <button key={it.key} data-nav-key={it.key} onClick={() => setActive(it.key)} aria-label={it.label} className="active:scale-[0.98] transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>
                 <div
                   style={{
                     position: "relative",
                     width: 46,
                     height: 34,
                     borderRadius: RADIUS.pill,
-                    background: isActive ? `linear-gradient(165deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}` : "transparent",
-                    boxShadow: isActive ? `0 2px 8px ${colors.accent}25, inset 0 1px 0 rgba(255,255,255,0.16)` : "none",
+                    background: isActive || isHover ? `linear-gradient(165deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}` : "transparent",
+                    boxShadow: isActive || isHover ? `0 2px 8px ${colors.accent}25, inset 0 1px 0 rgba(255,255,255,0.16)` : "none",
+                    transform: isHover ? "scale(1.08)" : "scale(1)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
                     animation: isActive ? "piste-pill-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
                   }}
                 >
@@ -1745,7 +1804,7 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                       actif) — même logique que IconButton — plutôt qu'une
                       épaisseur fixe qui ne distinguait l'état actif que par
                       la couleur et le fond. */}
-                  <Icon size={isActive ? 22 : 20} strokeWidth={isActive ? 2.3 : 1.7} color={isActive ? colors.accent : colors.textFaint} style={{ transition: "all 220ms cubic-bezier(0.22, 1, 0.36, 1)" }} />
+                  <Icon size={isActive || isHover ? 22 : 20} strokeWidth={isActive || isHover ? 2.3 : 1.7} color={isActive || isHover ? colors.accent : colors.textFaint} style={{ transition: "all 220ms cubic-bezier(0.22, 1, 0.36, 1)" }} />
                   {it.key === "messages" && unreadConversations > 0 && (
                     <span style={{ position: "absolute", top: -2, right: 2, minWidth: 14, height: 14, borderRadius: 7, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, boxShadow: `0 2px 6px ${colors.accent}50`, color: colors.onAccent, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
                       {unreadConversations > 9 ? "9+" : unreadConversations}
