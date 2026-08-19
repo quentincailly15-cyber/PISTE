@@ -7426,7 +7426,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     const previous = messages;
     setMessages((m) => m.filter((x) => x.id !== msg.id));
     try {
-      await messageService.deleteMessage(msg.id, msg.message_media?.[0]?.url || null);
+      await messageService.deleteMessage(msg.id, msg.message_media?.[0]?.path || null);
     } catch (e) {
       setMessages(previous); // échec réel : on remet le message, pas de suppression silencieuse fausse
     }

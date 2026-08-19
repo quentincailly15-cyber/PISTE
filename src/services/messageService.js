@@ -229,6 +229,26 @@ export async function fetchConversationMembers(conversationId) {
 // moyen de savoir à quel message précis la réponse renvoyait.
 const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avatar_url), message_media(url, type, duration_seconds), reply_to:messages!reply_to_id(id, texte, sender_id, profiles!messages_sender_id_fkey(nom, username), message_media(type), shared_post_id), message_reactions(user_id, emoji), shared_post:posts!shared_post_id(id, type, texte, titre, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(url, ordre, type, thumbnail_url))";
 
+/**
+ * Le bucket "messages" est privé (migration 056) — message_media.url ne
+ * contient plus une URL publique mais le chemin Storage brut. On génère ici
+ * une URL signée (1h) juste avant de renvoyer les messages à l'interface,
+ * en un seul appel groupé plutôt qu'un par média. `path` reste accessible
+ * à côté de `url` (signée) pour que deleteMessage() puisse supprimer le
+ * fichier sans avoir à re-parser une URL.
+ */
+async function withSignedMedia(rows) {
+  const paths = rows.map((m) => m.message_media?.[0]?.url).filter(Boolean);
+  if (paths.length === 0) return rows;
+  const { data: signed } = await supabase.storage.from("messages").createSignedUrls(paths, 3600);
+  const byPath = new Map((signed || []).filter((s) => !s.error).map((s) => [s.path, s.signedUrl]));
+  return rows.map((m) => {
+    const media = m.message_media?.[0];
+    if (!media) return m;
+    return { ...m, message_media: [{ ...media, path: media.url, url: byPath.get(media.url) || null }] };
+  });
+}
+
 export async function fetchMessages(conversationId) {
   const { data, error } = await supabase
     .from("messages")
@@ -236,7 +256,7 @@ export async function fetchMessages(conversationId) {
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
   if (error) throw error;
-  return data;
+  return withSignedMedia(data);
 }
 
 export async function sendMessage(conversationId, texte, replyToId = null) {
@@ -291,31 +311,31 @@ export async function sendMediaMessage(conversationId, file, mediaType, duration
   });
   if (uploadError) throw uploadError;
 
-  const { data: publicUrl } = supabase.storage.from("messages").getPublicUrl(path);
+  // Chemin brut stocké (pas d'URL publique — le bucket est privé, migration
+  // 056) : une URL signée est générée à la demande, ici pour l'affichage
+  // immédiat, et à chaque fetchMessages() ensuite (voir withSignedMedia).
   const { data: media, error: mediaError } = await supabase
     .from("message_media")
-    .insert({ message_id: message.id, url: publicUrl.publicUrl, type: mediaType, duration_seconds: durationSeconds })
+    .insert({ message_id: message.id, url: path, type: mediaType, duration_seconds: durationSeconds })
     .select("url, type, duration_seconds")
     .single();
   if (mediaError) throw mediaError;
 
-  return { ...message, message_media: [media] };
+  const { data: signedData } = await supabase.storage.from("messages").createSignedUrl(path, 3600);
+  return { ...message, message_media: [{ ...media, path: media.url, url: signedData?.signedUrl || null }] };
 }
 
 /**
  * Supprime un message envoyé par l'utilisateur connecté (RLS : "sender
  * deletes own messages", migration 035). message_media est en cascade côté
  * base, mais le fichier Storage lui-même ne l'est pas — on le retire ici en
- * best-effort à partir de son URL publique (chemin après "/messages/").
+ * best-effort. `mediaPath` est le chemin Storage brut (message_media[0].path,
+ * voir withSignedMedia) — plus besoin de le re-extraire d'une URL depuis que
+ * le bucket est privé et servi par URL signée (migration 056).
  */
-export async function deleteMessage(messageId, mediaUrl = null) {
-  if (mediaUrl) {
-    const marker = "/messages/";
-    const idx = mediaUrl.indexOf(marker);
-    if (idx !== -1) {
-      const path = decodeURIComponent(mediaUrl.slice(idx + marker.length));
-      await supabase.storage.from("messages").remove([path]).catch(() => {});
-    }
+export async function deleteMessage(messageId, mediaPath = null) {
+  if (mediaPath) {
+    await supabase.storage.from("messages").remove([mediaPath]).catch(() => {});
   }
   const { error } = await supabase.from("messages").delete().eq("id", messageId);
   if (error) throw error;
