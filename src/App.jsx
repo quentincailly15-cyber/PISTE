@@ -21,6 +21,13 @@ import * as socialService from "./services/socialService.js";
 import * as messageService from "./services/messageService.js";
 import * as notificationService from "./services/notificationService.js";
 import { supabase } from "./services/supabaseClient.js";
+// Logique pure (algorithme de fil, âge/modération, hashtags/mentions) — une
+// seule source de vérité, testée par piste_core.test.js. Avant l'audit
+// pré-bêta, App.jsx gardait sa propre copie de ces fonctions, déjà divergée
+// de celle réellement testée (poids de score manquants, filtrage par nom
+// d'affichage au lieu du pseudo) — les tests validaient donc un algorithme
+// que l'app n'exécutait jamais réellement.
+import { MIN_AGE, computeAge, MODERATION_AGE_RULES, isContentVisible, FEED_WEIGHTS, getCandidatePosts, filterSafety, filterAge, calculateScores, sortFeed, diversifyFeed, buildFeed, buildChronologicalFeed, extractHashtags, extractMentions } from "./lib/piste_core.js";
 
 /* ============================================================
    1. TOKENS DE DESIGN — un seul accent (vert kaki)
@@ -637,17 +644,9 @@ const REGIONS = Object.keys(REGIONS_DEPARTEMENTS);
 //   - vérification d'identité réelle de l'âge déclaré
 //   - obligations spécifiques selon les juridictions (âge de consentement numérique...)
 //   - modalités de consentement parental le cas échéant
-function computeAge(day, month, year) {
-  if (!day || !month || !year) return null;
-  const today = new Date();
-  const birth = new Date(Number(year), Number(month) - 1, Number(day));
-  let age = today.getFullYear() - birth.getFullYear();
-  const hasHadBirthdayThisYear = today.getMonth() > birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() >= birth.getDate());
-  if (!hasHadBirthdayThisYear) age -= 1;
-  return age;
-}
 // Âge d'un chien recalculé à chaque affichage depuis sa date de naissance
-// (plutôt qu'un nombre saisi une fois qui devient faux avec le temps).
+// (plutôt qu'un nombre saisi une fois qui devient faux avec le temps) — pas
+// dans piste_core.js, propre à l'UI des chiens, pas à l'algorithme de fil.
 function ageFromBirthDate(dateStr) {
   if (!dateStr) return null;
   const birth = new Date(dateStr);
@@ -657,115 +656,19 @@ function ageFromBirthDate(dateStr) {
   if (!hasHadBirthdayThisYear) age -= 1;
   return age;
 }
-// Structure (pas encore appliquée automatiquement) des restrictions envisagées par tranche
-// d'âge — à brancher sur de vraies vérifications backend avant d'être réellement appliquée.
-const MIN_AGE = 14; // en dessous, l'inscription est refusée dès l'onboarding
-const MODERATION_AGE_RULES = {
-  minor: { maxAge: 17, messagerieOuverte: false, profilPublicParDefaut: false, contenuSensibleMasque: true },
-  adult: { messagerieOuverte: true, profilPublicParDefaut: true, contenuSensibleMasque: false },
-};
 // --- Contenu sensible -------------------------------------------------------
 // Classification déclarée par l'auteur à la publication (normal / sensible / interdit).
 // "Interdit" reste réservé à la modération réelle (voir REPORT_REASONS) — un auteur ne
 // peut se classer lui-même que normal ou sensible. Logique centralisée ici plutôt que
-// dispersée dans chaque composant d'affichage.
+// dispersée dans chaque composant d'affichage. (Différent du CONTENT_RATINGS de
+// piste_core.js, qui n'est qu'une liste de valeurs valides pour la validation —
+// celui-ci porte les libellés/avertissements affichés à l'écran.)
 const CONTENT_RATINGS = {
   normal: { label: "Normal" },
   sensitive: { label: "Sensible", warning: "Cette publication peut contenir des images liées à la chasse (dépouillement, sang, blessures) pouvant choquer certains utilisateurs." },
   restricted: { label: "Interdit" }, // attribué uniquement par la modération, jamais par l'auteur
 };
-function isContentVisible(rating, viewerIsMinor) {
-  if (rating === "restricted") return false; // retiré, quel que soit le spectateur
-  if (rating === "sensitive" && viewerIsMinor) return false; // masqué aux mineurs par défaut
-  return true;
-}
 
-// --- Algorithme de fil (V1) ---------------------------------------------
-// Pipeline explicite et centralisé, pensé pour être remplacé par un vrai service
-// backend sans changer l'interface : getCandidatePosts → filterSafety → filterAge →
-// calculateScores → sortFeed → diversifyFeed. Chaque étape est une fonction pure,
-// testable indépendamment (voir piste_core.js / piste_core.test.js).
-const FEED_WEIGHTS = { affinity: 3, recency: 2, interaction: 2, interest: 1.5, quality: 1, groupAffinity: 1.2, alreadySeen: -2.5 };
-
-function getCandidatePosts(posts) {
-  return posts; // point d'entrée unique — deviendra un vrai fetch paginé côté backend
-}
-function filterSafety(posts, blockedAuthors, hiddenPostIds) {
-  return posts.filter((p) => p.contentRating !== "restricted" && !blockedAuthors.includes(p.username) && !hiddenPostIds.includes(p.id));
-}
-function filterAge(posts, viewerIsMinor) {
-  return posts.filter((p) => isContentVisible(p.contentRating || "normal", viewerIsMinor));
-}
-function calculateScores(posts, ctx) {
-  const { following = [], interests = [], now = Date.now(), myGroupIds = [], seenIds = [] } = ctx;
-  return posts.map((p) => {
-    const affinity = following.includes(p.username) ? 1 : 0;
-    const ageHours = p.createdAt ? (now - p.createdAt) / 36e5 : null;
-    const recency = ageHours === null ? 0.6 : Math.max(0, 1 - ageHours / 72); // décroît sur 72h
-    const interaction = Math.min(1, ((p.likes || 0) + (p.commentaires || 0) * 2) / 20);
-    const interestMatch = (p.animal && interests.includes(p.animal)) || (p.pratique && interests.includes(p.pratique)) ? 1 : 0;
-    const quality = p.texte && p.texte.length > 20 ? 1 : 0.5;
-    // Signal groupe : un post publié dans un groupe que l'utilisateur a rejoint
-    // est plus pertinent — n'a d'effet que si p.groupId existe (voir mapPostRow).
-    const groupAffinity = p.groupId && myGroupIds.includes(p.groupId) ? 1 : 0;
-    // Pénalité "déjà vu" : fait redescendre (sans l'exclure) un contenu déjà
-    // montré récemment (seenIds, alimenté par l'appelant si pertinent).
-    const alreadySeen = seenIds.includes(p.id) ? 1 : 0;
-    const score =
-      affinity * FEED_WEIGHTS.affinity +
-      recency * FEED_WEIGHTS.recency +
-      interaction * FEED_WEIGHTS.interaction +
-      interestMatch * FEED_WEIGHTS.interest +
-      quality * FEED_WEIGHTS.quality +
-      groupAffinity * FEED_WEIGHTS.groupAffinity +
-      alreadySeen * FEED_WEIGHTS.alreadySeen;
-    return { ...p, _score: score };
-  });
-}
-function sortFeed(posts) {
-  return [...posts].sort((a, b) => (b._score || 0) - (a._score || 0));
-}
-function diversifyFeed(posts) {
-  // Round-robin par auteur : évite d'afficher plusieurs contenus du même auteur d'affilée,
-  // tout en conservant le classement par score au sein de chaque auteur.
-  const byAuthor = {};
-  posts.forEach((p) => { const key = p.username || p.nom; (byAuthor[key] = byAuthor[key] || []).push(p); });
-  const queues = Object.values(byAuthor);
-  const result = [];
-  let added = true;
-  while (added) {
-    added = false;
-    for (const q of queues) if (q.length) { result.push(q.shift()); added = true; }
-  }
-  return result;
-}
-function buildFeed(posts, ctx) {
-  const candidates = getCandidatePosts(posts);
-  const safe = filterSafety(candidates, ctx.blockedAuthors || [], ctx.hiddenPostIds || []);
-  const ageOk = filterAge(safe, !!ctx.viewerIsMinor);
-  const scored = calculateScores(ageOk, ctx);
-  return diversifyFeed(sortFeed(scored));
-}
-// Fil purement chronologique (le plus récent en premier, sans pondération
-// affinité/interaction/qualité) — utilisé par l'onglet "Nouveautés" de
-// Vidéo - Vidéo : une nouvelle vidéo doit toujours prendre la première place
-// dès sa publication, jamais être devancée par une vidéo plus ancienne mais
-// mieux notée par l'algorithme (contrairement au Fil "Pour toi").
-function buildChronologicalFeed(posts, ctx) {
-  const candidates = getCandidatePosts(posts);
-  const safe = filterSafety(candidates, ctx.blockedAuthors || [], ctx.hiddenPostIds || []);
-  const ageOk = filterAge(safe, !!ctx.viewerIsMinor);
-  return [...ageOk].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-}
-
-// Extraction de #hashtags et @mentions depuis le texte réellement saisi par l'auteur
-// (jamais inventés) — prépare la recherche par hashtag et les mentions futures.
-function extractHashtags(text) {
-  return Array.from(new Set((text.match(/#[\p{L}0-9_]+/gu) || []).map((h) => h.toLowerCase())));
-}
-function extractMentions(text) {
-  return Array.from(new Set((text.match(/@[\p{L}0-9_.]+/gu) || []).map((m) => m.toLowerCase())));
-}
 // Convertit une ligne brute Supabase (posts, jointe à profiles) vers la forme
 // attendue par PostCard/VideoCard — l'UI ne connaît que ce format, jamais les
 // noms de colonnes SQL.

@@ -88,12 +88,14 @@ test("aucun hashtag ni mention inventé si absent du texte", () => {
 
 console.log("\n-- Algorithme de fil --");
 test("filterSafety retire les auteurs bloqués et le contenu masqué", () => {
+  // Filtré par username (identifiant réel, unique), pas par "nom" (nom
+  // d'affichage, non unique et souvent vide) — voir mapPostRow côté App.jsx.
   const posts = [
-    { id: "1", nom: "A", contentRating: "normal" },
-    { id: "2", nom: "B", contentRating: "normal" },
-    { id: "3", nom: "A", contentRating: "restricted" },
+    { id: "1", username: "a", contentRating: "normal" },
+    { id: "2", username: "b", contentRating: "normal" },
+    { id: "3", username: "a", contentRating: "restricted" },
   ];
-  const result = core.filterSafety(posts, ["B"], ["3"]);
+  const result = core.filterSafety(posts, ["b"], ["3"]);
   assert.deepStrictEqual(result.map((p) => p.id), ["1"]);
 });
 test("filterAge masque le contenu sensible aux mineurs uniquement", () => {
@@ -103,13 +105,33 @@ test("filterAge masque le contenu sensible aux mineurs uniquement", () => {
 });
 test("calculateScores donne un score plus élevé à un auteur suivi", () => {
   const posts = [
-    { id: "1", nom: "suivi", likes: 0, commentaires: 0 },
-    { id: "2", nom: "inconnu", likes: 0, commentaires: 0 },
+    { id: "1", username: "suivi", likes: 0, commentaires: 0 },
+    { id: "2", username: "inconnu", likes: 0, commentaires: 0 },
   ];
   const scored = core.calculateScores(posts, { following: ["suivi"], now: Date.now() });
   const suivi = scored.find((p) => p.id === "1");
   const inconnu = scored.find((p) => p.id === "2");
   assert.ok(suivi._score > inconnu._score);
+});
+test("calculateScores donne un score plus élevé à un post d'un groupe rejoint", () => {
+  const posts = [
+    { id: "1", username: "a", groupId: "g1", likes: 0, commentaires: 0 },
+    { id: "2", username: "b", groupId: "g2", likes: 0, commentaires: 0 },
+  ];
+  const scored = core.calculateScores(posts, { myGroupIds: ["g1"], now: Date.now() });
+  const dansMonGroupe = scored.find((p) => p.id === "1");
+  const autreGroupe = scored.find((p) => p.id === "2");
+  assert.ok(dansMonGroupe._score > autreGroupe._score);
+});
+test("calculateScores pénalise un post déjà vu récemment (sans l'exclure)", () => {
+  const posts = [
+    { id: "1", username: "a", likes: 0, commentaires: 0 },
+    { id: "2", username: "b", likes: 0, commentaires: 0 },
+  ];
+  const scored = core.calculateScores(posts, { seenIds: ["1"], now: Date.now() });
+  const dejaVu = scored.find((p) => p.id === "1");
+  const jamaisVu = scored.find((p) => p.id === "2");
+  assert.ok(dejaVu._score < jamaisVu._score);
 });
 test("diversifyFeed alterne les auteurs plutôt que de les grouper", () => {
   const posts = [
@@ -130,6 +152,18 @@ test("buildFeed ne montre jamais de contenu sensible à un mineur", () => {
   const asAdult = core.buildFeed(posts, { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: false, following: [], interests: [] });
   assert.strictEqual(asMinor.length, 0);
   assert.strictEqual(asAdult.length, 1);
+});
+test("buildChronologicalFeed classe strictement par date, jamais par score", () => {
+  // Utilisé par "Nouveautés" (Vidéo) et "Abonnements" (Fil) : une publication
+  // qui vient de sortir doit toujours passer devant une plus ancienne, même
+  // si celle-ci a énormément plus de likes/commentaires (voir App.jsx).
+  const posts = [
+    { id: "ancien-mais-populaire", contentRating: "normal", createdAt: 1000, likes: 999, commentaires: 999 },
+    { id: "recent", contentRating: "normal", createdAt: 5000, likes: 0, commentaires: 0 },
+  ];
+  const ctx = { blockedAuthors: [], hiddenPostIds: [], viewerIsMinor: false };
+  const result = core.buildChronologicalFeed(posts, ctx);
+  assert.deepStrictEqual(result.map((p) => p.id), ["recent", "ancien-mais-populaire"]);
 });
 
 console.log(`\n${passed} test(s) réussi(s), ${failed} échec(s).\n`);
