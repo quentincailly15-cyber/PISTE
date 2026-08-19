@@ -1580,16 +1580,20 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         margin: floating ? "0 8px" : 0,
         borderRadius: floating ? RADIUS.pill : 0,
         boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
-        // Même rétraction vers un petit galet central que BottomNav (voir ses
-        // commentaires) — origine "50% 0%" (haut-centre) cette fois puisque
-        // cette barre est ancrée en haut plutôt qu'en bas.
+        // Repli MODÉRÉ vers le centre (pas un rétrécissement extrême) — même
+        // raison que BottomNav (voir ses commentaires) : au-delà d'un certain
+        // point, l'icône devient illisible ou semble avoir disparu, ce qui
+        // contredit "toujours voir les icônes dedans". "top" reste
+        // volontairement CONSTANT (voir plus haut) : le seul dégagement
+        // possible ici vient donc de la modération du repli lui-même, pas
+        // d'un déplacement vertical (qui recréerait le bug de recalcul
+        // "sticky" déjà corrigé).
         transformOrigin: "50% 0%",
-        transform: chromeMode === "hidden" ? "scale(0.32)" : "scale(1)",
-        transition: "transform 380ms cubic-bezier(0.34, 1.4, 0.4, 1), margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
-        pointerEvents: chromeMode === "hidden" ? "none" : "auto",
+        transform: chromeMode === "hidden" ? "scale(0.88)" : "scale(1)",
+        transition: "transform 380ms cubic-bezier(0.34, 1.3, 0.4, 1), margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
       }}
     >
-      <div className="flex items-center justify-between px-4 py-3" style={{ opacity: chromeMode === "hidden" ? 0 : 1, transition: "opacity 180ms ease" }}>
+      <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2"><Logo size={28} /><Wordmark /><BetaBadge /></div>
         <div className="flex items-center gap-1">
           <IconButton icon={Search} onClick={onSearch} />
@@ -1624,7 +1628,11 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
     { key: "profil", label: "Profil", icon: User },
   ];
   return (
-    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 40, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+    // bottom augmente légèrement en mode compact : sans ce dégagement
+    // supplémentaire, la pilule rétrécie restait ancrée exactement là où
+    // était le bas de la pilule pleine — collée contre le bord de l'écran.
+    // Elle flotte maintenant clairement au-dessus, jamais au ras du bord.
+    <div style={{ position: "fixed", left: 0, right: 0, bottom: chromeMode === "hidden" ? 14 : 0, zIndex: 40, display: "flex", justifyContent: "center", pointerEvents: "none", transition: "bottom 380ms cubic-bezier(0.34, 1.2, 0.4, 1)" }}>
       <div
         style={{
           width: "100%",
@@ -1632,26 +1640,28 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
           background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 24%), ${colors.navBg}`,
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
-          border: floating ? "1px solid rgba(255,255,255,0.12)" : "none",
-          borderTop: floating ? "none" : `1px solid ${colors.border}`,
-          margin: floating ? "0 8px calc(8px + env(safe-area-inset-bottom, 0px))" : 0,
-          borderRadius: floating ? RADIUS.pill : 0,
+          // Toujours une vraie pilule flottante avec filet de verre — plus
+          // d'état "docked" plein-largeur sans bordure : cette barre ne
+          // redevient jamais un simple bandeau collé au bord.
+          border: "1px solid rgba(255,255,255,0.12)",
+          margin: "0 8px calc(8px + env(safe-area-inset-bottom, 0px))",
+          borderRadius: RADIUS.pill,
           // Halo d'ombre élargi + filet clair en haut de la pilule (bord qui
           // capte la lumière) : le même vocabulaire "verre liquide" que
           // Button/SegmentedControl, appliqué à la barre la plus visible et
           // la plus manipulée de l'app.
-          boxShadow: floating ? "0 8px 28px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.10)" : "none",
-          // Se rétracte vers un petit galet central au lieu de glisser hors
-          // de l'écran — le point d'origine "50% 100%" (bas-centre) fait que
-          // la pilule "coule" dans ce petit repère plutôt que de sembler
-          // s'envoler ; remonter d'un cran suffit à la faire regonfler au
-          // même endroit exact, jamais besoin de la voir revenir de nulle
-          // part comme avec un simple slide vertical.
+          boxShadow: "0 8px 28px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.10)",
+          // Repli MODÉRÉ (0.88, pas 0.32 comme avant) : à 6 icônes, une
+          // pilule vraiment minuscule les aurait rendues illisibles ou
+          // aurait dû en cacher certaines pour tenir dans l'espace — les
+          // deux contredisent "toujours voir les icônes dedans". Ce resserré
+          // léger + le dégagement du bord (ci-dessus) suffisent à signaler
+          // "discret" sans jamais rien escamoter.
           transformOrigin: "50% 100%",
-          transform: chromeMode === "hidden" ? "scale(0.32)" : "scale(1)",
-          transition: "transform 380ms cubic-bezier(0.34, 1.4, 0.4, 1), margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
-          pointerEvents: chromeMode === "hidden" ? "none" : "auto",
-          paddingBottom: floating ? 4 : "env(safe-area-inset-bottom, 0px)",
+          transform: chromeMode === "hidden" ? "scale(0.88)" : "scale(1)",
+          transition: "transform 380ms cubic-bezier(0.34, 1.3, 0.4, 1), box-shadow 260ms ease",
+          pointerEvents: "auto",
+          paddingBottom: 4,
         }}
       >
         <div
@@ -1661,11 +1671,6 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
             paddingBottom: 8,
             paddingLeft: 10,
             paddingRight: 10,
-            // Le contenu s'efface un peu avant que le galet finisse de se
-            // rétracter (durée plus courte) : on ne voit jamais d'icônes
-            // écrasées à mi-rétraction, seulement le verre qui rapetisse.
-            opacity: chromeMode === "hidden" ? 0 : 1,
-            transition: "opacity 180ms ease",
           }}
         >
           {items.map((it) => {
@@ -1696,8 +1701,8 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                     width: 46,
                     height: 34,
                     borderRadius: RADIUS.pill,
-                    background: isActive ? colors.accentSoft : "transparent",
-                    boxShadow: isActive ? `0 2px 8px ${colors.accent}25` : "none",
+                    background: isActive ? `linear-gradient(165deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}` : "transparent",
+                    boxShadow: isActive ? `0 2px 8px ${colors.accent}25, inset 0 1px 0 rgba(255,255,255,0.16)` : "none",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1705,7 +1710,11 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                     animation: isActive ? "piste-pill-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
                   }}
                 >
-                  <Icon size={21} strokeWidth={isActive ? 2.3 : 1.8} color={isActive ? colors.accent : colors.textFaint} />
+                  {/* Poids de trait variable (léger au repos, plus marqué
+                      actif) — même logique que IconButton — plutôt qu'une
+                      épaisseur fixe qui ne distinguait l'état actif que par
+                      la couleur et le fond. */}
+                  <Icon size={isActive ? 22 : 20} strokeWidth={isActive ? 2.3 : 1.7} color={isActive ? colors.accent : colors.textFaint} style={{ transition: "all 220ms cubic-bezier(0.22, 1, 0.36, 1)" }} />
                   {it.key === "messages" && unreadConversations > 0 && (
                     <span style={{ position: "absolute", top: -2, right: 2, minWidth: 14, height: 14, borderRadius: 7, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, boxShadow: `0 2px 6px ${colors.accent}50`, color: colors.onAccent, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
                       {unreadConversations > 9 ? "9+" : unreadConversations}
