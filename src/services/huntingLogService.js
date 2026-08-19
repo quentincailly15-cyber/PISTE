@@ -21,17 +21,16 @@ async function requireUser() {
 
 const LOG_SELECT = "*, dogs(id, nom, photo_url), hunting_log_photos(id, path, ordre), hunting_log_companions(user_id, profiles(id, username, nom, avatar_url)), profiles!hunting_logs_user_id_fkey(id, username, nom, avatar_url)";
 
+// Un seul appel groupé (createSignedUrls) plutôt qu'un aller-retour par photo
+// — un carnet avec beaucoup de sorties illustrées de plusieurs photos
+// multipliait sinon les requêtes réseau rien que pour afficher une sortie.
 async function signPhotoUrls(photos) {
   if (!photos || photos.length === 0) return [];
   const sorted = [...photos].sort((a, b) => a.ordre - b.ordre);
-  const signed = await Promise.all(
-    sorted.map(async (p) => {
-      const { data, error } = await supabase.storage.from("carnet").createSignedUrl(p.path, 3600);
-      if (error) return null;
-      return { id: p.id, path: p.path, url: data.signedUrl };
-    })
-  );
-  return signed.filter(Boolean);
+  const { data: signed, error } = await supabase.storage.from("carnet").createSignedUrls(sorted.map((p) => p.path), 3600);
+  if (error) return [];
+  const byPath = new Map(signed.filter((s) => !s.error).map((s) => [s.path, s.signedUrl]));
+  return sorted.map((p) => ({ id: p.id, path: p.path, url: byPath.get(p.path) || null })).filter((p) => p.url);
 }
 
 /**
@@ -87,14 +86,22 @@ function mapLogRow(row, photos, meId) {
  *  celles où il a été identifié comme compagnon (voir migration 034), les
  *  plus récentes en premier. Pas de filtre .eq("user_id", ...) ici : c'est
  *  la policy RLS "owner and companions read hunting logs" qui détermine ce
- *  qui est réellement visible, dans les deux cas. */
-export async function fetchMyLogs() {
+ *  qui est réellement visible, dans les deux cas.
+ *
+ *  limit : un vrai plafond de sécurité, pas une troncature "assumée" comme
+ *  sur les messages/publications — computeStats() a besoin de la totalité
+ *  des sorties d'un utilisateur pour être exacte (total, cette année...).
+ *  1000 est volontairement large : même une sortie chaque jour depuis des
+ *  années resterait très en dessous, ça ne fait que couvrir le cas
+ *  pathologique sans jamais fausser les statistiques d'un usage réel. */
+export async function fetchMyLogs({ limit = 1000 } = {}) {
   const me = await requireUser();
   const { data, error } = await supabase
     .from("hunting_logs")
     .select(LOG_SELECT)
     .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
   return Promise.all(data.map(async (row) => mapLogRow(row, row.user_id === me.id ? await signPhotoUrls(row.hunting_log_photos) : [], me.id)));
 }

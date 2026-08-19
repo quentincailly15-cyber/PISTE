@@ -2491,6 +2491,20 @@ function MediaCarousel({ media, colors }) {
   // vidéos de la même publication restent consultables normalement.
   const [failed, setFailed] = useState(() => new Set());
   const markFailed = (i) => setFailed((prev) => new Set(prev).add(i));
+  // URL signée expirée (session restée ouverte plus d'1h, voir
+  // signPostMediaRows) : une seule tentative de re-signature par média avant
+  // de considérer qu'il est vraiment indisponible — jamais de boucle si le
+  // fichier a réellement disparu ou si l'utilisateur n'y a plus droit.
+  const [overrides, setOverrides] = useState(() => new Map());
+  const retriedRef = useRef(new Set());
+  const handleMediaError = async (i, m) => {
+    if (retriedRef.current.has(i)) { markFailed(i); return; }
+    retriedRef.current.add(i);
+    const path = m.path || m.thumbnailPath;
+    const fresh = path ? await postService.resignPostMediaPath(path).catch(() => null) : null;
+    if (!fresh) { markFailed(i); return; }
+    setOverrides((prev) => new Map(prev).set(i, { url: fresh }));
+  };
   const onScroll = (e) => {
     const el = e.currentTarget;
     const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
@@ -2503,7 +2517,9 @@ function MediaCarousel({ media, colors }) {
         className="flex"
         style={{ overflowX: "auto", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}
       >
-        {media.map((m, i) => (
+        {media.map((m, i) => {
+          const url = overrides.get(i)?.url || m.url;
+          return (
           <div key={i} style={{ flex: "0 0 100%", scrollSnapAlign: "start", minWidth: 0 }}>
             {failed.has(i) ? (
               <div style={{ width: "100%", aspectRatio: "4/5", background: colors.surfaceAlt, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
@@ -2512,15 +2528,16 @@ function MediaCarousel({ media, colors }) {
               </div>
             ) : m.type === "video" ? (
               <div style={{ width: "100%", aspectRatio: "4/5", background: "#000" }}>
-                <video src={m.url} poster={m.thumbnail_url || undefined} controls playsInline onError={() => markFailed(i)} style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }} />
+                <video src={url} poster={m.thumbnail_url || undefined} controls playsInline onError={() => handleMediaError(i, m)} style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }} />
               </div>
             ) : (
               <div style={{ width: "100%", aspectRatio: "4/5", background: colors.surfaceAlt }}>
-                <img loading="lazy" src={m.url} alt="" onError={() => markFailed(i)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                <img loading="lazy" src={url} alt="" onError={() => handleMediaError(i, m)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
       {/* En bas à droite plutôt qu'en haut : la position haute coïncidait
           avec le bouton "..." de authorRow en overlay (PostCard), au point
@@ -7305,7 +7322,23 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const fetchSeqRef = useRef(0);
   const refetch = () => {
     const seq = ++fetchSeqRef.current;
-    return messageService.fetchMessages(conversationId).then((rows) => { if (seq === fetchSeqRef.current) setMessages(rows); }).catch(() => {});
+    return messageService.fetchMessages(conversationId).then((rows) => {
+      if (seq !== fetchSeqRef.current) return;
+      setMessages((prev) => {
+        if (rows.length === 0) return rows;
+        const rowIds = new Set(rows.map((r) => r.id));
+        const oldestInWindow = rows[0].created_at; // rows déjà triés chronologiquement
+        // Un message plus ancien que toute la fenêtre rechargée n'a jamais
+        // pu être recandidat par fetchMessages (plafonnée aux plus récents)
+        // — c'est forcément un message retrouvé via une citation hors
+        // fenêtre (voir scrollToMessage) qu'il faut garder, plutôt que le
+        // perdre au moindre événement temps réel. Un message DANS la
+        // fenêtre mais absent de `rows`, lui, a réellement été supprimé.
+        const extra = prev.filter((m) => !rowIds.has(m.id) && new Date(m.created_at) < new Date(oldestInWindow));
+        if (extra.length === 0) return rows;
+        return [...rows, ...extra].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      });
+    }).catch(() => {});
   };
   const markRead = async () => {
     // Deux systèmes distincts à mettre à jour : last_read_at (badge de la

@@ -203,6 +203,18 @@ export async function saveGeneratedThumbnail(mediaId, videoUrl) {
 }
 
 /**
+ * Redemande une URL signée pour un seul chemin — sert de secours quand une
+ * image/vidéo déjà affichée casse (session restée ouverte plus d'1h, voir
+ * signPostMediaRows) : on retente juste ce média-là plutôt que d'exiger un
+ * rechargement complet du fil.
+ */
+export async function resignPostMediaPath(path) {
+  if (!path) return null;
+  const { data } = await supabase.storage.from("posts").createSignedUrl(path, 3600);
+  return data?.signedUrl || null;
+}
+
+/**
  * Le bucket "posts" est privé (migration 059) — post_media.url et
  * .thumbnail_url ne contiennent plus une URL publique mais le chemin
  * Storage brut. Génère ici des URLs signées (1h) pour tous les médias d'un
