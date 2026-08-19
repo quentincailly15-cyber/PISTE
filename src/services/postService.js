@@ -587,12 +587,28 @@ export async function fetchComments(postId, { limit = 200 } = {}) {
   // PostgREST et échouait silencieusement (voir 048_drop_comments_thread_owner.sql).
   const { data, error } = await supabase
     .from("comments")
-    .select("*, profiles!author_id(username, nom)")
+    .select("*, profiles!author_id(username, nom), comment_likes(user_id)")
     .eq("post_id", postId)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
   return [...data].reverse();
+}
+
+/** Bascule le like d'un commentaire (table comment_likes, migration 062) —
+ *  même principe que toggleLike sur une publication, une seule ligne par
+ *  personne et par commentaire (clé primaire (comment_id, user_id)). */
+export async function toggleCommentLike(commentId, shouldLike) {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) throw new Error("Non authentifié");
+  if (shouldLike) {
+    const { error } = await supabase.from("comment_likes").insert({ comment_id: commentId, user_id: userData.user.id });
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("comment_likes").delete().eq("comment_id", commentId).eq("user_id", userData.user.id);
+    if (error) throw error;
+  }
+  return true;
 }
 
 /**

@@ -2127,6 +2127,33 @@ function MentionPickerButton({ onSelect }) {
 // le champ de saisie — partagé entre CommentsSheet (modale, la plupart des
 // contenus) et FullScreenVideoPlayer (commentaires intégrés dans la page,
 // pas dans une modale, voir plus bas).
+// Bouton cœur + compteur, réutilisé pour un commentaire ou une réponse — état
+// optimiste géré localement (overrides) plutôt que remonté jusqu'à MainApp :
+// contrairement à une suppression (qui doit retirer l'élément de la liste
+// partagée commentsByPost), un like ne change que ce commentaire précis, pas
+// besoin de faire voyager un nouveau callback à travers toute la chaîne de
+// composants (ScreenFil, GroupPage, DogPage, FullScreenVideoPlayer...).
+function CommentLikeButton({ comment, size = 13 }) {
+  const { colors } = useTheme();
+  const [override, setOverride] = useState(null); // { liked, likeCount } | null
+  const state = override || { liked: !!comment.liked, likeCount: comment.likeCount || 0 };
+  const toggle = async () => {
+    const previous = state;
+    const next = { liked: !previous.liked, likeCount: Math.max(0, previous.likeCount + (previous.liked ? -1 : 1)) };
+    setOverride(next);
+    try {
+      await postService.toggleCommentLike(comment.id, next.liked);
+    } catch (e) {
+      setOverride(previous);
+    }
+  };
+  return (
+    <button onClick={toggle} className="flex items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+      <Heart size={size} color={state.liked ? colors.accent : colors.textFaint} fill={state.liked ? colors.accent : "none"} strokeWidth={1.8} />
+      {state.likeCount > 0 && <span style={{ fontSize: size - 1.5, color: state.liked ? colors.accent : colors.textFaint, fontWeight: state.liked ? 700 : 500 }}>{state.likeCount}</span>}
+    </button>
+  );
+}
 function CommentsList({ comments, onDelete, meUsername, onOpenProfile, onReply }) {
   const { colors } = useTheme();
   const topLevel = comments.filter((c) => !c.parentId);
@@ -2150,7 +2177,10 @@ function CommentsList({ comments, onDelete, meUsername, onOpenProfile, onReply }
             )}
           </div>
           <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(c.texte, colors, onOpenProfile)}</div>
-          <button onClick={() => onReply({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: 4, padding: 0 }}>Répondre</button>
+          <div className="flex items-center gap-3" style={{ marginTop: 5 }}>
+            <button onClick={() => onReply({ id: c.id, auteur: c.auteur })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>Répondre</button>
+            <CommentLikeButton comment={c} />
+          </div>
           {repliesOf(c.id).map((r) => (
             <div key={r.id} style={{ marginTop: 8, marginLeft: 18, paddingLeft: 10, borderLeft: `2px solid ${colors.border}` }}>
               <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
@@ -2165,6 +2195,14 @@ function CommentsList({ comments, onDelete, meUsername, onOpenProfile, onReply }
                 )}
               </div>
               <div style={{ fontSize: 12.5, color: colors.text, lineHeight: 1.4 }}>{renderTextWithMentions(r.texte, colors, onOpenProfile)}</div>
+              <div className="flex items-center gap-3" style={{ marginTop: 4 }}>
+                {/* Répondre à une réponse reste rattaché au même commentaire
+                    parent (pas de 3e niveau visuel, comme Instagram) — seul
+                    le préremplissage "@pseudo" dans le champ indique à qui
+                    s'adresse la réponse, voir CommentsSheet.submit(). */}
+                <button onClick={() => onReply({ id: c.id, auteur: r.auteur, mention: r.authorUsername })} style={{ background: "none", border: "none", color: colors.accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}>Répondre</button>
+                <CommentLikeButton comment={r} size={12} />
+              </div>
             </div>
           ))}
         </div>
@@ -2175,10 +2213,15 @@ function CommentsList({ comments, onDelete, meUsername, onOpenProfile, onReply }
 function CommentsSheet({ comments, onClose, onAdd, onDelete, meUsername, onOpenProfile }) {
   const { colors } = useTheme();
   const [text, setText] = useState("");
-  const [replyTo, setReplyTo] = useState(null); // { id, auteur } | null
+  const [replyTo, setReplyTo] = useState(null); // { id, auteur, mention? } | null
   const submit = () => {
     if (!text.trim()) return;
-    onAdd(text.trim(), replyTo?.id || null);
+    // mention : présent seulement en répondant à une RÉPONSE (pas à un
+    // commentaire de premier niveau) — la réponse reste rattachée au même
+    // commentaire parent (replyTo.id), le "@pseudo" en tête du texte est ce
+    // qui indique concrètement à qui elle s'adresse.
+    const finalTexte = replyTo?.mention ? `@${replyTo.mention} ${text.trim()}` : text.trim();
+    onAdd(finalTexte, replyTo?.id || null);
     setText("");
     setReplyTo(null);
   };
@@ -9478,6 +9521,7 @@ function MainApp({ session, onboardingData, ageInfo }) {
     markNotifTargetRead(postId, ["like", "comment", "repost", "new_post", "mention"]);
     try {
       const rows = await postService.fetchComments(postId);
+      const meId = session?.user?.id || null;
       const mapped = rows.map((r) => ({
         id: r.id,
         auteur: r.profiles?.nom || r.profiles?.username || "Utilisateur",
@@ -9485,6 +9529,8 @@ function MainApp({ session, onboardingData, ageInfo }) {
         texte: r.texte,
         date: formatRelativeDate(r.created_at),
         parentId: r.parent_id,
+        likeCount: r.comment_likes?.length || 0,
+        liked: meId ? (r.comment_likes || []).some((l) => l.user_id === meId) : false,
       }));
       setCommentsByPost((m) => ({ ...m, [postId]: mapped }));
     } catch (e) { /* pas bloquant : la feuille s'ouvrira simplement vide */ }
