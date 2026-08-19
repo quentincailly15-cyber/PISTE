@@ -372,7 +372,7 @@ function Button({ children, onClick, disabled, variant = "primary", full = true 
     primary: {
       background: disabled
         ? colors.border
-        : `linear-gradient(165deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`,
+        : `linear-gradient(165deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`,
       color: disabled ? colors.textFaint : colors.onAccent,
       border: "none",
       boxShadow: disabled ? "none" : `0 10px 28px ${colors.accent}55, 0 2px 5px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.35)`,
@@ -381,7 +381,7 @@ function Button({ children, onClick, disabled, variant = "primary", full = true 
       // Translucide + flou plutôt qu'un aplat — même langage "glass" que le
       // reste des surfaces flottantes de l'app (headerBg, SegmentedControl),
       // + le même verni en surface que le primaire pour rester cohérent.
-      background: `linear-gradient(165deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
+      background: `linear-gradient(165deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
       backdropFilter: "blur(20px)",
       WebkitBackdropFilter: "blur(20px)",
       color: colors.text,
@@ -430,10 +430,10 @@ function IconButton({ icon: Icon, onClick, size = 36, active }) {
         // avec le reste des pastilles flottantes de l'app, + relief plus
         // marqué (halo + verni) pour que le bouton se détache franchement.
         background: active
-          ? `linear-gradient(165deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0) 55%), ${colors.accentSoft}`
-          : `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
-        backdropFilter: "blur(14px)",
-        WebkitBackdropFilter: "blur(14px)",
+          ? `linear-gradient(165deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}`
+          : `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
         border: `1px solid ${active ? "transparent" : colors.border}`,
         boxShadow: active ? `0 4px 14px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.25)` : "0 2px 8px rgba(0,0,0,0.10)",
         cursor: "pointer",
@@ -473,10 +473,10 @@ function Chip({ label, active, onClick, solid = false }) {
         // reste pleinement coloré (accent/accentSoft) mais gagne le même
         // verni glossy que Button/Chip icône, pour un relief plus marqué.
         background: active
-          ? `linear-gradient(165deg, rgba(255,255,255,${solid ? 0.32 : 0.22}) 0%, rgba(255,255,255,0) 55%), ${solid ? colors.accent : colors.accentSoft}`
-          : `linear-gradient(165deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
-        backdropFilter: active ? "none" : "blur(12px)",
-        WebkitBackdropFilter: active ? "none" : "blur(12px)",
+          ? `linear-gradient(165deg, rgba(255,255,255,${solid ? 0.32 : 0.22}) 0%, rgba(255,255,255,0) 24%), ${solid ? colors.accent : colors.accentSoft}`
+          : `linear-gradient(165deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
+        backdropFilter: active ? "none" : "blur(18px)",
+        WebkitBackdropFilter: active ? "none" : "blur(18px)",
         boxShadow: active ? `0 4px 12px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.25)` : "none",
         color: active ? (solid ? colors.onAccent : colors.accent) : colors.textSecondary,
         borderRadius: RADIUS.pill,
@@ -575,7 +575,7 @@ function SegmentedControl({ options, value, onChange }) {
             // Translucide, pas un aplat plein — la référence garde ce
             // même verre légèrement teinté même sur ses pilules "actives",
             // + le même verni glossy que Button/Chip pour un relief marqué.
-            background: value === o.key ? `linear-gradient(165deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 55%), ${colors.accent}CC` : "transparent",
+            background: value === o.key ? `linear-gradient(165deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 24%), ${colors.accent}CC` : "transparent",
             backdropFilter: value === o.key ? "blur(8px)" : "none",
             WebkitBackdropFilter: value === o.key ? "blur(8px)" : "none",
             color: value === o.key ? colors.onAccent : colors.textFaint,
@@ -1614,8 +1614,8 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                   {/* Plus de décalage vers le haut (marginTop négatif) : le
                       bouton flotte maintenant centré entre le haut et le bas
                       de la pilule, comme les autres icônes de la barre. */}
-                  <div style={{ position: "relative", width: 42, height: 42, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 20px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.35)`, transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
-                    {createPulse > 0 && <span key={createPulse} aria-hidden="true" style={{ position: "absolute", inset: -8, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out" }} />}
+                  <div style={{ position: "relative", width: 42, height: 42, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 20px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.35)`, transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                    {createPulse > 0 && <span key={createPulse} aria-hidden="true" style={{ position: "absolute", inset: -8, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out forwards" }} />}
                     <Plus size={21} color={colors.onAccent} strokeWidth={2.4} />
                   </div>
                 </button>
@@ -2841,7 +2841,7 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
                 à vrai (montage du <span>, pas à chaque re-render) — retour
                 visuel immédiat sur l'action, au-delà du simple remplissage
                 de l'icône. */}
-            {liked && <span aria-hidden="true" style={{ position: "absolute", inset: -7, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out" }} />}
+            {liked && <span aria-hidden="true" style={{ position: "absolute", inset: -7, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out forwards" }} />}
             <Heart size={17} color={liked ? colors.accent : overlay ? "#fff" : colors.textSecondary} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
           </span>
           <AnimatedCount value={post.likes || 0} style={{ fontSize: 12, color: liked ? colors.accent : overlay ? "#fff" : colors.textSecondary, fontWeight: liked ? 700 : 400 }} />
@@ -4608,7 +4608,7 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
           ) : (
             <div className="flex flex-col gap-2" style={{ padding: "10px 16px" }}>
               {discussions.map((d) => (
-                <button key={d.id} onClick={() => setOpenDiscussion(d)} className="flex items-center gap-3 active:scale-[0.98]" style={{ width: "100%", background: `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 55%), ${colors.surface}`, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, padding: "12px 14px", cursor: "pointer", textAlign: "left", boxShadow: "0 3px 10px rgba(0,0,0,0.08)", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                <button key={d.id} onClick={() => setOpenDiscussion(d)} className="flex items-center gap-3 active:scale-[0.98]" style={{ width: "100%", background: `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 24%), ${colors.surface}`, border: `1px solid ${colors.border}`, borderRadius: RADIUS.lg, padding: "12px 14px", cursor: "pointer", textAlign: "left", boxShadow: "0 3px 10px rgba(0,0,0,0.08)", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                   <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <MessageSquare size={16} color={colors.accent} />
                   </div>
@@ -5747,8 +5747,8 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, onDiscus
           height: 38,
           borderRadius: RADIUS.pill,
           background: "rgba(255,255,255,0.12)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
+          backdropFilter: "blur(22px)",
+          WebkitBackdropFilter: "blur(22px)",
           border: "1px solid rgba(255,255,255,0.22)",
           display: "flex",
           alignItems: "center",
@@ -5804,10 +5804,10 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, onDiscus
                       height: isDragHover ? 62 : 54,
                       borderRadius: RADIUS.pill,
                       background: isDragHover
-                        ? `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`
-                        : `linear-gradient(165deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 55%), rgba(255,255,255,0.1)`,
-                      backdropFilter: "blur(16px)",
-                      WebkitBackdropFilter: "blur(16px)",
+                        ? `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`
+                        : `linear-gradient(165deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 24%), rgba(255,255,255,0.1)`,
+                      backdropFilter: "blur(22px)",
+                      WebkitBackdropFilter: "blur(22px)",
                       border: `1px solid ${isDragHover ? colors.accent : "rgba(255,255,255,0.22)"}`,
                       display: "flex",
                       alignItems: "center",
@@ -5831,7 +5831,7 @@ function CreateFlow({ open, onClose, dogs, onPublished, onTraceCreated, onDiscus
               width: 66,
               height: 66,
               borderRadius: RADIUS.pill,
-              background: `linear-gradient(165deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`,
+              background: `linear-gradient(165deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -8153,8 +8153,8 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                       // fond) — les bulles envoyées comme reçues gagnent le
                       // même relief "verre liquide" que le reste de l'app.
                       background: mine
-                        ? `linear-gradient(165deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 55%), linear-gradient(135deg, ${colors.accent}, ${colors.accent}dd)`
-                        : `linear-gradient(165deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
+                        ? `linear-gradient(165deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 24%), linear-gradient(135deg, ${colors.accent}, ${colors.accent}dd)`
+                        : `linear-gradient(165deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
                       backdropFilter: mine ? "none" : "blur(20px)",
                       WebkitBackdropFilter: mine ? "none" : "blur(20px)",
                       color: mine ? colors.onAccent : colors.text,
@@ -8345,8 +8345,8 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
               style={{ flex: 1, border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.xl, padding: "11px 16px", fontSize: 13.5, color: colors.text, outline: "none", resize: "none", maxHeight: 120, overflowY: "auto", lineHeight: 1.35, fontFamily: FONT, boxShadow: "inset 0 1px 3px rgba(0,0,0,0.05)", transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}
             />
             {text.trim() ? (
-              <button onClick={submit} disabled={sending} className="active:scale-90" style={{ position: "relative", width: 38, height: 38, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: `0 4px 14px ${colors.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)`, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
-                {sendPulse > 0 && <span key={sendPulse} aria-hidden="true" style={{ position: "absolute", inset: -6, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out" }} />}
+              <button onClick={submit} disabled={sending} className="active:scale-90" style={{ position: "relative", width: 38, height: 38, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: `0 4px 14px ${colors.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)`, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                {sendPulse > 0 && <span key={sendPulse} aria-hidden="true" style={{ position: "absolute", inset: -6, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out forwards" }} />}
                 <ArrowLeft size={16} color={colors.onAccent} style={{ transform: "rotate(135deg)" }} />
               </button>
             ) : (
@@ -8687,9 +8687,9 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
               height: 34,
               border: `1px solid ${colors.border}`,
               color: colors.text,
-              background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), ${colors.headerBg}`,
-              backdropFilter: "blur(14px)",
-              WebkitBackdropFilter: "blur(14px)",
+              background: `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
               boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
               borderRadius: RADIUS.pill,
               display: "flex",
@@ -8754,7 +8754,7 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
                 // publication), la conversation non lue se détache avec un
                 // léger halo teinté à l'accent plutôt qu'un simple gras.
                 background: c.unread
-                  ? `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), ${colors.accentSoft}`
+                  ? `linear-gradient(165deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}`
                   : "transparent",
                 border: `1px solid ${c.unread ? "transparent" : "rgba(255,255,255,0.05)"}`,
                 boxShadow: c.unread ? `0 3px 12px ${colors.accent}22` : "none",
@@ -8782,7 +8782,7 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
                       : "Aucun message"}
                   </span>
                   {c.unread && c.unreadCount > 0 && (
-                    <span style={{ flexShrink: 0, minWidth: 17, height: 17, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, color: colors.onAccent, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", boxShadow: `0 2px 6px ${colors.accent}50` }}>
+                    <span style={{ flexShrink: 0, minWidth: 17, height: 17, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 24%), ${colors.accent}`, color: colors.onAccent, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", boxShadow: `0 2px 6px ${colors.accent}50` }}>
                       {c.unreadCount > 99 ? "99+" : c.unreadCount}
                     </span>
                   )}
@@ -9018,8 +9018,8 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
                     style={{
                       width: "100%",
                       background: n.lu
-                        ? `linear-gradient(165deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 55%), ${colors.surface}`
-                        : `linear-gradient(165deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 55%), ${colors.accentSoft}`,
+                        ? `linear-gradient(165deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 24%), ${colors.surface}`
+                        : `linear-gradient(165deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}`,
                       border: "none",
                       borderRadius: RADIUS.lg,
                       padding: "12px 14px",
