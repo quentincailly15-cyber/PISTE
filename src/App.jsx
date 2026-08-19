@@ -3166,6 +3166,18 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
               placeholder={replySent ? "Envoyé ✓" : "Envoyer un message..."}
               style={{ flex: 1, minWidth: 0, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(20,20,20,0.35)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", borderRadius: RADIUS.pill, padding: "11px 16px", fontSize: 13, color: "#fff", outline: "none" }}
             />
+            {/* Bouton d'envoi explicite — jusqu'ici seule la touche Entrée
+                envoyait le texte tapé, aucun bouton visible ne le faisait
+                (le cœur juste à côté sert à liker, pas à envoyer). */}
+            <button
+              onClick={() => sendReply(replyText)}
+              disabled={!replyText.trim() || sendingReply}
+              aria-label="Envoyer"
+              className="active:scale-90 transition-transform"
+              style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: replyText.trim() ? colors.accent : "rgba(20,20,20,0.35)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: replyText.trim() ? "none" : "1px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: replyText.trim() ? "pointer" : "default", flexShrink: 0 }}
+            >
+              <ChevronRight size={18} color={replyText.trim() ? "white" : "rgba(255,255,255,0.6)"} />
+            </button>
             <button
               onClick={toggleTraceLike}
               aria-label={likeState.liked ? "Retirer le like" : "Aimer cette Trace"}
