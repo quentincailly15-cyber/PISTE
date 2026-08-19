@@ -4314,6 +4314,23 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState(null); // { id, auteur, texte } | null
+  // Supprimer la discussion ENTIÈRE (pas juste un message) — même règle que
+  // la suppression d'un message individuel (auteur ou admin, RLS "author or
+  // admin deletes discussion", migration 046), jusqu'ici jamais reliée à
+  // l'interface alors que groupService.deleteGroupDiscussion existait déjà.
+  const canDeleteDiscussion = discussion.authorUsername === meUsername || isAdmin;
+  const [confirmDeleteDiscussion, setConfirmDeleteDiscussion] = useState(false);
+  const [deletingDiscussion, setDeletingDiscussion] = useState(false);
+  const deleteDiscussion = async () => {
+    setDeletingDiscussion(true);
+    try {
+      await groupService.deleteGroupDiscussion(discussion.id);
+      onClose();
+    } catch (e) {
+      setDeletingDiscussion(false);
+      setConfirmDeleteDiscussion(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -4365,8 +4382,21 @@ function DiscussionThread({ discussion, meUsername, isAdmin, onClose }) {
   return (
     <div ref={swipeBack} style={{ position: "fixed", inset: 0, zIndex: 71, background: "transparent", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" , animation: "piste-screen-in 300ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <AmbientBackground />
-      <ScreenHeader title={discussion.titre} onBack={onClose} />
+      <ScreenHeader
+        title={discussion.titre}
+        onBack={onClose}
+        rightAction={canDeleteDiscussion ? <IconButton icon={Trash2} onClick={() => setConfirmDeleteDiscussion(true)} /> : undefined}
+      />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      {confirmDeleteDiscussion && (
+        <div style={{ margin: "8px 14px 0", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: 12, fontSize: 12.5, color: colors.error }}>
+          Supprimer cette discussion et tous ses messages ? Action irréversible.
+          <div className="flex gap-3" style={{ marginTop: 8 }}>
+            <button onClick={deleteDiscussion} disabled={deletingDiscussion} style={{ background: "none", border: "none", color: colors.error, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>{deletingDiscussion ? "..." : "Supprimer"}</button>
+            <button onClick={() => setConfirmDeleteDiscussion(false)} style={{ background: "none", border: "none", color: colors.error, textDecoration: "underline", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Annuler</button>
+          </div>
+        </div>
+      )}
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
