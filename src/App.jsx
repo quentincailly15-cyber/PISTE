@@ -114,11 +114,16 @@ const THEMES = {
     text: "#1A1A18",
     textSecondary: "#8A8A85",
     textFaint: "#B7B7B1",
-    // Orange chasse (était un vert sauge #6B7A47) — voir Logo, l'anneau
-    // "Trace" autour de l'avatar et les pilules pleines pour le camaïeu
-    // orange/vert complet.
-    accent: "#B85A28",
-    accentSoft: "#F6E1D1",
+    // Vert sauge (couleur d'origine de l'app, avant le passage à l'orange
+    // chasse — voir le commentaire équivalent côté thème sombre) : en clair,
+    // l'accent redevient ce vert plutôt que l'orange, qui écrasait le ton
+    // sable du fond (#EBEDDF, déjà légèrement vert-olive) au lieu de s'y
+    // fondre. Le thème sombre garde l'orange chasse, c'est un choix de
+    // palette assumé par mode, pas une incohérence — l'anneau "Trace"
+    // (accent → #5A6B3B) reste un dégradé de deux verts cohérents ici,
+    // pas un mélange orange/vert.
+    accent: "#6B7A47",
+    accentSoft: "#E1E7D2",
     onAccent: "#FFFFFF",
     error: "#C0453A",
     errorSoft: "#F6E2DF",
@@ -9510,18 +9515,29 @@ function PlusPanel({ open, onClose, profile, setProfile, posts, savedPostIds, on
           <ScreenHeader title={sub.label} onBack={() => setSub(null)} />
           {sub.appearance ? (
             <div style={{ padding: 20 }}>
-              {/* Seul le mode sombre est disponible pour le moment — c'est
-                  l'identité par défaut et unique de PISTE (voir ThemeProvider).
-                  Clair/Système restent visibles pour ne pas surprendre, mais
-                  désactivés avec un badge explicite plutôt que masqués. */}
+              {/* Les 3 modes sont maintenant réellement disponibles — voir
+                  THEMES.light, qui reprend le vert sauge d'origine de l'app
+                  comme accent plutôt que l'orange chasse du thème sombre
+                  (choix de palette assumé par mode, pas un oubli). */}
               <div className="flex flex-col gap-2">
-                {[["light", "Clair", Sun, true], ["dark", "Sombre", Moon, false], ["system", "Système", Monitor, true]].map(([m, l, Icon, disabled]) => (
+                {[["light", "Clair", Sun, false], ["dark", "Sombre", Moon, false], ["system", "Système", Monitor, false]].map(([m, l, Icon, disabled]) => (
                   <button
                     key={m}
                     onClick={disabled ? undefined : () => setMode(m)}
                     disabled={disabled}
-                    className={disabled ? "flex items-center justify-between" : "flex items-center justify-between active:scale-[0.98] transition-transform"}
-                    style={{ border: `1.5px solid ${mode === m ? colors.accent : colors.border}`, background: mode === m ? colors.accentSoft : colors.surface, borderRadius: RADIUS.sm, padding: "12px 14px", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.55 : 1 }}
+                    className={disabled ? "flex items-center justify-between" : "flex items-center justify-between active:scale-[0.98]"}
+                    style={{
+                      border: `1.5px solid ${mode === m ? colors.accent : colors.border}`,
+                      background: mode === m
+                        ? `linear-gradient(165deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 24%), ${colors.accentSoft}`
+                        : `linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 24%), ${colors.surface}`,
+                      borderRadius: RADIUS.sm,
+                      padding: "12px 14px",
+                      cursor: disabled ? "default" : "pointer",
+                      opacity: disabled ? 0.55 : 1,
+                      boxShadow: mode === m ? `0 3px 10px ${colors.accent}22` : "none",
+                      transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    }}
                   >
                     <div className="flex items-center gap-2.5"><Icon size={16} color={mode === m ? colors.accent : colors.text} /><span style={{ fontSize: 13.5, fontWeight: 600, color: mode === m ? colors.accent : colors.text }}>{l}</span></div>
                     {disabled ? (
