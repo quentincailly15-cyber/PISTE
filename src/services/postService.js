@@ -410,6 +410,19 @@ export async function updatePost(postId, fields) {
     .select()
     .single();
   if (error) throw error;
+  // Remplace entièrement les chiens tagués (supprime puis réinsère) plutôt
+  // que de calculer un diff — post_dogs est une petite table de liaison, pas
+  // besoin d'une mise à jour incrémentale. Avant ce correctif, "dogIds"
+  // n'était même pas envoyé ici : modifier les chiens tagués sur une
+  // publication existante n'avait jamais aucun effet.
+  if (fields.dogIds !== undefined) {
+    const { error: delError } = await supabase.from("post_dogs").delete().eq("post_id", postId);
+    if (delError) throw delError;
+    if (fields.dogIds.length > 0) {
+      const { error: dogLinkError } = await supabase.from("post_dogs").insert(fields.dogIds.map((dogId) => ({ post_id: postId, dog_id: dogId })));
+      if (dogLinkError) throw dogLinkError;
+    }
+  }
   return data;
 }
 
@@ -503,10 +516,10 @@ export async function addComment(postId, texte, parentId = null) {
 export async function searchVideos(query, { limit = 30 } = {}) {
   const q = query.trim();
   if (!q) return [];
-  const select = "*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))";
+  const select = "*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)), post_dogs(dog_id)";
   const [byText, byAuthor] = await Promise.all([
     supabase.from("posts").select(select).in("type", ["video", "video_courte"]).or(`titre.ilike.%${q}%,texte.ilike.%${q}%`).order("created_at", { ascending: false }).limit(limit),
-    supabase.from("posts").select(`*, profiles!posts_author_id_fkey!inner(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))`).in("type", ["video", "video_courte"]).or(`username.ilike.%${q}%,nom.ilike.%${q}%`, { foreignTable: "profiles" }).order("created_at", { ascending: false }).limit(limit),
+    supabase.from("posts").select(`*, profiles!posts_author_id_fkey!inner(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)), post_dogs(dog_id)`).in("type", ["video", "video_courte"]).or(`username.ilike.%${q}%,nom.ilike.%${q}%`, { foreignTable: "profiles" }).order("created_at", { ascending: false }).limit(limit),
   ]);
   if (byText.error) throw byText.error;
   if (byAuthor.error) throw byAuthor.error;
@@ -521,7 +534,7 @@ export async function searchVideos(query, { limit = 30 } = {}) {
 export async function fetchCandidatePosts({ limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)), post_dogs(dog_id)")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -533,7 +546,7 @@ export async function fetchCandidatePosts({ limit = 50 } = {}) {
 export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)), post_dogs(dog_id)")
     .eq("group_id", groupId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -545,7 +558,7 @@ export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
 export async function fetchUserPosts(userId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)), post_dogs(dog_id)")
     .eq("author_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -560,7 +573,7 @@ export async function fetchUserPosts(userId, { limit = 50 } = {}) {
 export async function fetchPostById(postId) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)), post_dogs(dog_id)")
     .eq("id", postId)
     .single();
   if (error) throw error;
@@ -574,7 +587,7 @@ export async function fetchPostById(postId) {
 export async function fetchPostsByDog(dogId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("post_dogs")
-    .select("posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)))")
+    .select("posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)), post_dogs(dog_id))")
     .eq("dog_id", dogId)
     .order("created_at", { ascending: false, foreignTable: "posts" })
     .limit(limit);
@@ -688,7 +701,7 @@ export async function fetchMyRepostedPosts() {
   if (!userData.user) return [];
   const { data, error } = await supabase
     .from("reposts")
-    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)))")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)), post_dogs(dog_id))")
     .eq("user_id", userData.user.id)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -701,7 +714,7 @@ export async function fetchMyRepostedPosts() {
 export async function fetchUserRepostedPosts(userId) {
   const { data, error } = await supabase
     .from("reposts")
-    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)))")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)), post_dogs(dog_id))")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;

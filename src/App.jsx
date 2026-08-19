@@ -912,6 +912,11 @@ function mapPostRow(row) {
     // via le sélecteur dédié (table post_identified_users, migration 063),
     // pour l'affichage "avec Untel" dans l'en-tête (voir authorRow/PostCard).
     identifiedUsers: (row.post_identified_users || []).map((r) => ({ username: r.profiles?.username, nom: r.profiles?.nom || r.profiles?.username })).filter((u) => u.username),
+    // Chiens tagués (table post_dogs, many-to-many) — sert à préremplir le
+    // sélecteur de chiens quand on modifie une publication existante (voir
+    // ComposeScreen). Absent jusqu'ici : "Modifier" une publication perdait
+    // silencieusement ses chiens tagués, jamais rechargés ni renvoyés.
+    dogIds: (row.post_dogs || []).map((r) => r.dog_id).filter(Boolean),
     likes: row.likes_count || 0,
     commentaires: row.comments_count || 0,
     reposts: row.reposts_count || 0,
@@ -1593,15 +1598,10 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         background: `linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 24%), ${colors.headerBg}`,
         backdropFilter: "blur(24px)",
         WebkitBackdropFilter: "blur(24px)",
-        // Toujours une vraie pilule flottante — plus d'état "docked"
-        // plein-largeur/carré. Cet état ne servait plus qu'à chromeMode
-        // "hidden" (repli au scroll) depuis le passage au repli en scale :
-        // "floating" (var ci-dessus) valait déjà "true" pour "full" ET
-        // "floating", donc "false" arrivait UNIQUEMENT en mode compact — la
-        // barre redevenait carrée/plein-largeur pile au moment où elle se
-        // rétractait, l'exact bug signalé ("coins carrés" en repli). Même
-        // correction que BottomNav : ces propriétés ne dépendent plus de
-        // "floating" du tout.
+        // Toujours une vraie pilule flottante (bordure/marge/arrondi fixes,
+        // aucune variante "docked" plein-largeur/carrée) — chromeMode
+        // "hidden" ne fait plus que la faire disparaître entièrement
+        // (translateY + opacity, voir plus bas), jamais changer sa forme.
         border: "1px solid rgba(255,255,255,0.12)",
         margin: "0 8px",
         borderRadius: RADIUS.pill,
@@ -1644,7 +1644,6 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
 const NAV_HEIGHT = 66;
 function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chromeMode = "full" }) {
   const { colors } = useTheme();
-  const floating = chromeMode !== "hidden"; // toujours pilule flottante, sauf masqué au défilement
   // Halo rejoué à chaque tap sur "Créer" (pas seulement au montage) : la clé
   // change à chaque clic, ce qui force le <span> à se remonter et donc
   // rejouer l'animation, même en tapant plusieurs fois de suite.
@@ -5478,7 +5477,11 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const [pratiqueAutre, setPratiqueAutre] = useState("");
   const [pratique, setPratique] = useState(editingPost?.pratique || null);
   const [departement, setDepartement] = useState(editingPost?.localisation?.departement || "");
-  const [dogIds, setDogIds] = useState(editingPost?.chienId ? [editingPost.chienId] : []);
+  // editingPost?.chienId n'a jamais existé sur un vrai post (mapPostRow
+  // n'a jamais exposé les chiens tagués avant ce correctif) — "Modifier"
+  // une publication ouvrait donc toujours le sélecteur de chiens vide,
+  // même si la publication en avait un ou plusieurs de tagués.
+  const [dogIds, setDogIds] = useState(editingPost?.dogIds || []);
   const [mediaFiles, setMediaFiles] = useState([]);
   const [mediaDurations, setMediaDurations] = useState([]);
   const [mediaError, setMediaError] = useState("");
@@ -5626,10 +5629,10 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
         // Chemin réel (Supabase) — publication/photo/vidéo/instant/sondage.
         if (editingPost) {
           const updated = await postService.updatePost(editingPost.id, {
-            texte: finalText, titre: type === "video" ? titre : undefined, animal: finalAnimal, pratique: finalPratique, departement, contentRating,
+            texte: finalText, titre: type === "video" ? titre : undefined, animal: finalAnimal, pratique: finalPratique, departement, contentRating, dogIds,
           });
           setSaving(false);
-          onPublished({ ...editingPost, texte: updated.texte, titre: updated.titre || updated.texte, animal: updated.animal, pratique: updated.pratique, contentRating: updated.content_rating, hashtags: updated.hashtags, mentions: updated.mentions });
+          onPublished({ ...editingPost, texte: updated.texte, titre: updated.titre || updated.texte, animal: updated.animal, pratique: updated.pratique, contentRating: updated.content_rating, hashtags: updated.hashtags, mentions: updated.mentions, dogIds });
         } else {
           const saved = await postService.createPost({
             texte: finalText, titre: type === "video" ? titre : null, type: savedType, animal: finalAnimal, pratique: finalPratique,
@@ -8216,9 +8219,19 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   useEffect(() => {
     const last = messages[messages.length - 1];
     if (last && last.id !== lastMessageIdRef.current) {
+      // isFirstLoad : à l'ouverture de la conversation, on doit TOUJOURS
+      // atterrir en bas, quel que soit stickToBottomRef (encore à sa valeur
+      // par défaut à ce stade). Ensuite, un nouveau message ne force le
+      // défilement que si on était déjà en bas — sinon ça arrachait la
+      // personne à l'historique qu'elle était en train de relire dès que
+      // n'importe qui envoyait un message, contredisant stickToBottomRef
+      // (voir handleListScroll) qui existe justement pour éviter ça.
+      const isFirstLoad = lastMessageIdRef.current === null;
       lastMessageIdRef.current = last.id;
-      stickToBottomRef.current = true;
-      if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+      if (isFirstLoad || stickToBottomRef.current) {
+        stickToBottomRef.current = true;
+        if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+      }
     }
   }, [messages]);
   // Filet pour les messages avec média (photo/vidéo) : au moment où l'effet
@@ -9157,6 +9170,13 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
       )}
       {openConv && (
         <ConversationThread
+          // key={conversationId} : sans elle, taper sur une notification qui
+          // cible une AUTRE conversation pendant qu'une conversation est
+          // déjà ouverte réutilisait la même instance du composant — le fond
+          // choisi, l'image du groupe et un brouillon de message non envoyé
+          // restaient ceux de l'ancienne conversation au lieu d'être
+          // réinitialisés pour la nouvelle.
+          key={openConv.id}
           conversationId={openConv.id}
           meId={meId}
           onClose={() => { setOpenConv(null); refresh(); }}
@@ -10030,6 +10050,12 @@ function MainApp({ session, onboardingData, ageInfo }) {
     if (!session) return;
     let cancelled = false;
     (async () => {
+      // try/finally : sans lui, un rejet de promesse (échec réseau, pas
+      // juste une erreur Postgres — le "error" ci-dessous ne couvre que ce
+      // second cas) sautait le setProfileLoaded(true) final, et l'app
+      // restait bloquée sur l'écran de chargement pour toujours, sans
+      // aucun recours pour la personne à part recharger la page.
+      try {
       const { data, error } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
       if (cancelled) return;
       if (!error && data) {
@@ -10069,7 +10095,9 @@ function MainApp({ session, onboardingData, ageInfo }) {
         if (cancelled) return;
         setProfile((p) => ({ ...p, statistiques: { abonnes: abonnes || 0, abonnements: abonnements || 0 } }));
       }
-      setProfileLoaded(true);
+      } finally {
+        if (!cancelled) setProfileLoaded(true);
+      }
     })();
     return () => { cancelled = true; };
   }, [session]);
