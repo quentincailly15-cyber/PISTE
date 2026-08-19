@@ -9001,6 +9001,14 @@ function MainApp({ session, onboardingData, ageInfo }) {
         refreshConversations();
       }
     } else {
+      // Réinitialiser chromeMode ICI (pas seulement via l'effet [active] plus
+      // bas) : sans ça, le tout premier rendu du nouvel écran utilise encore
+      // l'ancienne valeur (ex. "hidden" si on avait défilé vers le bas sur
+      // l'écran précédent) — un onglet/bandeau apparaît alors caché puis
+      // "saute" visible dès que l'effet se déclenche juste après, un frame
+      // plus tard. Les deux mises à jour groupées dans le même clic évitent
+      // ce flash (repéré en arrivant sur Vidéo/Instants).
+      setChromeMode("full");
       setActive(key);
     }
   };
