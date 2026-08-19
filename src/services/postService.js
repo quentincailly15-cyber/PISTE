@@ -278,7 +278,7 @@ export async function signPostMediaRows(rows) {
   }));
 }
 
-export async function createPost({ texte, titre, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null, pollOptions = [], identifiedUsernames = [] }) {
+export async function createPost({ texte, titre, type, animal, pratique, dogIds = [], departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null, pollOptions = [], identifiedUsernames = [] }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
@@ -310,8 +310,11 @@ export async function createPost({ texte, titre, type, animal, pratique, dogId, 
     .single();
   if (error) throw error;
 
-  if (dogId) {
-    const { error: dogLinkError } = await supabase.from("post_dogs").insert({ post_id: post.id, dog_id: dogId });
+  // post_dogs est many-to-many (clé primaire (post_id, dog_id)) — une sortie
+  // en meute peut identifier plusieurs chiens sur la même publication, pas
+  // un seul. Un seul aller-retour, une ligne par chien sélectionné.
+  if (dogIds.length > 0) {
+    const { error: dogLinkError } = await supabase.from("post_dogs").insert(dogIds.map((dogId) => ({ post_id: post.id, dog_id: dogId })));
     if (dogLinkError) throw dogLinkError;
   }
 

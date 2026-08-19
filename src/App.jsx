@@ -4931,7 +4931,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const [animal, setAnimal] = useState(editingPost?.animal || null);
   const [pratique, setPratique] = useState(editingPost?.pratique || null);
   const [departement, setDepartement] = useState(editingPost?.localisation?.departement || "");
-  const [dogId, setDogId] = useState(editingPost?.chienId || null);
+  const [dogIds, setDogIds] = useState(editingPost?.chienId ? [editingPost.chienId] : []);
   const [mediaFiles, setMediaFiles] = useState([]);
   const [mediaDurations, setMediaDurations] = useState([]);
   const [mediaError, setMediaError] = useState("");
@@ -5080,7 +5080,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
         } else {
           const saved = await postService.createPost({
             texte: finalText, titre: type === "video" ? titre : null, type: savedType, animal, pratique,
-            dogId,
+            dogIds,
             departement, contentRating, mediaFiles, mediaDurations, thumbnailFile: type === "video" ? thumbnailFile : null, groupId,
             pollOptions: isPoll ? pollOptions : [],
             identifiedUsernames: identifiedUsers.map((u) => u.username),
@@ -5245,12 +5245,25 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
                 <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>{ANIMALS.map((a) => <Chip key={a} label={a} active={animal === a} onClick={() => setAnimal(animal === a ? null : a)} />)}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>TYPE</div>
                 <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>{PRACTICE_TYPES.map((t) => <Chip key={t} label={t} active={pratique === t} onClick={() => setPratique(pratique === t ? null : t)} />)}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>CHIEN</div>
-                <select value={dogId || ""} onChange={(e) => setDogId(e.target.value || null)} style={{ width: "100%", border: `1.5px solid ${colors.border}`, background: colors.surfaceAlt, borderRadius: RADIUS.sm, padding: "11px 14px", fontSize: 13.5, color: colors.text, outline: "none", marginBottom: 16 }}>
-                  <option value="">Aucun</option>
-                  {dogs.length === 0 && <option disabled>Aucun chien enregistré</option>}
-                  {dogs.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
-                </select>
+                <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>CHIEN(S)</div>
+                {dogs.length === 0 ? (
+                  <div style={{ fontSize: 12, color: colors.textFaint, marginBottom: 16 }}>Aucun chien enregistré.</div>
+                ) : (
+                  // Plusieurs chiens à la fois (sortie en meute) — chaque
+                  // chip toggle sa présence dans post_dogs, table de liaison
+                  // déjà many-to-many (createPost insère une ligne par
+                  // chien sélectionné, voir postService.js).
+                  <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
+                    {dogs.map((d) => (
+                      <Chip
+                        key={d.id}
+                        label={d.nom}
+                        active={dogIds.includes(d.id)}
+                        onClick={() => setDogIds((ids) => (ids.includes(d.id) ? ids.filter((x) => x !== d.id) : [...ids, d.id]))}
+                      />
+                    ))}
+                  </div>
+                )}
                 <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>LOCALISATION</div>
                 <TextField label={null} value={departement} onChange={setDepartement} placeholder="Département" />
                 <div style={{ fontSize: 11.5, color: colors.textFaint, marginTop: -8, lineHeight: 1.5 }}><MapPin size={11} style={{ display: "inline", marginRight: 4, verticalAlign: -1 }} />Votre position précise n'est jamais affichée publiquement.</div>
