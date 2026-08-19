@@ -7,6 +7,47 @@ import { supabase } from "./supabaseClient.js";
 import { extractHashtags, extractMentions } from "../lib/piste_core.js";
 
 /**
+ * Redimensionne/compresse une photo côté navigateur avant l'envoi — sans ça,
+ * une photo de téléphone à pleine résolution (15-20 Mo, souvent bien plus
+ * grande que ce qu'un écran affiche jamais) partait telle quelle vers
+ * Storage, et c'est ce même fichier que chaque personne qui voit la
+ * publication téléchargeait. 1920px de plus grand côté suffit largement à
+ * un affichage plein écran ; en dessous de cette taille, le fichier original
+ * est renvoyé tel quel (repasser par un canvas ferait perdre de la qualité
+ * pour rien). Échoue en silence vers le fichier d'origine plutôt que de
+ * bloquer la publication si jamais le navigateur ne sait pas décoder l'image.
+ */
+function compressImage(file, { maxDimension = 1920, quality = 0.82 } = {}) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width <= maxDimension && height <= maxDimension) {
+        resolve(file);
+        return;
+      }
+      const scale = maxDimension / Math.max(width, height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => resolve(blob ? new File([blob], file.name, { type: "image/jpeg" }) : file),
+        "image/jpeg",
+        quality
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+/**
  * Capture une vraie image (première seconde) d'un fichier vidéo, côté
  * navigateur (canvas) — sert de miniature dans les listes, plutôt que
  * d'afficher un <video> qui reste souvent noir tant qu'on n'a pas cliqué.
@@ -201,7 +242,12 @@ export async function createPost({ texte, titre, type, animal, pratique, dogId, 
   // Upload média réel vers Supabase Storage (bucket "posts" à créer côté Dashboard).
   const uploadedMedia = [];
   for (let i = 0; i < mediaFiles.length; i++) {
-    const file = mediaFiles[i];
+    const rawFile = mediaFiles[i];
+    const mediaType = rawFile.type.startsWith("video") ? "video" : "image";
+    // Compression uniquement pour les photos — une vidéo se compresse
+    // différemment (encodage, pas juste des dimensions), hors de portée d'un
+    // simple canvas côté navigateur.
+    const file = mediaType === "image" ? await compressImage(rawFile) : rawFile;
     const path = `${userData.user.id}/${post.id}/${i}-${file.name}`;
     const { error: uploadError } = await supabase.storage.from("posts").upload(path, file, {
       cacheControl: "3600",
@@ -209,7 +255,6 @@ export async function createPost({ texte, titre, type, animal, pratique, dogId, 
     });
     if (uploadError) throw uploadError;
     const { data: publicUrl } = supabase.storage.from("posts").getPublicUrl(path);
-    const mediaType = file.type.startsWith("video") ? "video" : "image";
 
     let thumbnailUrl = null;
     if (mediaType === "video") {
