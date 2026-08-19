@@ -768,7 +768,7 @@ function mapPostRow(row) {
     titre: row.titre || row.texte || null,
   };
 }
-const ANIMALS = ["Chevreuil", "Sanglier", "Cerf", "Lièvre", "Faisan", "Canard", "Autre", "Aucun"];
+const ANIMALS = ["Chevreuil", "Sanglier", "Cerf", "Daim", "Chamois", "Mouflon", "Renard", "Lièvre", "Lapin", "Faisan", "Perdrix", "Bécasse", "Bécassine", "Pigeon", "Canard", "Blaireau", "Autre", "Aucun"];
 const PRACTICE_TYPES = ["Approche", "Affût", "Battue", "Chasse au chien", "Gibier d'eau", "Petit gibier", "Grand gibier", "Piégeage", "Vénerie sous terre", "Observation", "Préparation", "Matériel", "Autre"];
 const GROUP_CATEGORIES = ["Grand gibier", "Petit gibier", "Gibier d'eau", "Chiens de chasse", "Approche", "Affût", "Battue", "Matériel", "Photographie", "Nature"];
 
@@ -4996,6 +4996,8 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const [text, setText] = useState(editingPost?.texte || "");
   const [showDetails, setShowDetails] = useState(false);
   const [animal, setAnimal] = useState(editingPost?.animal || null);
+  const [animalAutre, setAnimalAutre] = useState("");
+  const [pratiqueAutre, setPratiqueAutre] = useState("");
   const [pratique, setPratique] = useState(editingPost?.pratique || null);
   const [departement, setDepartement] = useState(editingPost?.localisation?.departement || "");
   const [dogIds, setDogIds] = useState(editingPost?.chienId ? [editingPost.chienId] : []);
@@ -5131,6 +5133,12 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
     // en base, voir postService.createPost) et un message privé une fois la
     // publication créée, voir plus bas.
     const finalText = text.trim();
+    // "Autre" reste la valeur stockée par défaut si rien n'est précisé ; sinon
+    // le texte libre remplace directement "Autre" (colonnes text simples,
+    // aucune contrainte à respecter — même principe que terrain_autre/
+    // type_sortie_autre côté carnet de chasse).
+    const finalAnimal = animal === "Autre" && animalAutre.trim() ? animalAutre.trim() : animal;
+    const finalPratique = pratique === "Autre" && pratiqueAutre.trim() ? pratiqueAutre.trim() : pratique;
     // Un sondage reste stocké comme un post de type "sondage" (inchangé côté
     // base/Fil) — seule la façon de le créer change : plus un type séparé,
     // une simple option dans "Publication" (voir isPoll).
@@ -5140,13 +5148,13 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
         // Chemin réel (Supabase) — publication/photo/vidéo/instant/sondage.
         if (editingPost) {
           const updated = await postService.updatePost(editingPost.id, {
-            texte: finalText, titre: type === "video" ? titre : undefined, animal, pratique, departement, contentRating,
+            texte: finalText, titre: type === "video" ? titre : undefined, animal: finalAnimal, pratique: finalPratique, departement, contentRating,
           });
           setSaving(false);
           onPublished({ ...editingPost, texte: updated.texte, titre: updated.titre || updated.texte, animal: updated.animal, pratique: updated.pratique, contentRating: updated.content_rating, hashtags: updated.hashtags, mentions: updated.mentions });
         } else {
           const saved = await postService.createPost({
-            texte: finalText, titre: type === "video" ? titre : null, type: savedType, animal, pratique,
+            texte: finalText, titre: type === "video" ? titre : null, type: savedType, animal: finalAnimal, pratique: finalPratique,
             dogIds,
             departement, contentRating, mediaFiles, mediaDurations, thumbnailFile: type === "video" ? thumbnailFile : null, groupId,
             pollOptions: isPoll ? pollOptions : [],
@@ -5310,9 +5318,15 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             {showDetails && (
               <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: RADIUS.md, padding: 16, marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>ANIMAL</div>
-                <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>{ANIMALS.map((a) => <Chip key={a} label={a} active={animal === a} onClick={() => setAnimal(animal === a ? null : a)} />)}</div>
+                <div className="flex flex-wrap gap-2" style={{ marginBottom: animal === "Autre" ? 10 : 16 }}>{ANIMALS.map((a) => <Chip key={a} label={a} active={animal === a} onClick={() => setAnimal(animal === a ? null : a)} />)}</div>
+                {animal === "Autre" && (
+                  <div style={{ marginBottom: 16 }}><TextField label={null} value={animalAutre} onChange={setAnimalAutre} placeholder="Précisez l'animal..." /></div>
+                )}
                 <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>TYPE</div>
-                <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>{PRACTICE_TYPES.map((t) => <Chip key={t} label={t} active={pratique === t} onClick={() => setPratique(pratique === t ? null : t)} />)}</div>
+                <div className="flex flex-wrap gap-2" style={{ marginBottom: pratique === "Autre" ? 10 : 16 }}>{PRACTICE_TYPES.map((t) => <Chip key={t} label={t} active={pratique === t} onClick={() => setPratique(pratique === t ? null : t)} />)}</div>
+                {pratique === "Autre" && (
+                  <div style={{ marginBottom: 16 }}><TextField label={null} value={pratiqueAutre} onChange={setPratiqueAutre} placeholder="Précisez le type..." /></div>
+                )}
                 <div style={{ fontSize: 12, fontWeight: 700, color: colors.textSecondary, marginBottom: 8 }}>CHIEN(S)</div>
                 {dogs.length === 0 ? (
                   <div style={{ fontSize: 12, color: colors.textFaint, marginBottom: 16 }}>Aucun chien enregistré.</div>
