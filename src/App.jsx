@@ -5800,7 +5800,18 @@ function DogFormScreen({ dog, onClose, onSaved, onDeleted }) {
   const photoInputRef = useRef(null);
   const pickPhoto = (e) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
+    // "accept" sur l'<input> n'est qu'une suggestion pour le sélecteur du
+    // système — certains sélecteurs de photos (notamment iOS) proposent
+    // quand même des vidéos malgré accept="image/*", et rien n'empêchait
+    // jusqu'ici qu'une vidéo soit acceptée comme photo de chien (juste
+    // stockée telle quelle, puis affichée cassée dans un <img>).
+    if (!file.type.startsWith("image/")) {
+      setError("La photo d'un chien doit être une image, pas une vidéo.");
+      return;
+    }
+    setError("");
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
   };
