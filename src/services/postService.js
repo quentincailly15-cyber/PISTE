@@ -215,6 +215,32 @@ export async function resignPostMediaPath(path) {
 }
 
 /**
+ * Toute publication créée AVANT le passage du bucket en privé (migration
+ * 059) a encore une URL publique complète stockée dans post_media.url/
+ * thumbnail_url (ex: ".../storage/v1/object/public/posts/{path}") — seul le
+ * code d'ÉCRITURE (createPost) a été mis à jour pour stocker un chemin brut,
+ * les lignes déjà en base n'ont jamais été converties. Sans ce filet, toute
+ * photo/vidéo publiée avant ce déploiement casse (createSignedUrls() reçoit
+ * une URL complète au lieu d'un chemin, échoue silencieusement pour
+ * chacune) — exactement le bug remonté juste après avoir exécuté la
+ * migration. On extrait donc le chemin réel qu'il s'agisse déjà d'un chemin
+ * brut (publications récentes) ou d'une ancienne URL publique (tout le
+ * reste) — decodeURIComponent car getPublicUrl() encode l'URL (espaces,
+ * accents...) alors que le chemin réel sur Storage ne l'est pas.
+ */
+export function pathFromStoredValue(bucket, value) {
+  if (!value) return null;
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const idx = value.indexOf(marker);
+  if (idx === -1) return value; // déjà un chemin brut
+  try {
+    return decodeURIComponent(value.slice(idx + marker.length));
+  } catch (e) {
+    return value.slice(idx + marker.length);
+  }
+}
+
+/**
  * Le bucket "posts" est privé (migration 059) — post_media.url et
  * .thumbnail_url ne contiennent plus une URL publique mais le chemin
  * Storage brut. Génère ici des URLs signées (1h) pour tous les médias d'un
@@ -227,8 +253,10 @@ export async function signPostMediaRows(rows) {
   const paths = new Set();
   for (const row of rows) {
     for (const media of row.post_media || []) {
-      if (media.url) paths.add(media.url);
-      if (media.thumbnail_url) paths.add(media.thumbnail_url);
+      const p = pathFromStoredValue("posts", media.url);
+      const tp = pathFromStoredValue("posts", media.thumbnail_url);
+      if (p) paths.add(p);
+      if (tp) paths.add(tp);
     }
   }
   if (paths.size === 0) return rows;
@@ -236,13 +264,17 @@ export async function signPostMediaRows(rows) {
   const byPath = new Map((signed || []).filter((s) => !s.error).map((s) => [s.path, s.signedUrl]));
   return rows.map((row) => ({
     ...row,
-    post_media: (row.post_media || []).map((media) => ({
-      ...media,
-      path: media.url || null,
-      url: media.url ? byPath.get(media.url) || null : null,
-      thumbnailPath: media.thumbnail_url || null,
-      thumbnail_url: media.thumbnail_url ? byPath.get(media.thumbnail_url) || null : null,
-    })),
+    post_media: (row.post_media || []).map((media) => {
+      const p = pathFromStoredValue("posts", media.url);
+      const tp = pathFromStoredValue("posts", media.thumbnail_url);
+      return {
+        ...media,
+        path: p,
+        url: p ? byPath.get(p) || null : null,
+        thumbnailPath: tp,
+        thumbnail_url: tp ? byPath.get(tp) || null : null,
+      };
+    }),
   }));
 }
 

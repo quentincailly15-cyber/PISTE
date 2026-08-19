@@ -6,7 +6,7 @@
 // realtime.
 
 import { supabase } from "./supabaseClient.js";
-import { signPostMediaRows } from "./postService.js";
+import { signPostMediaRows, pathFromStoredValue } from "./postService.js";
 
 async function requireUser() {
   const { data, error } = await supabase.auth.getUser();
@@ -255,8 +255,13 @@ const MESSAGE_SELECT = "*, profiles!messages_sender_id_fkey(username, nom, avata
  * le même travail pour ce bucket-là ; on la réutilise plutôt que dupliquer
  * la logique de signature.
  */
+// Un message avec pièce jointe envoyé AVANT le passage du bucket en privé
+// (migration 057) a encore une URL publique complète dans message_media.url
+// (seul le code d'écriture, sendMediaMessage, a été mis à jour) — même bug
+// que post_media, même filet : pathFromStoredValue() (postService.js)
+// retrouve le vrai chemin, qu'il soit déjà brut ou encore une ancienne URL.
 async function withSignedMedia(rows) {
-  const paths = rows.map((m) => m.message_media?.[0]?.url).filter(Boolean);
+  const paths = rows.map((m) => pathFromStoredValue("messages", m.message_media?.[0]?.url)).filter(Boolean);
   const signedMediaPromise = paths.length > 0
     ? supabase.storage.from("messages").createSignedUrls(paths, 3600)
     : Promise.resolve({ data: [] });
@@ -269,9 +274,10 @@ async function withSignedMedia(rows) {
   let sharedIdx = 0;
   return rows.map((m) => {
     const media = m.message_media?.[0];
+    const p = media ? pathFromStoredValue("messages", media.url) : null;
     return {
       ...m,
-      message_media: media ? [{ ...media, path: media.url, url: byPath.get(media.url) || null }] : m.message_media,
+      message_media: media ? [{ ...media, path: p, url: (p && byPath.get(p)) || null }] : m.message_media,
       shared_post: m.shared_post ? signedShared[sharedIdx++] : m.shared_post,
     };
   });
