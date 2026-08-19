@@ -575,7 +575,14 @@ function ScreenHeader({ title, onBack, onCloseX, rightAction, chromeMode = "full
         // env(safe-area-inset-top) : encoche/île dynamique en PWA plein écran
         // sur iPhone (voir viewport-fit=cover, index.html) — vaut 0px partout
         // ailleurs (navigateur classique, Android), donc sans effet là-bas.
-        top: floating ? "calc(8px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
+        // Constant (ne dépend plus de "floating") : un top qui change EN MÊME
+        // TEMPS que la transformation de masquage faisait recalculer la
+        // position "collée" d'un élément sticky en plein milieu de sa propre
+        // transition — l'élément pouvait alors chevaucher brièvement le
+        // contenu suivant pendant l'animation (repéré sur capture d'écran
+        // réelle). translateY() suffit déjà entièrement à le faire
+        // disparaître/réapparaître ; top n'a plus besoin de bouger.
+        top: "calc(8px + env(safe-area-inset-top, 0px))",
         zIndex: 10,
         background: colors.headerBg,
         backdropFilter: "blur(24px)",
@@ -585,7 +592,7 @@ function ScreenHeader({ title, onBack, onCloseX, rightAction, chromeMode = "full
         borderRadius: floating ? RADIUS.pill : 0,
         boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
         transform: chromeMode === "hidden" ? "translateY(-130%)" : "translateY(0)",
-        transition: "transform 260ms ease, top 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+        transition: "transform 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
       }}
     >
       <div className="flex items-center gap-3" style={{ minWidth: 0, flex: 1 }}>
@@ -1407,12 +1414,16 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
     <div
       style={{
         position: "sticky",
-        // La marge du haut sur un élément "sticky" ne crée pas un vrai espace
-        // fiable (comportement différent d'un élément "fixed") — on décale
-        // plutôt sa position elle-même pour obtenir le même détachement que
-        // la barre du bas. env(safe-area-inset-top) : encoche/île dynamique
-        // en PWA plein écran sur iPhone (voir viewport-fit=cover, index.html).
-        top: floating ? "calc(8px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
+        // env(safe-area-inset-top) : encoche/île dynamique en PWA plein écran
+        // sur iPhone (voir viewport-fit=cover, index.html). Constant (ne
+        // dépend plus de "floating") : un top qui change EN MÊME TEMPS que
+        // la transformation de masquage force le navigateur à recalculer la
+        // position "collée" d'un élément sticky en plein milieu de sa propre
+        // transition — l'élément pouvait alors chevaucher brièvement l'écran
+        // en dessous pendant l'animation (repéré sur capture d'écran réelle,
+        // "Ma Trace" caché par les onglets Fil). translateY() suffit déjà
+        // entièrement à le faire disparaître/réapparaître.
+        top: "calc(8px + env(safe-area-inset-top, 0px))",
         zIndex: 20,
         background: colors.headerBg,
         backdropFilter: "blur(24px)",
@@ -1422,7 +1433,7 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         borderRadius: floating ? RADIUS.pill : 0,
         boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
         transform: chromeMode === "hidden" ? "translateY(-130%)" : "translateY(0)",
-        transition: "transform 260ms ease, top 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+        transition: "transform 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
       }}
       className="flex items-center justify-between px-4 py-3"
     >
@@ -3071,12 +3082,16 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
       <div
         style={{
           position: "sticky",
-          top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
+          // Constant : voir le commentaire équivalent sur Header/ScreenHeader
+          // — un top qui bouge en même temps que la transition de masquage
+          // faisait recalculer la position "collée" en plein milieu de
+          // l'animation, chevauchant brièvement "Ma Trace" en dessous.
+          top: "calc(74px + env(safe-area-inset-top, 0px))",
           zIndex: 5,
           padding: "14px 16px 6px",
           opacity: chromeMode === "hidden" ? 0 : 1,
           transform: chromeMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
-          transition: "opacity 220ms ease, transform 220ms ease, top 260ms ease",
+          transition: "opacity 220ms ease, transform 220ms ease",
           pointerEvents: chromeMode === "hidden" ? "none" : "auto",
         }}
       >
@@ -3794,12 +3809,13 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
         <div
           style={{
             position: "sticky",
-            top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
+            // Constant — voir Header/ScreenFil pour l'explication du bug évité.
+            top: "calc(74px + env(safe-area-inset-top, 0px))",
             zIndex: 5,
             padding: "14px 16px 6px",
             opacity: chromeMode === "hidden" ? 0 : 1,
             transform: chromeMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
-            transition: "opacity 220ms ease, transform 220ms ease, top 260ms ease",
+            transition: "opacity 220ms ease, transform 220ms ease",
             pointerEvents: chromeMode === "hidden" ? "none" : "auto",
           }}
         >
@@ -4176,13 +4192,14 @@ function GroupPage({ group, onClose, onToggleJoin, onCreatePost, onGroupUpdated,
         <div
           style={{
             position: "sticky",
-            top: localMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
+            // Constant — voir Header/ScreenFil pour l'explication du bug évité.
+            top: "calc(74px + env(safe-area-inset-top, 0px))",
             zIndex: 5,
             padding: "10px 16px",
             background: colors.background,
             opacity: localMode === "hidden" ? 0 : 1,
             transform: localMode === "hidden" ? "translateY(-140%)" : "translateY(0)",
-            transition: "opacity 220ms ease, transform 220ms ease, top 260ms ease",
+            transition: "opacity 220ms ease, transform 220ms ease",
             pointerEvents: localMode === "hidden" ? "none" : "auto",
           }}
         >
@@ -4560,7 +4577,8 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
       <div
         style={{
           position: "sticky",
-          top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
+          // Constant — voir Header/ScreenFil pour l'explication du bug évité.
+          top: "calc(74px + env(safe-area-inset-top, 0px))",
           zIndex: 5,
           background: colors.headerBg,
           backdropFilter: "blur(24px)",
@@ -4570,7 +4588,7 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
           boxShadow: chromeMode !== "hidden" ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
           opacity: chromeMode === "hidden" ? 0 : 1,
           transform: chromeMode === "hidden" ? "translateY(-130%)" : "translateY(0)",
-          transition: "transform 260ms ease, top 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease, opacity 220ms ease",
+          transition: "transform 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease, opacity 220ms ease",
           pointerEvents: chromeMode === "hidden" ? "none" : "auto",
         }}
       >
@@ -8142,7 +8160,8 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
       <div
         style={{
           position: "sticky",
-          top: chromeMode !== "hidden" ? "calc(74px + env(safe-area-inset-top, 0px))" : "env(safe-area-inset-top, 0px)",
+          // Constant — voir Header/ScreenFil pour l'explication du bug évité.
+          top: "calc(74px + env(safe-area-inset-top, 0px))",
           zIndex: 5,
           background: colors.headerBg,
           backdropFilter: "blur(24px)",
@@ -8152,7 +8171,7 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
           boxShadow: chromeMode !== "hidden" ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
           opacity: chromeMode === "hidden" ? 0 : 1,
           transform: chromeMode === "hidden" ? "translateY(-130%)" : "translateY(0)",
-          transition: "transform 260ms ease, top 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease, opacity 220ms ease",
+          transition: "transform 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease, opacity 220ms ease",
           pointerEvents: chromeMode === "hidden" ? "none" : "auto",
         }}
       >
