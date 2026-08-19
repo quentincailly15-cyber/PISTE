@@ -363,13 +363,49 @@ function PisteGlyph({ type, size = 16, color }) {
 
 function Button({ children, onClick, disabled, variant = "primary", full = true }) {
   const { colors } = useTheme();
+  // Relief à deux couches (halo doux + ombre de contact resserrée) plutôt
+  // qu'une seule ombre plate — c'est ce qui donne l'impression que le bouton
+  // "flotte" légèrement au-dessus de la page. Le filet clair en haut
+  // (inset 0 1px 0) est le repère classique du verre liquide : un bord qui
+  // capte la lumière, cohérent avec SegmentedControl/les sheets déjà glass.
   const styles = {
-    primary: { background: disabled ? colors.border : colors.accent, color: disabled ? colors.textFaint : colors.onAccent, border: "none", boxShadow: disabled ? "none" : `0 3px 12px ${colors.accent}40` },
-    secondary: { background: colors.surfaceAlt, color: colors.text, border: "none" },
+    primary: {
+      background: disabled ? colors.border : colors.accent,
+      color: disabled ? colors.textFaint : colors.onAccent,
+      border: "none",
+      boxShadow: disabled ? "none" : `0 6px 18px ${colors.accent}3D, 0 1px 2px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.22)`,
+    },
+    secondary: {
+      // Translucide + flou plutôt qu'un aplat — même langage "glass" que le
+      // reste des surfaces flottantes de l'app (headerBg, SegmentedControl).
+      background: colors.headerBg,
+      backdropFilter: "blur(16px)",
+      WebkitBackdropFilter: "blur(16px)",
+      color: colors.text,
+      border: `1px solid ${colors.border}`,
+      boxShadow: "0 2px 8px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.06)",
+    },
     ghost: { background: "transparent", color: colors.accent, border: "none" },
   }[variant];
   return (
-    <button onClick={onClick} disabled={disabled} className="transition-transform active:scale-[0.98]" style={{ width: full ? "100%" : "auto", borderRadius: RADIUS.pill, padding: "14px 22px", fontSize: 14.5, fontWeight: 700, cursor: disabled ? "default" : "pointer", ...styles }}>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="active:scale-[0.97]"
+      style={{
+        width: full ? "100%" : "auto",
+        borderRadius: RADIUS.pill,
+        padding: "14px 22px",
+        fontSize: 14.5,
+        fontWeight: 700,
+        cursor: disabled ? "default" : "pointer",
+        // Bezier "liquide" (léger dépassement élastique) plutôt que l'easing
+        // linéaire par défaut de Tailwind — même courbe que piste-screen-in/
+        // piste-pill-pop, pour une sensation cohérente sur toute l'app.
+        transition: "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1), background 220ms ease",
+        ...styles,
+      }}
+    >
       {children}
     </button>
   );
@@ -379,7 +415,7 @@ function IconButton({ icon: Icon, onClick, size = 36, active }) {
   return (
     <button
       onClick={onClick}
-      className="active:scale-90 transition-transform"
+      className="active:scale-90"
       style={{
         width: size,
         height: size,
@@ -387,10 +423,16 @@ function IconButton({ icon: Icon, onClick, size = 36, active }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: active ? colors.accentSoft : colors.surfaceAlt,
-        border: "none",
+        // Verre plutôt qu'aplat (colors.surfaceAlt était opaque) — cohérent
+        // avec le reste des pastilles flottantes de l'app, + relief léger
+        // pour que le bouton se détache de la page sans peser visuellement.
+        background: active ? colors.accentSoft : colors.headerBg,
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+        border: `1px solid ${active ? "transparent" : colors.border}`,
+        boxShadow: active ? `0 2px 8px ${colors.accent}30` : "0 1px 4px rgba(0,0,0,0.08)",
         cursor: "pointer",
-        transition: "background 150ms ease",
+        transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
       }}
     >
       <Icon size={18} color={active ? colors.accent : colors.textSecondary} strokeWidth={2} />
@@ -417,7 +459,31 @@ function AvatarImg({ src, size, strokeWidth, fallbackIcon: FallbackIcon = User }
 function Chip({ label, active, onClick, solid = false }) {
   const { colors } = useTheme();
   return (
-    <button onClick={onClick} className="transition-colors active:scale-95" style={{ border: `1.5px solid ${active ? colors.accent : colors.border}`, background: active ? (solid ? colors.accent : colors.accentSoft) : colors.surface, color: active ? (solid ? colors.onAccent : colors.accent) : colors.textSecondary, borderRadius: RADIUS.pill, padding: "9px 15px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+    <button
+      onClick={onClick}
+      className="active:scale-95"
+      style={{
+        border: `1.5px solid ${active ? colors.accent : colors.border}`,
+        // Verre au repos (colors.surface était un aplat opaque) — actif
+        // reste pleinement coloré (accent/accentSoft), c'est justement ce
+        // contraste verre→couleur qui rend l'état actif lisible d'un coup d'œil.
+        background: active ? (solid ? colors.accent : colors.accentSoft) : colors.headerBg,
+        backdropFilter: active ? "none" : "blur(12px)",
+        WebkitBackdropFilter: active ? "none" : "blur(12px)",
+        boxShadow: active ? `0 2px 8px ${colors.accent}30` : "none",
+        color: active ? (solid ? colors.onAccent : colors.accent) : colors.textSecondary,
+        borderRadius: RADIUS.pill,
+        padding: "9px 15px",
+        fontSize: 12.5,
+        fontWeight: 600,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        whiteSpace: "nowrap",
+        transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms ease, color 220ms ease",
+      }}
+    >
       {active && !solid && <Check size={12} strokeWidth={3} />}
       {label}
     </button>
@@ -448,14 +514,37 @@ function EmptyState({ title, subtitle, ctaLabel, onCta, onAdd, icon: Icon }) {
 }
 function TextField({ label, value, onChange, placeholder, type = "text", error, textarea, rows = 3 }) {
   const { colors } = useTheme();
-  const style = { width: "100%", border: `1.5px solid ${error ? colors.error : "transparent"}`, background: colors.surfaceAlt, borderRadius: textarea ? RADIUS.lg : RADIUS.pill, padding: textarea ? "13px 16px" : "13px 18px", fontSize: 14, color: colors.text, outline: "none", boxSizing: "border-box", fontFamily: FONT, boxShadow: error ? "none" : "inset 0 1px 3px rgba(0,0,0,0.04)", transition: "border-color 150ms ease" };
+  const [focused, setFocused] = useState(false);
+  // Halo d'accent au focus (en plus du léger creux permanent, façon champ
+  // "gravé" dans la surface) : le seul retour visuel qu'on avait jusqu'ici
+  // était le curseur clignotant, rien n'indiquait clairement quel champ était
+  // actif dans un formulaire à plusieurs champs.
+  const style = {
+    width: "100%",
+    border: `1.5px solid ${error ? colors.error : focused ? colors.accent : "transparent"}`,
+    background: colors.surfaceAlt,
+    borderRadius: textarea ? RADIUS.lg : RADIUS.pill,
+    padding: textarea ? "13px 16px" : "13px 18px",
+    fontSize: 14,
+    color: colors.text,
+    outline: "none",
+    boxSizing: "border-box",
+    fontFamily: FONT,
+    boxShadow: error
+      ? "inset 0 1px 3px rgba(0,0,0,0.04)"
+      : focused
+      ? `inset 0 1px 3px rgba(0,0,0,0.04), 0 0 0 4px ${colors.accent}22`
+      : "inset 0 1px 3px rgba(0,0,0,0.04)",
+    transition: "border-color 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+  };
+  const handlers = { onFocus: () => setFocused(true), onBlur: () => setFocused(false) };
   return (
     <div style={{ marginBottom: SPACE.lg }}>
       {label && <label style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, display: "block" }}>{label}</label>}
       {textarea ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{ ...style, resize: "none" }} />
+        <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{ ...style, resize: "none" }} {...handlers} />
       ) : (
-        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={style} />
+        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={style} {...handlers} />
       )}
       {error && <div style={{ fontSize: 11.5, color: colors.error, marginTop: 5, fontWeight: 500 }}>{error}</div>}
     </div>
@@ -467,11 +556,12 @@ function TextField({ label, value, onChange, placeholder, type = "text", error, 
 function SegmentedControl({ options, value, onChange }) {
   const { colors } = useTheme();
   return (
-    <div className="flex" style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, gap: 2, boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
+    <div className="flex" style={{ background: colors.headerBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: RADIUS.pill, padding: 3, gap: 2, boxShadow: "0 4px 16px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
       {options.map((o) => (
         <button
           key={o.key}
           onClick={() => onChange(o.key)}
+          className="active:scale-[0.96]"
           style={{
             flex: 1,
             border: "none",
@@ -487,8 +577,11 @@ function SegmentedControl({ options, value, onChange }) {
             fontWeight: value === o.key ? 700 : 600,
             cursor: "pointer",
             whiteSpace: "nowrap",
-            boxShadow: value === o.key ? `0 2px 8px ${colors.accent}40` : "none",
-            transition: "background 150ms ease, box-shadow 150ms ease",
+            // Relief à deux couches sur la pilule active, même recette que
+            // Button primary (halo + filet clair en haut) pour qu'elle se
+            // détache du verre du fond plutôt que de rester à plat dessus.
+            boxShadow: value === o.key ? `0 3px 10px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.25)` : "none",
+            transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
             animation: value === o.key ? "piste-pill-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
           }}
         >
@@ -1489,9 +1582,13 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
           borderTop: floating ? "none" : `1px solid ${colors.border}`,
           margin: floating ? "0 8px calc(8px + env(safe-area-inset-bottom, 0px))" : 0,
           borderRadius: floating ? RADIUS.pill : 0,
-          boxShadow: floating ? "0 4px 20px rgba(0,0,0,0.18)" : "none",
+          // Halo d'ombre élargi + filet clair en haut de la pilule (bord qui
+          // capte la lumière) : le même vocabulaire "verre liquide" que
+          // Button/SegmentedControl, appliqué à la barre la plus visible et
+          // la plus manipulée de l'app.
+          boxShadow: floating ? "0 8px 28px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.10)" : "none",
           transform: chromeMode === "hidden" ? "translateY(130%)" : "translateY(0)",
-          transition: "transform 260ms ease, margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
+          transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
           paddingBottom: floating ? 4 : "env(safe-area-inset-bottom, 0px)",
         }}
       >
@@ -1505,7 +1602,7 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                   {/* Plus de décalage vers le haut (marginTop négatif) : le
                       bouton flotte maintenant centré entre le haut et le bas
                       de la pilule, comme les autres icônes de la barre. */}
-                  <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 16px ${colors.accent}70` }}>
+                  <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: colors.accent, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 16px ${colors.accent}70, inset 0 1px 0 rgba(255,255,255,0.3)`, transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                     <Plus size={21} color={colors.onAccent} strokeWidth={2.4} />
                   </div>
                 </button>
@@ -1524,10 +1621,11 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
                     height: 34,
                     borderRadius: RADIUS.pill,
                     background: isActive ? colors.accentSoft : "transparent",
+                    boxShadow: isActive ? `0 2px 8px ${colors.accent}25` : "none",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    transition: "background 200ms ease",
+                    transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
                     animation: isActive ? "piste-pill-pop 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
                   }}
                 >
