@@ -729,6 +729,14 @@ function formatCount(n) {
   if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10000 ? 1 : 0).replace(".", ",")}k`;
   return `${(n / 1_000_000).toFixed(1).replace(".", ",")}M`;
 }
+// "avec Jean" / "avec Jean et Marie" / "avec Jean, Marie et Paul" — jamais
+// juste une virgule avant le dernier nom, plus naturel à lire dans l'en-tête
+// d'une publication (voir authorRow, PostCard).
+function formatIdentifiedNames(users) {
+  const names = users.map((u) => u.nom || u.username);
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(", ")} et ${names[names.length - 1]}`;
+}
 function mapPostRow(row) {
   return {
     id: row.id,
@@ -752,6 +760,11 @@ function mapPostRow(row) {
     contentRating: row.content_rating,
     hashtags: row.hashtags || [],
     mentions: row.mentions || [],
+    // Distinct de "mentions" (qui mélange aussi les @mentions tapées à la
+    // main dans le texte) — uniquement les personnes réellement identifiées
+    // via le sélecteur dédié (table post_identified_users, migration 063),
+    // pour l'affichage "avec Untel" dans l'en-tête (voir authorRow/PostCard).
+    identifiedUsers: (row.post_identified_users || []).map((r) => ({ username: r.profiles?.username, nom: r.profiles?.nom || r.profiles?.username })).filter((u) => u.username),
     likes: row.likes_count || 0,
     commentaires: row.comments_count || 0,
     reposts: row.reposts_count || 0,
@@ -2656,7 +2669,10 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
         </div>
         <div style={{ textAlign: "left", minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: overlay ? "#fff" : colors.text, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.nom}</div>
-          <div style={{ fontSize: 11, color: overlay ? "rgba(255,255,255,0.8)" : colors.textFaint, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none" }}>{post.date}</div>
+          <div style={{ fontSize: 11, color: overlay ? "rgba(255,255,255,0.8)" : colors.textFaint, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {post.date}
+            {post.identifiedUsers && post.identifiedUsers.length > 0 && ` · avec ${formatIdentifiedNames(post.identifiedUsers)}`}
+          </div>
         </div>
       </button>
       {overlay ? (
@@ -5083,7 +5099,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             dogIds,
             departement, contentRating, mediaFiles, mediaDurations, thumbnailFile: type === "video" ? thumbnailFile : null, groupId,
             pollOptions: isPoll ? pollOptions : [],
-            identifiedUsernames: identifiedUsers.map((u) => u.username),
+            identifiedUsers,
           });
           // Message privé "en plus" de la notification — best-effort : la
           // publication reste réussie même si l'envoi du message échoue pour
@@ -5103,6 +5119,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             type: saved.type, animal: saved.animal, pratique: saved.pratique,
             contentRating: saved.content_rating, hashtags: saved.hashtags || [], mentions: saved.mentions || [],
             likes: 0, commentaires: 0, date: "à l'instant", createdAt: Date.now(), titre: saved.titre || saved.texte,
+            identifiedUsers: identifiedUsers.map((u) => ({ username: u.username, nom: u.nom || u.username })),
           });
         }
       }

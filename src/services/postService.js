@@ -278,7 +278,7 @@ export async function signPostMediaRows(rows) {
   }));
 }
 
-export async function createPost({ texte, titre, type, animal, pratique, dogIds = [], departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null, pollOptions = [], identifiedUsernames = [] }) {
+export async function createPost({ texte, titre, type, animal, pratique, dogIds = [], departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null, pollOptions = [], identifiedUsers = [] }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
@@ -289,7 +289,7 @@ export async function createPost({ texte, titre, type, animal, pratique, dogIds 
   // "mention" (trigger notify_on_post_mention, migration 036), qui ne lit
   // que la colonne mentions, jamais le texte lui-même. On fusionne donc les
   // deux sources plutôt que de dépendre uniquement de ce qui est tapé.
-  const mentions = Array.from(new Set([...extractMentions(texte || ""), ...identifiedUsernames.map((u) => `@${u.toLowerCase()}`)]));
+  const mentions = Array.from(new Set([...extractMentions(texte || ""), ...identifiedUsers.map((u) => `@${u.username.toLowerCase()}`)]));
 
   const { data: post, error } = await supabase
     .from("posts")
@@ -316,6 +316,15 @@ export async function createPost({ texte, titre, type, animal, pratique, dogIds 
   if (dogIds.length > 0) {
     const { error: dogLinkError } = await supabase.from("post_dogs").insert(dogIds.map((dogId) => ({ post_id: post.id, dog_id: dogId })));
     if (dogLinkError) throw dogLinkError;
+  }
+
+  // Table dédiée (migration 063) — distincte de posts.mentions (qui mélange
+  // aussi les @mentions tapées à la main dans le texte) : sert à savoir
+  // précisément qui a été identifié, pour l'afficher "avec Untel" dans
+  // l'en-tête de la publication.
+  if (identifiedUsers.length > 0) {
+    const { error: identifiedError } = await supabase.from("post_identified_users").insert(identifiedUsers.map((u) => ({ post_id: post.id, user_id: u.id })));
+    if (identifiedError) throw identifiedError;
   }
 
   const cleanPollOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
@@ -494,10 +503,10 @@ export async function addComment(postId, texte, parentId = null) {
 export async function searchVideos(query, { limit = 30 } = {}) {
   const q = query.trim();
   if (!q) return [];
-  const select = "*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)";
+  const select = "*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))";
   const [byText, byAuthor] = await Promise.all([
     supabase.from("posts").select(select).in("type", ["video", "video_courte"]).or(`titre.ilike.%${q}%,texte.ilike.%${q}%`).order("created_at", { ascending: false }).limit(limit),
-    supabase.from("posts").select(`*, profiles!posts_author_id_fkey!inner(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)`).in("type", ["video", "video_courte"]).or(`username.ilike.%${q}%,nom.ilike.%${q}%`, { foreignTable: "profiles" }).order("created_at", { ascending: false }).limit(limit),
+    supabase.from("posts").select(`*, profiles!posts_author_id_fkey!inner(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))`).in("type", ["video", "video_courte"]).or(`username.ilike.%${q}%,nom.ilike.%${q}%`, { foreignTable: "profiles" }).order("created_at", { ascending: false }).limit(limit),
   ]);
   if (byText.error) throw byText.error;
   if (byAuthor.error) throw byAuthor.error;
@@ -512,7 +521,7 @@ export async function searchVideos(query, { limit = 30 } = {}) {
 export async function fetchCandidatePosts({ limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -524,7 +533,7 @@ export async function fetchCandidatePosts({ limit = 50 } = {}) {
 export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))")
     .eq("group_id", groupId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -536,7 +545,7 @@ export async function fetchGroupPosts(groupId, { limit = 50 } = {}) {
 export async function fetchUserPosts(userId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))")
     .eq("author_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -551,7 +560,7 @@ export async function fetchUserPosts(userId, { limit = 50 } = {}) {
 export async function fetchPostById(postId) {
   const { data, error } = await supabase
     .from("posts")
-    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)")
+    .select("*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom))")
     .eq("id", postId)
     .single();
   if (error) throw error;
@@ -565,7 +574,7 @@ export async function fetchPostById(postId) {
 export async function fetchPostsByDog(dogId, { limit = 50 } = {}) {
   const { data, error } = await supabase
     .from("post_dogs")
-    .select("posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds))")
+    .select("posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)))")
     .eq("dog_id", dogId)
     .order("created_at", { ascending: false, foreignTable: "posts" })
     .limit(limit);
@@ -679,7 +688,7 @@ export async function fetchMyRepostedPosts() {
   if (!userData.user) return [];
   const { data, error } = await supabase
     .from("reposts")
-    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds))")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)))")
     .eq("user_id", userData.user.id)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -692,7 +701,7 @@ export async function fetchMyRepostedPosts() {
 export async function fetchUserRepostedPosts(userId) {
   const { data, error } = await supabase
     .from("reposts")
-    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds))")
+    .select("created_at, posts(*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds), post_identified_users(profiles(username, nom)))")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;
