@@ -310,6 +310,19 @@ export async function createPost({ texte, titre, type, animal, pratique, dogIds 
     .single();
   if (error) throw error;
 
+  // Tout ce qui suit peut échouer APRÈS que la ligne "posts" ait déjà été
+  // validée en base (tag chien, personne identifiée, sondage, upload média)
+  // — trouvé à l'audit pré-bêta : sans ce try/catch, un échec ici laissait
+  // une publication bel et bien créée mais rejetait quand même la promesse,
+  // ComposeScreen affichait alors "Impossible de publier" et l'auteur
+  // republiait en pensant que rien n'était passé — deux publications
+  // réelles pour une seule action. Toutes les tables liées ont "on delete
+  // cascade" sur post_id (post_dogs, post_identified_users, poll_options,
+  // post_media — voir 001_init.sql/063), donc supprimer la publication
+  // orpheline nettoie tout ce qui a pu être inséré avant l'échec, et rend
+  // une nouvelle tentative sûre plutôt que redondante.
+  try {
+
   // post_dogs est many-to-many (clé primaire (post_id, dog_id)) — une sortie
   // en meute peut identifier plusieurs chiens sur la même publication, pas
   // un seul. Un seul aller-retour, une ligne par chien sélectionné.
@@ -387,6 +400,10 @@ export async function createPost({ texte, titre, type, animal, pratique, dogIds 
 
   const [{ post_media: signedMedia }] = await signPostMediaRows([{ post_media: uploadedMedia }]);
   return { ...post, mediaUrls: signedMedia.map((m) => m.url), media: signedMedia };
+  } catch (e) {
+    await supabase.from("posts").delete().eq("id", post.id).catch(() => {});
+    throw e;
+  }
 }
 
 export async function updatePost(postId, fields) {

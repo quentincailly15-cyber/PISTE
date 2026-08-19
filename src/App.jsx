@@ -2439,6 +2439,14 @@ function MentionPickerButton({ onSelect }) {
 function CommentLikeButton({ comment, size = 13 }) {
   const { colors } = useTheme();
   const [override, setOverride] = useState(null); // { liked, likeCount } | null
+  // Échec de la requête (RLS, migration manquante, réseau) : jusqu'ici le
+  // coeur revenait silencieusement en arrière sans aucune indication —
+  // trouvé à l'audit pré-bêta, ça se lit comme un simple bug visuel plutôt
+  // qu'un vrai échec. Pas de showToast ici (composant profond, plusieurs
+  // couches de parents, showToast n'est pas propagé jusqu'ici) : un flash
+  // rouge local et autonome suffit à signaler "ça n'a pas marché" sans
+  // risquer de modifications sur toute la chaîne d'appel.
+  const [errored, setErrored] = useState(false);
   const state = override || { liked: !!comment.liked, likeCount: comment.likeCount || 0 };
   const toggle = async () => {
     const previous = state;
@@ -2448,13 +2456,15 @@ function CommentLikeButton({ comment, size = 13 }) {
       await postService.toggleCommentLike(comment.id, next.liked);
     } catch (e) {
       setOverride(previous);
+      setErrored(true);
+      window.setTimeout(() => setErrored(false), 500);
     }
   };
   return (
     <button onClick={toggle} className="flex items-center gap-1 active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
       <span style={{ position: "relative", display: "inline-flex" }}>
         {state.liked && <span aria-hidden="true" style={{ position: "absolute", inset: -6, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out forwards" }} />}
-        <Heart size={size} color={state.liked ? colors.accent : colors.textFaint} fill={state.liked ? colors.accent : "none"} strokeWidth={1.8} />
+        <Heart size={size} color={errored ? colors.error : state.liked ? colors.accent : colors.textFaint} fill={state.liked ? colors.accent : "none"} strokeWidth={1.8} style={{ transition: "color 150ms ease" }} />
       </span>
       {state.likeCount > 0 && <span style={{ fontSize: size - 1.5, color: state.liked ? colors.accent : colors.textFaint, fontWeight: state.liked ? 700 : 500 }}>{state.likeCount}</span>}
     </button>
@@ -2964,8 +2974,28 @@ function MediaCarousel({ media, colors }) {
     const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
     if (i !== index) setIndex(i);
   };
+  // Toutes les diapos (y compris les vidéos) restent montées en même temps
+  // ici — un défilement horizontal, pas un montage/démontage par diapo — donc
+  // une vidéo lancée puis quittée (glisser vers une autre photo, ou scroller
+  // toute la publication hors écran) continuait de jouer en arrière-plan
+  // (trouvé à l'audit pré-bêta). querySelectorAll plutôt qu'un tableau de
+  // refs par diapo : plus simple pour un nombre de médias variable.
+  const carouselRef = useRef(null);
+  useEffect(() => {
+    carouselRef.current?.querySelectorAll("video").forEach((v, i) => { if (i !== index) v.pause(); });
+  }, [index]);
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (!entry.isIntersecting) el.querySelectorAll("video").forEach((v) => v.pause()); },
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   return (
-    <div style={{ position: "relative" }}>
+    <div ref={carouselRef} style={{ position: "relative" }}>
       <div
         onScroll={onScroll}
         className="flex"
@@ -3012,6 +3042,25 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
   const [burst, setBurst] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const lastTapRef = useRef(0);
+  // Coupe la vidéo dès qu'elle sort de l'écran (trouvé à l'audit pré-bêta) :
+  // sans ça, une vidéo lancée dans le Fil continuait de jouer (et de faire du
+  // bruit) même après avoir scrollé loin d'elle — possible de se retrouver
+  // avec plusieurs vidéos qui jouent en même temps. Même principe que
+  // InstantSlide, en plus simple (pas de lecture auto ici, juste une pause
+  // forcée — les contrôles natifs restent seuls responsables de la lecture).
+  const videoRef = useRef(null);
+  const postVideoSlideRef = useRef(null);
+  useEffect(() => {
+    const el = postVideoSlideRef.current;
+    const vid = videoRef.current;
+    if (!el || !vid) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (!entry.isIntersecting) vid.pause(); },
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [post.videoUrl]);
   const handleMediaTap = () => {
     const now = Date.now();
     if (now - lastTapRef.current < 300) {
@@ -3191,14 +3240,14 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
               {post.media && post.media.length > 0 ? (
                 <MediaCarousel media={post.media} colors={colors} />
               ) : post.videoUrl ? (
-                <div style={{ aspectRatio: "4/3", background: "#000" }}>
+                <div ref={postVideoSlideRef} style={{ aspectRatio: "4/3", background: "#000" }}>
                   {videoError ? (
                     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
                       <AlertTriangle size={22} color="rgba(255,255,255,0.5)" strokeWidth={1.6} />
                       <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>Vidéo indisponible</span>
                     </div>
                   ) : (
-                    <video src={post.videoUrl} poster={post.image || undefined} controls playsInline onError={() => setVideoError(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <video ref={videoRef} src={post.videoUrl} poster={post.image || undefined} controls playsInline onError={() => setVideoError(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   )}
                 </div>
               ) : (
@@ -3349,6 +3398,9 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
   // CommentLikeButton) plutôt que remontés plus haut : n'affecte que la
   // Trace affichée, pas besoin de faire voyager un callback.
   const [likeOverrides, setLikeOverrides] = useState({});
+  // Même correctif que CommentLikeButton (audit pré-bêta) : un échec revenait
+  // en arrière sans aucune indication, se lisant comme un bug visuel.
+  const [likeErrored, setLikeErrored] = useState(false);
 
   const group = groups[groupIndex];
   const trace = group?.traces?.[traceIndex];
@@ -3363,6 +3415,8 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
       await traceService.toggleTraceLike(trace.id, next.liked);
     } catch (e) {
       setLikeOverrides((o) => ({ ...o, [trace.id]: previous }));
+      setLikeErrored(true);
+      window.setTimeout(() => setLikeErrored(false), 500);
     }
   };
 
@@ -3592,7 +3646,7 @@ function TraceViewer({ groups, startGroupIndex, onClose, meUsername, onView, onD
               className="active:scale-90 transition-transform"
               style={{ width: 40, height: 40, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.35)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
             >
-              <Heart size={18} color={likeState.liked ? colors.accent : "#fff"} fill={likeState.liked ? colors.accent : "none"} />
+              <Heart size={18} color={likeErrored ? colors.error : likeState.liked ? colors.accent : "#fff"} fill={likeState.liked ? colors.accent : "none"} style={{ transition: "color 150ms ease" }} />
             </button>
           </div>
         )}
@@ -3739,6 +3793,14 @@ function ScreenFil({ posts, profile, liked, saved, reposted, commentsByPost, fol
 function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = [], reposted = [], commentsByPost = {}, onLike, onRepost, onAddComment, onDelete, onDeleteComment, onEditRequest, onReport, onHide, onBlock, onLoadComments, onOpenProfile }) {
   const { colors } = useTheme();
   const videoRef = useRef(null);
+  // "autoPlay" seul (sans "muted") est bloqué par Safari iOS en dehors d'un
+  // geste utilisateur synchrone — le montage de ce composant se fait après un
+  // re-render React (setState → effet), donc hors de la fenêtre de geste
+  // reconnue par Safari : la vidéo restait figée sur l'image de preview sans
+  // qu'on comprenne pourquoi (trouvé à l'audit pré-bêta). "muted" est la
+  // seule garantie d'autoplay fiable sur tous les navigateurs ; un bouton
+  // dédié permet de rétablir le son en un tap.
+  const [muted, setMuted] = useState(true);
   const [sheet, setSheet] = useState(null); // 'actions' | 'report' | 'share' | null
   const [commentText, setCommentText] = useState("");
   const [replyTo, setReplyTo] = useState(null); // { id, auteur } | null
@@ -3802,9 +3864,14 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
           <button onClick={rotate} aria-label="Plein écran / pivoter" style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <RotateCw size={16} color="#fff" />
           </button>
-          <button onClick={onClose} aria-label="Fermer" style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-            <X size={18} color="#fff" />
-          </button>
+          <div className="flex items-center gap-2" style={{ pointerEvents: "none" }}>
+            <button onClick={() => setMuted((m) => !m)} aria-label={muted ? "Activer le son" : "Couper le son"} style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              {muted ? <VolumeX size={16} color="#fff" /> : <Volume2 size={16} color="#fff" />}
+            </button>
+            <button onClick={onClose} aria-label="Fermer" style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.45)", border: "none", borderRadius: RADIUS.pill, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <X size={18} color="#fff" />
+            </button>
+          </div>
         </div>
         {videoError ? (
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, textAlign: "center" }}>
@@ -3820,6 +3887,7 @@ function FullScreenVideoPlayer({ video, onClose, meUsername, isAdmin, liked = []
             disableRemotePlayback
             x-webkit-airplay="deny"
             autoPlay
+            muted={muted}
             playsInline
             onError={() => setVideoError(true)}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
@@ -7160,7 +7228,11 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
   const [filterDog, setFilterDog] = useState(null);
   const [filterShared, setFilterShared] = useState(false); // sous-catégorie "sortie partagée" (voir badge, HuntingLogDetailSheet)
 
-  const refresh = () => huntingLogService.fetchMyLogs().then(setLogs).catch(() => {});
+  // Distinct de "logs.length === 0" (audit pré-bêta, même correctif que
+  // Messages/Notifications) : un échec réseau laissait la liste vide,
+  // indiscernable d'un carnet réellement vierge.
+  const [loadError, setLoadError] = useState(false);
+  const refresh = () => huntingLogService.fetchMyLogs().then((rows) => { setLogs(rows); setLoadError(false); }).catch(() => setLoadError(true));
   useEffect(() => {
     setLoading(true);
     refresh().finally(() => setLoading(false));
@@ -7196,6 +7268,9 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
       <div className="px-4" style={{ paddingTop: 12, paddingBottom: 4 }}>
         <SegmentedControl options={[{ key: "liste", label: "Liste" }, { key: "calendrier", label: "Calendrier" }, { key: "stats", label: "Statistiques" }]} value={tab} onChange={setTab} />
       </div>
+      {loadError && !loading && (
+        <div style={{ margin: "0 16px 10px", background: colors.errorSoft, borderRadius: RADIUS.sm, padding: "10px 14px", fontSize: 12, color: colors.error }}>Impossible de charger votre carnet de chasse pour le moment.</div>
+      )}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {loading ? (
           <Spinner />
@@ -9332,12 +9407,18 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
   const { colors } = useTheme();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Distinct de "items.length === 0" (audit pré-bêta) : sans cet état
+  // séparé, un échec réseau laissait juste la liste vide — rendue à
+  // l'identique d'une boîte de notifications réellement vide, aucun moyen
+  // de deviner que le chargement avait en fait échoué.
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
+    setLoadError(false);
     notificationService.fetchNotifications()
       .then((rows) => { setItems(rows); onUnreadChange?.(rows.filter((r) => !r.lu).length); })
-      .catch(() => {})
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -9384,6 +9465,8 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 12px 12px" }}>
         {loading ? (
           <Spinner />
+        ) : loadError ? (
+          <EmptyState title="Impossible de charger vos notifications" subtitle="Vérifiez votre connexion et réessayez." icon={AlertTriangle} />
         ) : items.length === 0 ? (
           <EmptyState title="Aucune notification pour le moment" subtitle="Vous serez averti ici des interactions et des nouveautés qui vous concernent." icon={HelpCircle} />
         ) : (
@@ -10126,6 +10209,16 @@ function MainApp({ session, onboardingData, ageInfo }) {
   // qu'une session existe ; le reste (blocages, signalements, préférences) reste en
   // session locale pour l'instant — pas encore branché.
   const [likedIds, setLikedIds] = useState([]);
+  // Garde-fou anti-double-tap (audit pré-bêta) : toggleLike lisait "isLiked"
+  // depuis la fermeture au moment de l'appel — un double-tap rapide (avant
+  // le re-render qui suit le premier appel) lisait deux fois la même valeur
+  // périmée. Pour un double-LIKE, la seconde requête échouait silencieusement
+  // (clé primaire déjà prise) sans dégât visible ; pour un double-UNLIKE, la
+  // seconde suppression ne trouvait aucune ligne, ne renvoyait aucune erreur,
+  // mais décrémentait quand même le compteur local une seconde fois pour un
+  // seul vrai retrait — le nombre de likes affiché finissait durablement
+  // inférieur au vrai total tant qu'un rechargement ne le corrigeait pas.
+  const likeInFlightRef = useRef(new Set());
   const [savedPostIds, setSavedPostIds] = useState([]);
   const [repostedIds, setRepostedIds] = useState([]);
   const [commentsByPost, setCommentsByPost] = useState({});
@@ -10268,7 +10361,11 @@ function MainApp({ session, onboardingData, ageInfo }) {
   // dérivé plus haut) et l'onglet Messages lisent tous les deux ce même state,
   // plus besoin d'un fetchUnreadConversationCount() séparé rien que pour le badge.
   const refreshConversations = () => {
-    messageService.fetchConversations().then(setConversations).catch(() => {}).finally(() => setConversationsLoaded(true));
+    // showToast sur l'échec (audit pré-bêta) : sans lui, un fetch qui échoue
+    // (réseau, session expirée) laissait juste la liste vide — indiscernable
+    // d'une vraie boîte de réception vide, aucun moyen de savoir que quelque
+    // chose a réellement échoué plutôt que de n'y avoir simplement rien.
+    messageService.fetchConversations().then(setConversations).catch(() => showToast("Impossible de charger vos messages pour le moment.")).finally(() => setConversationsLoaded(true));
   };
   // Marque comme lue(s), en base, la ou les notifications correspondant à un
   // contenu qu'on vient d'ouvrir "en vrai" ailleurs dans l'app (messages,
@@ -10370,10 +10467,16 @@ function MainApp({ session, onboardingData, ageInfo }) {
     } catch (e) { /* pas bloquant : la feuille s'ouvrira simplement vide */ }
   };
   const toggleLike = async (id) => {
-    const isLiked = likedIds.includes(id);
-    if (!isLocalId(id)) await postService.toggleLike(id, !isLiked);
-    setLikedIds((l) => (isLiked ? l.filter((x) => x !== id) : [...l, id]));
-    bumpLikes(id, isLiked ? -1 : 1);
+    if (likeInFlightRef.current.has(id)) return; // voir le commentaire sur likeInFlightRef
+    likeInFlightRef.current.add(id);
+    try {
+      const isLiked = likedIds.includes(id);
+      if (!isLocalId(id)) await postService.toggleLike(id, !isLiked);
+      setLikedIds((l) => (isLiked ? l.filter((x) => x !== id) : [...l, id]));
+      bumpLikes(id, isLiked ? -1 : 1);
+    } finally {
+      likeInFlightRef.current.delete(id);
+    }
   };
   const toggleSave = async (id) => {
     const isSaved = savedPostIds.includes(id);
