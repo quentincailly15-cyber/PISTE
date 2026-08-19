@@ -4979,13 +4979,12 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
   const submit = async () => {
     setSaving(true);
     setError(false);
-    // Les personnes identifiées s'ajoutent au texte en @mentions réelles —
-    // même mécanisme que les commentaires/le carnet, jamais une simple
-    // étiquette décorative : extractMentions() les récupère ensuite pour de
-    // vrai (notification, lien cliquable).
-    const finalText = identifiedUsers.length > 0
-      ? `${text.trim()}${text.trim() ? "\n\n" : ""}${identifiedUsers.map((u) => `@${u.username}`).join(" ")}`
-      : text;
+    // Les personnes identifiées ne s'affichent plus dans le texte visible de
+    // la publication (identifiedUsernames est passé à part à createPost) —
+    // elles reçoivent quand même une vraie notification (colonne mentions
+    // en base, voir postService.createPost) et un message privé une fois la
+    // publication créée, voir plus bas.
+    const finalText = text.trim();
     // Un sondage reste stocké comme un post de type "sondage" (inchangé côté
     // base/Fil) — seule la façon de le créer change : plus un type séparé,
     // une simple option dans "Publication" (voir isPoll).
@@ -5005,6 +5004,15 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             dogId,
             departement, contentRating, mediaFiles, mediaDurations, thumbnailFile: type === "video" ? thumbnailFile : null, groupId,
             pollOptions: isPoll ? pollOptions : [],
+            identifiedUsernames: identifiedUsers.map((u) => u.username),
+          });
+          // Message privé "en plus" de la notification — best-effort : la
+          // publication reste réussie même si l'envoi du message échoue pour
+          // une des personnes identifiées.
+          identifiedUsers.forEach((u) => {
+            messageService.startDirectConversation(u.id)
+              .then((conversationId) => messageService.sendSharedPost(conversationId, saved.id, "Vous avez été identifié(e) dans cette publication."))
+              .catch(() => {});
           });
           setSaving(false);
           onPublished({

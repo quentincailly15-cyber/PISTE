@@ -278,13 +278,18 @@ export async function signPostMediaRows(rows) {
   }));
 }
 
-export async function createPost({ texte, titre, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null, pollOptions = [] }) {
+export async function createPost({ texte, titre, type, animal, pratique, dogId, departement, contentRating, mediaFiles = [], mediaDurations = [], thumbnailFile = null, groupId = null, pollOptions = [], identifiedUsernames = [] }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Non authentifié");
 
   const hashtags = extractHashtags(texte || "");
-  const mentions = extractMentions(texte || "");
+  // Les personnes identifiées (UserPickerField) ne sont plus écrites dans le
+  // texte visible — mais doivent quand même déclencher la notification
+  // "mention" (trigger notify_on_post_mention, migration 036), qui ne lit
+  // que la colonne mentions, jamais le texte lui-même. On fusionne donc les
+  // deux sources plutôt que de dépendre uniquement de ce qui est tapé.
+  const mentions = Array.from(new Set([...extractMentions(texte || ""), ...identifiedUsernames.map((u) => `@${u.toLowerCase()}`)]));
 
   const { data: post, error } = await supabase
     .from("posts")
