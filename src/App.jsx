@@ -7781,6 +7781,15 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const longPressTimerRef = useRef(null);
   const longPressFiredRef = useRef(false);
   const listRef = useRef(null);
+  // true tant qu'on doit rester collé au dernier message — mis à jour au
+  // scroll manuel (voir handleListScroll) pour ne jamais forcer la vue vers
+  // le bas si la personne a remonté lire l'historique.
+  const stickToBottomRef = useRef(true);
+  const handleListScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
   const fileInputRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -7902,9 +7911,29 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     const last = messages[messages.length - 1];
     if (last && last.id !== lastMessageIdRef.current) {
       lastMessageIdRef.current = last.id;
+      stickToBottomRef.current = true;
       if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [messages]);
+  // Filet pour les messages avec média (photo/vidéo) : au moment où l'effet
+  // ci-dessus calcule scrollHeight, l'image n'a souvent pas encore fini de
+  // charger (pas de hauteur intrinsèque connue) — le calcul se fait donc sur
+  // une hauteur de liste plus courte que la vraie, et la vue atterrit un peu
+  // AVANT le tout dernier message plutôt que dessus. Un ResizeObserver sur
+  // la liste réapplique le collage au bas à chaque fois que sa hauteur
+  // change (image qui charge, etc.), tant qu'on n'a pas manuellement
+  // remonté lire l'historique (stickToBottomRef, voir handleListScroll).
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (stickToBottomRef.current && listRef.current) {
+        listRef.current.scrollTop = listRef.current.scrollHeight;
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const submit = async () => {
     const texte = text.trim();
@@ -8045,7 +8074,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
       <ScreenHeader title={title} onBack={onClose} rightAction={<IconButton icon={MoreHorizontal} onClick={() => setShowSettings(true)} />} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {subtitle && <div style={{ padding: "0 16px 10px", fontSize: 11.5, color: colors.textFaint, marginTop: -6 }}>{subtitle}</div>}
-      <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div ref={listRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? (
           <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Chargement...</div>
         ) : loadError ? (
@@ -8824,7 +8853,7 @@ function ScreenMessages({ meId, conversations, conversationsLoaded, onRefreshCon
   );
 }
 
-const NOTIF_ICON = { like: Heart, comment: MessageSquare, follow: User, follow_request: User, follow_accepted: User, repost: Repeat2, message: MessageCircle, group_invite: Users, new_post: Bell, new_trace: Footprints, mention: MessageSquare, moderation: AlertTriangle, system: Bell };
+const NOTIF_ICON = { like: Heart, comment: MessageSquare, follow: User, follow_request: User, follow_accepted: User, repost: Repeat2, message: MessageCircle, message_reaction: Heart, group_invite: Users, new_post: Bell, new_trace: Footprints, mention: MessageSquare, moderation: AlertTriangle, system: Bell };
 const NOTIF_TEXT = {
   like: (nom) => `${nom} a aimé votre publication.`,
   comment: (nom) => `${nom} a commenté votre publication.`,
@@ -8833,6 +8862,7 @@ const NOTIF_TEXT = {
   follow_accepted: (nom) => `${nom} a accepté votre demande d'abonnement.`,
   repost: (nom) => `${nom} a reposté votre publication.`,
   message: (nom) => `${nom} vous a envoyé un message.`,
+  message_reaction: (nom) => `${nom} a aimé votre message.`,
   group_invite: (nom) => `${nom} vous a ajouté à un groupe de messagerie.`,
   new_post: (nom) => `${nom} a publié quelque chose de nouveau.`,
   new_trace: (nom) => `${nom} a publié une nouvelle Trace.`,
