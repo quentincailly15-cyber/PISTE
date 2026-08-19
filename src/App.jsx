@@ -1683,14 +1683,13 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
           // Button/SegmentedControl, appliqué à la barre la plus visible et
           // la plus manipulée de l'app.
           boxShadow: "0 8px 28px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.10)",
-          // Grossit légèrement (au lieu de rétrécir) en scrollant vers le bas
-          // — demande explicite : la barre du haut disparaît entièrement
-          // (voir Header), la barre du bas prend le relais et gagne en
-          // présence plutôt que de se faire discrète. Ancrée par le bas
-          // (transformOrigin "50% 100%") : elle grandit vers le haut, sans
-          // jamais se rapprocher du bord de l'écran.
+          // Rétrécit légèrement (plus petite que la taille initiale) en
+          // scrollant vers le bas — la barre du haut disparaît entièrement
+          // (voir Header) pendant que celle du bas reste visible mais se
+          // fait discrète. Ancrée par le bas (transformOrigin "50% 100%") :
+          // elle rapetisse vers le haut, sans jamais s'approcher du bord.
           transformOrigin: "50% 100%",
-          transform: chromeMode === "hidden" ? "scale(1.06)" : "scale(1)",
+          transform: chromeMode === "hidden" ? "scale(0.9)" : "scale(1)",
           transition: "transform 380ms cubic-bezier(0.34, 1.3, 0.4, 1), box-shadow 260ms ease",
           pointerEvents: "auto",
           paddingBottom: 4,
