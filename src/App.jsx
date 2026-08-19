@@ -1595,16 +1595,12 @@ function Header({ onBell, onMenu, onSearch, unreadCount = 0, chromeMode = "full"
         // ronde mais le flou déborde dans les coins, qui semblent carrés.
         overflow: "hidden",
         boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
-        // Repli MODÉRÉ vers le centre (pas un rétrécissement extrême) — même
-        // raison que BottomNav (voir ses commentaires) : au-delà d'un certain
-        // point, l'icône devient illisible ou semble avoir disparu, ce qui
-        // contredit "toujours voir les icônes dedans". "top" reste
-        // volontairement CONSTANT (voir plus haut) : le seul dégagement
-        // possible ici vient donc de la modération du repli lui-même, pas
-        // d'un déplacement vertical (qui recréerait le bug de recalcul
-        // "sticky" déjà corrigé).
+        // "top" reste volontairement CONSTANT (voir plus haut) : le seul
+        // dégagement possible ici vient donc du repli lui-même, pas d'un
+        // déplacement vertical (qui recréerait le bug de recalcul "sticky"
+        // déjà corrigé).
         transformOrigin: "50% 0%",
-        transform: chromeMode === "hidden" ? "scale(0.88)" : "scale(1)",
+        transform: chromeMode === "hidden" ? "scale(0.68)" : "scale(1)",
         transition: "transform 380ms cubic-bezier(0.34, 1.3, 0.4, 1), margin 260ms ease, border-radius 260ms ease, box-shadow 260ms ease",
       }}
     >
@@ -1647,7 +1643,7 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
     // supplémentaire, la pilule rétrécie restait ancrée exactement là où
     // était le bas de la pilule pleine — collée contre le bord de l'écran.
     // Elle flotte maintenant clairement au-dessus, jamais au ras du bord.
-    <div style={{ position: "fixed", left: 0, right: 0, bottom: chromeMode === "hidden" ? 14 : 0, zIndex: 40, display: "flex", justifyContent: "center", pointerEvents: "none", transition: "bottom 380ms cubic-bezier(0.34, 1.2, 0.4, 1)" }}>
+    <div style={{ position: "fixed", left: 0, right: 0, bottom: chromeMode === "hidden" ? 20 : 0, zIndex: 40, display: "flex", justifyContent: "center", pointerEvents: "none", transition: "bottom 380ms cubic-bezier(0.34, 1.2, 0.4, 1)" }}>
       <div
         style={{
           width: "100%",
@@ -1672,14 +1668,11 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
           // Button/SegmentedControl, appliqué à la barre la plus visible et
           // la plus manipulée de l'app.
           boxShadow: "0 8px 28px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.10)",
-          // Repli MODÉRÉ (0.88, pas 0.32 comme avant) : à 6 icônes, une
-          // pilule vraiment minuscule les aurait rendues illisibles ou
-          // aurait dû en cacher certaines pour tenir dans l'espace — les
-          // deux contredisent "toujours voir les icônes dedans". Ce resserré
-          // léger + le dégagement du bord (ci-dessus) suffisent à signaler
-          // "discret" sans jamais rien escamoter.
+          // Repli à 0.68 (pas 0.32 comme au tout premier essai, qui rendait
+          // les icônes illisibles) — assez petit pour se sentir "discret",
+          // assez grand pour que les 6 icônes restent identifiables.
           transformOrigin: "50% 100%",
-          transform: chromeMode === "hidden" ? "scale(0.88)" : "scale(1)",
+          transform: chromeMode === "hidden" ? "scale(0.68)" : "scale(1)",
           transition: "transform 380ms cubic-bezier(0.34, 1.3, 0.4, 1), box-shadow 260ms ease",
           pointerEvents: "auto",
           paddingBottom: 4,
