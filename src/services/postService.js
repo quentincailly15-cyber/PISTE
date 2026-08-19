@@ -352,6 +352,28 @@ export async function addComment(postId, texte, parentId = null) {
   return data;
 }
 
+/** Recherche de vidéos/Instants réelle côté serveur (titre, description, ou
+ *  auteur) — avant, l'onglet Recherche de Vidéo - Vidéo ne filtrait que les
+ *  50 dernières vidéos déjà chargées en mémoire, donc "ne trouve rien" pour
+ *  une vidéo plus ancienne ne voulait pas dire "n'existe pas". Deux requêtes
+ *  (texte, puis auteur) fusionnées plutôt qu'un OR entre deux tables — un
+ *  filtre PostgREST ne combine pas nativement une colonne locale et une
+ *  colonne d'une table jointe dans la même clause .or(). */
+export async function searchVideos(query, { limit = 30 } = {}) {
+  const q = query.trim();
+  if (!q) return [];
+  const select = "*, profiles!posts_author_id_fkey(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)";
+  const [byText, byAuthor] = await Promise.all([
+    supabase.from("posts").select(select).in("type", ["video", "video_courte"]).or(`titre.ilike.%${q}%,texte.ilike.%${q}%`).order("created_at", { ascending: false }).limit(limit),
+    supabase.from("posts").select(`*, profiles!posts_author_id_fkey!inner(username, nom, avatar_url), post_media(id, url, ordre, type, thumbnail_url, duration_seconds)`).in("type", ["video", "video_courte"]).or(`username.ilike.%${q}%,nom.ilike.%${q}%`, { foreignTable: "profiles" }).order("created_at", { ascending: false }).limit(limit),
+  ]);
+  if (byText.error) throw byText.error;
+  if (byAuthor.error) throw byAuthor.error;
+  const merged = new Map();
+  for (const row of [...(byText.data || []), ...(byAuthor.data || [])]) merged.set(row.id, row);
+  return [...merged.values()];
+}
+
 /** Fil personnalisé : récupère les posts visibles puis applique le pipeline
  *  buildFeed() (piste_core.js) — la logique de tri/diversité ne change pas,
  *  seule la source des données change (base au lieu d'un tableau local). */

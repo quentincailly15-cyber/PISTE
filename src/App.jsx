@@ -3819,12 +3819,25 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
   const ranked = rankedIds.map((id) => videosById.get(id)).filter(Boolean);
   const rankedInstants = rankedInstantIds.map((id) => videosById.get(id)).filter(Boolean);
   const visibleRanked = videoSubTab === "abonnements" ? ranked.filter((v) => following.includes(v.username)) : ranked;
-  // Recherche sur les vraies vidéos déjà chargées depuis Supabase (titre/texte,
-  // pseudo ou nom d'affichage de l'auteur) — pas de résultats inventés.
-  const q = query.trim().toLowerCase();
-  const searchResults = q
-    ? videos.filter((v) => (v.titre || "").toLowerCase().includes(q) || (v.nom || "").toLowerCase().includes(q) || (v.username || "").toLowerCase().includes(q))
-    : [];
+  // Recherche réellement côté serveur (postService.searchVideos) — avant,
+  // ce filtre ne portait que sur les 50 dernières vidéos déjà chargées en
+  // mémoire : une vidéo plus ancienne était introuvable sans qu'on sache
+  // pourquoi ("aucun résultat" au lieu de "pas encore cherché assez loin").
+  const q = query.trim();
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    if (!q) { setSearchResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = window.setTimeout(() => {
+      postService.searchVideos(q)
+        .then((rows) => { if (!cancelled) setSearchResults(rows.map(mapPostRow)); })
+        .catch(() => { if (!cancelled) setSearchResults([]); })
+        .finally(() => { if (!cancelled) setSearching(false); });
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(t); };
+  }, [q]);
   // Sur Instants, un bandeau d'en-tête classique (fond clair/sombre uni)
   // au-dessus d'une vidéo plein écran fait "encadré" — on affiche plutôt les
   // onglets flottants, translucides, directement par-dessus la vidéo.
@@ -3879,6 +3892,8 @@ function ScreenVideo({ videos, profile, liked, reposted, commentsByPost, followi
           </div>
           {!q ? (
             <EmptyState title="Rechercher une vidéo" subtitle="Lancez une recherche pour trouver des vidéos publiées par la communauté." icon={Search} />
+          ) : searching ? (
+            <div style={{ textAlign: "center", fontSize: 12.5, color: colors.textFaint, marginTop: 24 }}>Recherche...</div>
           ) : searchResults.length === 0 ? (
             <EmptyState title="Aucun résultat" subtitle={`Aucune vidéo ne correspond à « ${query} ».`} icon={HelpCircle} />
           ) : (
@@ -8441,6 +8456,12 @@ const APP_ITEMS = [
 function PlusRow({ item, onOpen }) {
   const { colors } = useTheme();
   const Icon = item.icon;
+  // Un item sans "real: true" (ni "apparence", qui gère son propre état
+  // "Bientôt disponible" en interne) mène à un écran de repli "Bientôt
+  // disponible" — sans indice ici, ça se découvre seulement après avoir
+  // tapé dessus, ce qui se lit comme "app pas finie" plutôt que comme une
+  // fonctionnalité à venir clairement annoncée.
+  const comingSoon = !item.real && !item.appearance;
   return (
     <button onClick={() => onOpen(item)} className="flex items-center justify-between active:scale-[0.98] transition-transform" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
       <div className="flex items-center gap-3">
@@ -8449,7 +8470,10 @@ function PlusRow({ item, onOpen }) {
         </div>
         <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>{item.label}</span>
       </div>
-      <ChevronRight size={15} color={colors.textFaint} />
+      <div className="flex items-center gap-2">
+        {comingSoon && <span style={{ fontSize: 10, fontWeight: 700, color: colors.textFaint, background: colors.surfaceAlt, borderRadius: RADIUS.pill, padding: "3px 8px" }}>Bientôt</span>}
+        <ChevronRight size={15} color={colors.textFaint} />
+      </div>
     </button>
   );
 }
