@@ -1569,6 +1569,10 @@ const NAV_HEIGHT = 66;
 function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chromeMode = "full" }) {
   const { colors } = useTheme();
   const floating = chromeMode !== "hidden"; // toujours pilule flottante, sauf masqué au défilement
+  // Halo rejoué à chaque tap sur "Créer" (pas seulement au montage) : la clé
+  // change à chaque clic, ce qui force le <span> à se remonter et donc
+  // rejouer l'animation, même en tapant plusieurs fois de suite.
+  const [createPulse, setCreatePulse] = useState(0);
   const items = [
     { key: "fil", label: "Fil", icon: Home },
     { key: "video", label: "Vidéo", icon: Film },
@@ -1606,11 +1610,12 @@ function BottomNav({ active, setActive, onCreate, unreadConversations = 0, chrom
             const isActive = active === it.key;
             if (it.isCreate) {
               return (
-                <button key={it.key} onClick={onCreate} aria-label="Créer" className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>
+                <button key={it.key} onClick={() => { setCreatePulse((n) => n + 1); onCreate(); }} aria-label="Créer" className="flex flex-col items-center gap-1 active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                   {/* Plus de décalage vers le haut (marginTop négatif) : le
                       bouton flotte maintenant centré entre le haut et le bas
                       de la pilule, comme les autres icônes de la barre. */}
-                  <div style={{ width: 42, height: 42, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 20px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.35)`, transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                  <div style={{ position: "relative", width: 42, height: 42, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 20px ${colors.accent}80, inset 0 1px 0 rgba(255,255,255,0.35)`, transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                    {createPulse > 0 && <span key={createPulse} aria-hidden="true" style={{ position: "absolute", inset: -8, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out" }} />}
                     <Plus size={21} color={colors.onAccent} strokeWidth={2.4} />
                   </div>
                 </button>
@@ -1718,6 +1723,12 @@ function AppShell({ children, header, active, setActive, onCreate, unreadConvers
         @keyframes piste-radial-pop { 0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; } 65% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
         @keyframes piste-count-pop { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
         @keyframes piste-crossfade { from { opacity: 0; } to { opacity: 1; } }
+        /* Halo lumineux générique : un anneau qui grossit et s'efface,
+           rejoué en montant/démontant l'élément qui le porte (comme
+           AnimatedCount rejoue son "pop" via sa key) — sert de retour
+           visuel "quelque chose vient de se passer" (like, envoi, action
+           réussie) sans dépendre d'un composant dédié par cas d'usage. */
+        @keyframes piste-halo-pulse { 0% { opacity: 0.65; transform: scale(0.5); } 100% { opacity: 0; transform: scale(2.2); } }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
         }
@@ -1764,20 +1775,20 @@ function ContentActionSheet({ isOwn, isAdmin, onClose, onDelete, onEdit, onRepor
         <div style={{ position: "absolute", top: 10, right: 12 }}><IconButton icon={X} onClick={onClose} size={30} /></div>
         {isOwn ? (
           <>
-            <button onClick={onEdit} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+            <button onClick={onEdit} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
               <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Modifier</span>
             </button>
-            <button onClick={onDelete} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+            <button onClick={onDelete} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
               <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Supprimer</span>
             </button>
           </>
         ) : (
           <>
-            <button onClick={onReport} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Signaler</span></button>
-            <button onClick={onHide} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Masquer</span></button>
-            <button onClick={onBlock} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Bloquer l'auteur</span></button>
+            <button onClick={onReport} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Signaler</span></button>
+            <button onClick={onHide} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Masquer</span></button>
+            <button onClick={onBlock} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Bloquer l'auteur</span></button>
             {isAdmin && (
-              <button onClick={onDelete} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Supprimer (admin)</span></button>
+              <button onClick={onDelete} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}><span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Supprimer (admin)</span></button>
             )}
           </>
         )}
@@ -2824,8 +2835,15 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
       )}
       {post.type === "sondage" && <div style={{ padding: overlay ? 0 : "0 18px", marginBottom: 10 }}><PollCard postId={post.id} /></div>}
       <div className="flex items-center gap-4" style={{ padding: overlay ? 0 : "0 18px" }}>
-        <button onClick={onLike} className="flex items-center gap-1.5 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
-          <Heart size={17} color={liked ? colors.accent : overlay ? "#fff" : colors.textSecondary} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
+        <button onClick={onLike} className="flex items-center gap-1.5 active:scale-90" style={{ background: "none", border: "none", cursor: "pointer", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+          <span style={{ position: "relative", display: "inline-flex" }}>
+            {/* Halo qui se déclenche uniquement à l'instant où "liked" passe
+                à vrai (montage du <span>, pas à chaque re-render) — retour
+                visuel immédiat sur l'action, au-delà du simple remplissage
+                de l'icône. */}
+            {liked && <span aria-hidden="true" style={{ position: "absolute", inset: -7, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out" }} />}
+            <Heart size={17} color={liked ? colors.accent : overlay ? "#fff" : colors.textSecondary} fill={liked ? colors.accent : "none"} strokeWidth={1.8} />
+          </span>
           <AnimatedCount value={post.likes || 0} style={{ fontSize: 12, color: liked ? colors.accent : overlay ? "#fff" : colors.textSecondary, fontWeight: liked ? 700 : 400 }} />
         </button>
         <button onClick={onOpenComments} className="flex items-center gap-1.5" style={{ background: "none", border: "none", cursor: "pointer", filter: overlay ? "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" : "none" }}>
@@ -3801,7 +3819,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
         </div>
       )}
       <HeartBurst show={burst} />
-      <button onClick={() => setMuted((m) => !m)} style={{ position: "absolute", top: "calc(18px + env(safe-area-inset-top, 0px))", right: 14, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+      <button onClick={() => setMuted((m) => !m)} style={{ position: "absolute", top: "calc(18px + env(safe-area-inset-top, 0px))", right: 14, width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.45)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", boxShadow: "0 3px 10px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.14)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
         {muted ? <VolumeX size={16} color="#fff" /> : <Volume2 size={16} color="#fff" />}
       </button>
       <div style={{ position: "absolute", left: 0, right: 68, bottom: 0, padding: "0 16px calc(22px + env(safe-area-inset-bottom, 0px))", color: "#fff", pointerEvents: "none" }}>
@@ -3828,25 +3846,25 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
       </div>
       <div className="flex flex-col items-center gap-4" style={{ position: "absolute", right: 14, bottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>
         <button onClick={onLike} className="flex flex-col items-center gap-1 active:scale-90 transition-transform" style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.45)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", boxShadow: "0 3px 10px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Heart size={18} color={liked ? colors.accent : "#fff"} fill={liked ? colors.accent : "none"} strokeWidth={2} />
           </div>
           <AnimatedCount value={item.likes || 0} style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }} />
         </button>
         <button onClick={onOpenComments} className="flex flex-col items-center gap-1" style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.45)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", boxShadow: "0 3px 10px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <MessageSquare size={18} color="#fff" strokeWidth={2} />
           </div>
           <AnimatedCount value={commentCount} style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }} />
         </button>
         {/* Option repost désactivée à la demande — voir PostCard. */}
         <button onClick={() => setShowShare(true)} style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.45)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", boxShadow: "0 3px 10px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Send size={17} color="#fff" strokeWidth={1.8} />
           </div>
         </button>
         <button onClick={onOpenActions} style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.4)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 34, height: 34, borderRadius: RADIUS.pill, background: "rgba(20,20,20,0.45)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", boxShadow: "0 3px 10px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <MoreHorizontal size={17} color="#fff" />
           </div>
         </button>
@@ -7535,22 +7553,22 @@ function DirectConversationOptionsSheet({ conversationId, otherUser, onClose, on
             ) : (
               <>
                 {otherUser && (
-                  <button onClick={() => { onClose(); onOpenProfile(otherUser.username); }} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                  <button onClick={() => { onClose(); onOpenProfile(otherUser.username); }} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                     <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Voir le profil</span>
                   </button>
                 )}
-                <button onClick={() => { onClose(); onOpenBackground(); }} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                <button onClick={() => { onClose(); onOpenBackground(); }} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                   <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Fond de la conversation</span>
                 </button>
-                <button onClick={() => setConfirmAction("delete")} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                <button onClick={() => setConfirmAction("delete")} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                   <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Supprimer la conversation</span>
                 </button>
                 {otherUser && (
                   <>
-                    <button onClick={() => setShowReport(true)} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                    <button onClick={() => setShowReport(true)} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                       <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.text }}>Signaler</span>
                     </button>
-                    <button onClick={() => setConfirmAction("block")} className="flex items-center" style={{ width: "100%", background: "none", border: "none", padding: "13px 2px", cursor: "pointer" }}>
+                    <button onClick={() => setConfirmAction("block")} className="flex items-center active:scale-[0.98]" style={{ width: "100%", background: "none", border: "none", padding: "13px 10px", margin: "0 -10px", borderRadius: RADIUS.md, cursor: "pointer", transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                       <span style={{ fontSize: 13.5, fontWeight: 600, color: colors.error }}>Bloquer @{otherUser.username}</span>
                     </button>
                   </>
@@ -7701,6 +7719,10 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const [loadError, setLoadError] = useState("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  // Halo rejoué à chaque envoi réussi (même clé-incrément que le "+" de
+  // BottomNav) — confirmation visuelle immédiate au-delà du simple vidage
+  // du champ de saisie.
+  const [sendPulse, setSendPulse] = useState(0);
   const [mediaError, setMediaError] = useState("");
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -7887,6 +7909,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
     try {
       const sent = await messageService.sendMessage(conversationId, texte, replyToId);
       setMessages((m) => (m.some((x) => x.id === sent.id) ? m : [...m, sent]));
+      setSendPulse((n) => n + 1);
     } catch (e) {
       setText(texte); // on redonne le texte pour ne pas le perdre
       setReplyTo(replyToId ? replyTo : null);
@@ -8098,7 +8121,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                 {changedSender && <div style={{ height: 1, background: colors.border, opacity: 0.6, margin: "6px 10px" }} />}
                 <div id={`msg-${m.id}`} className="flex items-end gap-1.5" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
                 {mine && (
-                  <button onClick={() => setMsgMenu(m)} aria-label="Options du message" className="active:scale-90 transition-transform" style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginBottom: 4 }}>
+                  <button onClick={() => setMsgMenu(m)} aria-label="Options du message" className="active:scale-90" style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: colors.headerBg, backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: `1px solid ${colors.border}`, boxShadow: "0 1px 4px rgba(0,0,0,0.08)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginBottom: 4, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                     <MoreHorizontal size={13} color={colors.textFaint} />
                   </button>
                 )}
@@ -8245,7 +8268,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                   </div>
                 </div>
                 {!mine && (
-                  <button onClick={() => setMsgMenu(m)} aria-label="Options du message" className="active:scale-90 transition-transform" style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginBottom: 4 }}>
+                  <button onClick={() => setMsgMenu(m)} aria-label="Options du message" className="active:scale-90" style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: colors.headerBg, backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: `1px solid ${colors.border}`, boxShadow: "0 1px 4px rgba(0,0,0,0.08)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginBottom: 4, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
                     <MoreHorizontal size={13} color={colors.textFaint} />
                   </button>
                 )}
@@ -8320,7 +8343,8 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
               style={{ flex: 1, border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.xl, padding: "11px 16px", fontSize: 13.5, color: colors.text, outline: "none", resize: "none", maxHeight: 120, overflowY: "auto", lineHeight: 1.35, fontFamily: FONT, boxShadow: "inset 0 1px 3px rgba(0,0,0,0.05)", transition: "box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}
             />
             {text.trim() ? (
-              <button onClick={submit} disabled={sending} className="active:scale-90" style={{ width: 38, height: 38, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: `0 4px 14px ${colors.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)`, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+              <button onClick={submit} disabled={sending} className="active:scale-90" style={{ position: "relative", width: 38, height: 38, borderRadius: RADIUS.pill, background: `linear-gradient(165deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 55%), ${colors.accent}`, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: `0 4px 14px ${colors.accent}55, inset 0 1px 0 rgba(255,255,255,0.3)`, transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                {sendPulse > 0 && <span key={sendPulse} aria-hidden="true" style={{ position: "absolute", inset: -6, borderRadius: "50%", background: colors.accent, animation: "piste-halo-pulse 550ms ease-out" }} />}
                 <ArrowLeft size={16} color={colors.onAccent} style={{ transform: "rotate(135deg)" }} />
               </button>
             ) : (
