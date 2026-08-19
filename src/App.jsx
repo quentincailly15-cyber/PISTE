@@ -134,7 +134,9 @@ const THEMES = {
     border: "rgba(255,255,255,0.09)",
     text: "#F4F2EF",
     textSecondary: "#A8A8A4",
-    textFaint: "#6E6E6A",
+    // Éclairci depuis #6E6E6A (3.76:1 sur le fond sombre, sous le seuil WCAG
+    // AA de 4.5:1) — utilisé 189 fois dans l'app, souvent en petite taille.
+    textFaint: "#828280",
     accent: "#E0813F",
     accentSoft: "rgba(224,129,63,0.16)",
     onAccent: "#14170D",
@@ -404,7 +406,7 @@ function AvatarImg({ src, size, strokeWidth, fallbackIcon: FallbackIcon = User }
   const { colors } = useTheme();
   const [failed, setFailed] = useState(false);
   if (src && !failed) {
-    return <img src={src} alt="" onError={() => setFailed(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+    return <img loading="lazy" src={src} alt="" onError={() => setFailed(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
   }
   return <FallbackIcon size={size} color={colors.textFaint} strokeWidth={strokeWidth || undefined} />;
 }
@@ -1552,7 +1554,7 @@ function AmbientBackground({ imageUrl: imageUrlOverride, muted = false } = {}) {
     <div aria-hidden="true" style={{ position: "fixed", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none", background: colors.background }}>
       {imageUrl ? (
         <>
-          <img src={imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "blur(72px) saturate(1.4)", transform: "scale(1.3)" }} />
+          <img loading="lazy" src={imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "blur(72px) saturate(1.4)", transform: "scale(1.3)" }} />
           <div style={{ position: "absolute", inset: 0, background: colors.background, opacity: darken }} />
         </>
       ) : (
@@ -1848,7 +1850,7 @@ function AuthorProfileSheet({ username, meUsername, isAdmin, isFollowing, isPend
                     {dogs.map((d) => (
                       <button key={d.id} onClick={() => setOpenDog(d)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ border: "none", padding: "9px 0", background: "transparent", cursor: "pointer", textAlign: "left" }}>
                         <div style={{ width: 46, height: 46, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                          {d.photo_url ? <img src={d.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={18} color={colors.textFaint} />}
+                          {d.photo_url ? <img loading="lazy" src={d.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={18} color={colors.textFaint} />}
                         </div>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text }}>{d.nom}</div>
@@ -2408,7 +2410,7 @@ function SharePostSheet({ item, onClose }) {
             <>
               <div className="flex items-center gap-3" style={{ padding: "0 16px 12px" }}>
                 <div style={{ width: 44, height: 44, borderRadius: RADIUS.lg, background: colors.surfaceAlt, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {thumb ? <img src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : isVideoLike ? <Film size={18} color={colors.textFaint} /> : <Feather size={18} color={colors.textFaint} />}
+                  {thumb ? <img loading="lazy" src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : isVideoLike ? <Film size={18} color={colors.textFaint} /> : <Feather size={18} color={colors.textFaint} />}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.titre || item.texte || "Contenu PISTE"}</div>
@@ -2514,7 +2516,7 @@ function MediaCarousel({ media, colors }) {
               </div>
             ) : (
               <div style={{ width: "100%", aspectRatio: "4/5", background: colors.surfaceAlt }}>
-                <img src={m.url} alt="" onError={() => markFailed(i)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                <img loading="lazy" src={m.url} alt="" onError={() => markFailed(i)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               </div>
             )}
           </div>
@@ -2619,7 +2621,7 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
                 // donc l'image affichée ici correspond déjà exactement à ce
                 // que l'auteur a choisi, sans lettrboxing ni bandes latérales.
                 <div style={{ width: "100%", aspectRatio: "4/5", background: colors.surfaceAlt }}>
-                  <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  <img loading="lazy" src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                 </div>
               )}
             </SensitiveGate>
@@ -3315,7 +3317,7 @@ function VideoCard({ video, onOpenPlayer }) {
         disabled={!gated && !canPlay}
         style={{ width: "100%", aspectRatio: "16/9", background: colors.surfaceAlt, position: "relative", overflow: "hidden", borderRadius: RADIUS.xl, border: "none", padding: 0, cursor: gated || canPlay ? "pointer" : "default" }}
       >
-        {image && <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: gated ? "blur(16px)" : "none" }} />}
+        {image && <img loading="lazy" src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: gated ? "blur(16px)" : "none" }} />}
         {gated ? (
           <div style={{ position: "absolute", inset: 0, background: "rgba(20,18,16,0.55)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 10, textAlign: "center", gap: 5 }}>
             <AlertTriangle size={18} color="#fff" strokeWidth={1.8} />
@@ -3458,7 +3460,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
       {item.videoUrl && shouldLoad && !videoError ? (
         <video ref={videoRef} src={item.videoUrl} poster={item.image || undefined} loop muted={muted} playsInline preload="metadata" onClick={handleTap} onError={() => setVideoError(true)} onLoadedMetadata={(e) => setIsHorizontal(e.target.videoWidth > e.target.videoHeight)} style={{ width: "100%", height: "100%", objectFit: isHorizontal ? "contain" : "cover" }} />
       ) : item.image ? (
-        <img src={item.image} alt="" onClick={handleTap} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <img loading="lazy" src={item.image} alt="" onClick={handleTap} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Film size={36} color="rgba(255,255,255,0.3)" /></div>
       )}
@@ -3480,7 +3482,7 @@ function InstantSlide({ item, liked, reposted, commentCount, onLike, onRepost, o
       <div style={{ position: "absolute", left: 0, right: 68, bottom: 0, padding: "0 16px calc(22px + env(safe-area-inset-bottom, 0px))", color: "#fff", pointerEvents: "none" }}>
         <button onClick={onOpenAuthor} className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 8, pointerEvents: "auto" }}>
           <div style={{ width: 30, height: 30, borderRadius: RADIUS.pill, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-            {item.avatar ? <img src={item.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color="#fff" />}
+            {item.avatar ? <img loading="lazy" src={item.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={14} color="#fff" />}
           </div>
           <span style={{ fontSize: 13, fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{item.nom}</span>
         </button>
@@ -3562,7 +3564,7 @@ function RepostRow({ post, onOpen }) {
     <button onClick={() => onOpen(post)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: "transparent", border: "none", padding: "9px 16px", cursor: "pointer", textAlign: "left" }}>
       <div style={{ position: "relative", width: 44, height: 44, borderRadius: RADIUS.sm, overflow: "hidden", background: colors.surfaceAlt, flexShrink: 0 }}>
         {image ? (
-          <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: post.contentRating === "sensitive" ? "blur(8px)" : "none" }} />
+          <img loading="lazy" src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: post.contentRating === "sensitive" ? "blur(8px)" : "none" }} />
         ) : post.videoUrl ? (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={14} color={colors.textFaint} /></div>
         ) : (
@@ -3927,7 +3929,7 @@ function GroupImageArea({ group, height = 92, iconSize = 20 }) {
   if (image) {
     return (
       <div style={{ width: "100%", height, position: "relative", overflow: "hidden" }}>
-        <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <img loading="lazy" src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0))" }} />
         {isVideo && (
           <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: iconSize * 1.5, height: iconSize * 1.5, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -3978,7 +3980,7 @@ function GroupCategoryTile({ group, onOpen }) {
           <div className="flex items-center" style={{ flexShrink: 0 }}>
             {previews.map((url, i) => (
               <div key={i} style={{ width: 26, height: 26, borderRadius: RADIUS.pill, overflow: "hidden", border: "2px solid rgba(255,255,255,0.55)", marginLeft: i === 0 ? 0 : -8, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }}>
-                <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img loading="lazy" src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               </div>
             ))}
           </div>
@@ -4461,7 +4463,7 @@ function CreateGroupForm({ onClose, onCreated }) {
           style={{ width: "100%", border: `1.5px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: imagePreview ? 0 : "22px 14px", textAlign: "center", marginBottom: 16, background: "transparent", cursor: "pointer", overflow: "hidden" }}
         >
           {imagePreview ? (
-            <img src={imagePreview} alt="" style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
+            <img loading="lazy" src={imagePreview} alt="" style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
           ) : (
             <>
               <Camera size={20} color={colors.textFaint} style={{ margin: "0 auto 6px" }} />
@@ -4950,7 +4952,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
                 {mediaFiles.map((f, i) => (
                   <div key={i} style={{ position: "relative", width: 64, height: 64, borderRadius: RADIUS.sm, overflow: "hidden", background: colors.surfaceAlt }}>
                     {f.type.startsWith("image") ? (
-                      <img src={mediaPreviewUrls[i]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img loading="lazy" src={mediaPreviewUrls[i]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : (
                       <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Video size={18} color={colors.textFaint} /></div>
                     )}
@@ -4983,7 +4985,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
             <input id="piste-thumb-input" type="file" accept="image/*" onChange={pickThumbnail} style={{ display: "none" }} />
             <label htmlFor="piste-thumb-input" className="flex items-center gap-3" style={{ cursor: "pointer" }}>
               <div style={{ width: 66, height: 66, borderRadius: RADIUS.lg, background: colors.surfaceAlt, border: thumbnailPreview ? "none" : `1.5px dashed ${colors.border}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                {thumbnailPreview ? <img src={thumbnailPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Camera size={18} color={colors.textFaint} />}
+                {thumbnailPreview ? <img loading="lazy" src={thumbnailPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Camera size={18} color={colors.textFaint} />}
               </div>
               <span style={{ fontSize: 12, color: colors.textFaint }}>{thumbnailPreview ? "Changer l'image de miniature" : "Sinon, une image sera extraite automatiquement de la vidéo"}</span>
             </label>
@@ -5119,7 +5121,7 @@ function TraceComposeScreen({ onClose, onPublished }) {
             {mediaType === "video" ? (
               <video src={preview} muted autoPlay loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             ) : (
-              <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img loading="lazy" src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             )}
             <button
               onClick={() => inputRef.current?.click()}
@@ -5545,7 +5547,7 @@ function DogFormScreen({ dog, onClose, onSaved, onDeleted }) {
           style={{ width: "100%", border: photoPreview ? "none" : `1.5px dashed ${colors.border}`, borderRadius: RADIUS.md, padding: photoPreview ? 0 : "22px 14px", textAlign: "center", marginBottom: 16, background: colors.surfaceAlt, cursor: "pointer", overflow: "hidden" }}
         >
           {photoPreview ? (
-            <img src={photoPreview} alt="" style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
+            <img loading="lazy" src={photoPreview} alt="" style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
           ) : (
             <>
               <Dog size={20} color={colors.textFaint} style={{ margin: "0 auto 6px" }} />
@@ -5656,7 +5658,7 @@ function DogPage({ dog, onClose, onOpenProfile, onOpenPlayer, meUsername, isAdmi
       <div className="px-5 pt-4">
         <div className="flex items-start justify-between" style={{ gap: 10 }}>
           <div style={{ width: 64, height: 64, borderRadius: RADIUS.md, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden", flexShrink: 0 }}>
-            {dog.photo_url ? <img src={dog.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={26} color={colors.textFaint} />}
+            {dog.photo_url ? <img loading="lazy" src={dog.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={26} color={colors.textFaint} />}
           </div>
           {isOwner && (
             <button onClick={onEditDog} className="active:scale-[0.98] transition-transform" style={{ flexShrink: 0, border: "none", background: colors.surfaceAlt, color: colors.text, borderRadius: RADIUS.pill, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Modifier</button>
@@ -6059,12 +6061,12 @@ function HuntingLogFormScreen({ log, dogs, onClose, onSaved }) {
         <div className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
           {(log?.photos || []).map((p) => (
             <div key={p.id} style={{ width: 66, height: 66, borderRadius: RADIUS.lg, overflow: "hidden" }}>
-              <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img loading="lazy" src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
           ))}
           {photoPreviews.map((src, i) => (
             <div key={i} style={{ position: "relative", width: 66, height: 66, borderRadius: RADIUS.lg, overflow: "hidden" }}>
-              <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img loading="lazy" src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: RADIUS.pill, background: "rgba(0,0,0,0.55)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                 <X size={10} color="#fff" />
               </button>
@@ -6135,7 +6137,7 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
                 <div style={{ fontSize: 11, fontWeight: 700, color: colors.textFaint, marginBottom: 6 }}>SORTIE DE</div>
                 <button onClick={() => onOpenProfile?.(log.owner.username)} className="flex items-center gap-1.5" style={{ background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.pill, padding: "4px 10px 4px 4px", cursor: onOpenProfile ? "pointer" : "default" }}>
                   <div style={{ width: 20, height: 20, borderRadius: RADIUS.pill, background: colors.accentSoft, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {log.owner.avatar ? <img src={log.owner.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={10} color={colors.accent} />}
+                    {log.owner.avatar ? <img loading="lazy" src={log.owner.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={10} color={colors.accent} />}
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{log.owner.nom}</span>
                 </button>
@@ -6148,7 +6150,7 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
                   {log.companions.map((c) => (
                     <button key={c.id} onClick={() => onOpenProfile?.(c.username)} className="flex items-center gap-1.5 active:scale-[0.98] transition-transform" style={{ background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.pill, padding: "4px 10px 4px 4px", cursor: onOpenProfile ? "pointer" : "default" }}>
                       <div style={{ width: 20, height: 20, borderRadius: RADIUS.pill, background: colors.accentSoft, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {c.avatar ? <img src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={10} color={colors.accent} />}
+                        {c.avatar ? <img loading="lazy" src={c.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={10} color={colors.accent} />}
                       </div>
                       <span style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{c.nom}</span>
                     </button>
@@ -6159,7 +6161,7 @@ function HuntingLogDetailSheet({ log, onClose, onEdit, onDelete, onOpenProfile }
             {log.photos.length > 0 && (
               <div className="flex gap-2" style={{ overflowX: "auto", marginBottom: 14 }}>
                 {log.photos.map((p) => (
-                  <img key={p.id} src={p.url} alt="" style={{ width: 96, height: 96, borderRadius: RADIUS.lg, objectFit: "cover", flexShrink: 0 }} />
+                  <img key={p.id} loading="lazy" src={p.url} alt="" style={{ width: 96, height: 96, borderRadius: RADIUS.lg, objectFit: "cover", flexShrink: 0 }} />
                 ))}
               </div>
             )}
@@ -6428,7 +6430,7 @@ function HuntingLogScreen({ onClose, dogs, onOpenProfile }) {
                     </div>
                     <button onClick={() => setDetailLog(l)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ flex: 1, minWidth: 0, background: colors.surfaceAlt, border: "none", borderRadius: RADIUS.xl, padding: "12px 14px", marginBottom: 14, cursor: "pointer", textAlign: "left" }}>
                       {l.photos.length > 0 ? (
-                        <img src={l.photos[0].url} alt="" style={{ width: 48, height: 48, borderRadius: RADIUS.lg, objectFit: "cover", flexShrink: 0 }} />
+                        <img loading="lazy" src={l.photos[0].url} alt="" style={{ width: 48, height: 48, borderRadius: RADIUS.lg, objectFit: "cover", flexShrink: 0 }} />
                       ) : (
                         <div style={{ width: 48, height: 48, borderRadius: RADIUS.lg, background: colors.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           <Footprints size={20} color={colors.accent} />
@@ -6543,7 +6545,7 @@ function PublicationGridCell({ post: p, onOpen }) {
   return (
     <button onClick={() => onOpen(p)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
       {image ? (
-        <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <img loading="lazy" src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
         // Marge généreuse + coupure de mot forcée : sans "wordBreak", un seul
         // mot ou hashtag trop long (pas d'espace pour couper naturellement)
@@ -6576,7 +6578,7 @@ function VideoThumbCell({ video: v, onOpen }) {
   return (
     <button onClick={() => onOpen(v)} className="active:scale-95 transition-transform" style={{ position: "relative", aspectRatio: "1 / 1", border: "none", padding: 0, cursor: "pointer", overflow: "hidden", borderRadius: RADIUS.md, background: colors.surfaceAlt }}>
       {image ? (
-        <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <img loading="lazy" src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
         <Film size={18} color={colors.textFaint} style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)" }} />
       )}
@@ -6722,7 +6724,7 @@ function ScreenProfil({ profile, setProfile, dogs, addDog, onDogUpdated, onDogDe
             dogs.map((d) => (
               <button key={d.id} onClick={() => setOpenDog(d)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ border: "none", padding: "9px 0", background: "transparent", cursor: "pointer", textAlign: "left" }}>
                 <div style={{ width: 46, height: 46, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                  {d.photo_url ? <img src={d.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={18} color={colors.textFaint} />}
+                  {d.photo_url ? <img loading="lazy" src={d.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Dog size={18} color={colors.textFaint} />}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: colors.text }}>{d.nom}</div>
@@ -6905,7 +6907,7 @@ function MessageBubble({ mine, media, colors }) {
     );
   }
   if (media.type === "image") {
-    return <img src={media.url} alt="" onError={() => setFailed(true)} style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
+    return <img loading="lazy" src={media.url} alt="" onError={() => setFailed(true)} style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
   }
   if (media.type === "video") {
     return <video src={media.url} controls playsInline onError={() => setFailed(true)} style={{ maxWidth: "100%", borderRadius: RADIUS.md, display: "block" }} />;
@@ -7142,7 +7144,7 @@ function GroupConversationSettingsSheet({ conversationId, title, image, onClose,
             <div className="flex flex-col items-center" style={{ marginBottom: 16 }}>
               <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickImage} style={{ display: "none" }} />
               <button onClick={() => imageInputRef.current?.click()} disabled={uploading} style={{ width: 76, height: 76, borderRadius: RADIUS.pill, background: colors.surfaceAlt, border: "none", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer", position: "relative", padding: 0 }}>
-                {image ? <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Users size={26} color={colors.textFaint} />}
+                {image ? <img loading="lazy" src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Users size={26} color={colors.textFaint} />}
                 {uploading && (
                   <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Camera size={18} color="#fff" />
@@ -7238,12 +7240,30 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   // Tap sur une citation "Réponse à X" : retrouve et met en évidence le
   // message original, comme WhatsApp/iMessage — sans ça, une citation reste
   // un simple aperçu texte, jamais vraiment "propre" pour retrouver le fil.
-  const scrollToMessage = (id) => {
+  const highlight = (id) => {
     const el = document.getElementById(`msg-${id}`);
-    if (!el) return;
+    if (!el) return false;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     setHighlightedId(id);
     window.setTimeout(() => setHighlightedId((h) => (h === id ? null : h)), 1400);
+    return true;
+  };
+  const scrollToMessage = async (id) => {
+    if (highlight(id)) return;
+    // Message cité hors de la fenêtre des messages les plus récents chargés
+    // par fetchMessages (voir son plafond `limit`) — sans ce secours, taper
+    // sur une vieille citation ne faisait rien, sans aucun retour visuel.
+    try {
+      const fetched = await messageService.fetchMessageById(id);
+      if (!fetched) return;
+      setMessages((m) => {
+        if (m.some((x) => x.id === fetched.id)) return m;
+        return [...m, fetched].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      });
+      window.setTimeout(() => highlight(id), 60);
+    } catch (e) {
+      // Message supprimé ou inaccessible : pas d'action, pas d'erreur bruyante.
+    }
   };
   const lastTapRef = useRef({ id: null, time: 0 });
   // Balayer une bulle vers la gauche pour y répondre (façon Instagram),
@@ -7264,6 +7284,20 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const textareaRef = useRef(null);
+  // Sans ça, quitter cet écran pendant un enregistrement (retour, changement
+  // d'onglet) laissait le flux micro actif indéfiniment côté navigateur —
+  // stopRecording() ne coupe le flux que sur un clic explicite sur "stop",
+  // jamais au démontage.
+  useEffect(() => {
+    return () => {
+      const ref = recorderRef.current;
+      if (!ref) return;
+      window.clearInterval(timerRef.current);
+      try { ref.recorder.stop(); } catch (e) {}
+      ref.stream.getTracks().forEach((t) => t.stop());
+      recorderRef.current = null;
+    };
+  }, []);
   // Deux messages qui arrivent coup sur coup déclenchent deux refetch() qui
   // peuvent se terminer dans le désordre — sans garde, la réponse la plus
   // lente écrase la plus récente et la conversation reste figée jusqu'à ce
@@ -7628,7 +7662,7 @@ function ConversationThread({ conversationId, meId, onClose, onLeave, title, sub
                           style={{ width: "100%", background: mine ? "rgba(255,255,255,0.14)" : colors.surfaceAlt, border: "none", borderRadius: RADIUS.md, padding: 6, marginBottom: m.texte ? 6 : 0, cursor: "pointer", textAlign: "left" }}
                         >
                           <div style={{ position: "relative", width: 44, height: 44, borderRadius: RADIUS.sm, overflow: "hidden", background: "#000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {spThumb ? <img src={spThumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : spIsVideo ? <Film size={16} color="rgba(255,255,255,0.6)" /> : <Feather size={16} color={colors.textFaint} />}
+                            {spThumb ? <img loading="lazy" src={spThumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : spIsVideo ? <Film size={16} color="rgba(255,255,255,0.6)" /> : <Feather size={16} color={colors.textFaint} />}
                             {spIsVideo && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)" }}><Play size={12} color="#fff" fill="#fff" /></div>}
                           </div>
                           <div style={{ minWidth: 0 }}>
@@ -7939,7 +7973,7 @@ function NewConversationSheet({ onClose, onStarted }) {
             style={{ width: "100%", border: "none", background: colors.surfaceAlt, borderRadius: RADIUS.lg, padding: 10, cursor: "pointer", marginBottom: 12, textAlign: "left" }}
           >
             <div style={{ width: 44, height: 44, borderRadius: RADIUS.pill, background: colors.surface, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-              {imagePreview ? <img src={imagePreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Camera size={17} color={colors.textFaint} />}
+              {imagePreview ? <img loading="lazy" src={imagePreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Camera size={17} color={colors.textFaint} />}
             </div>
             <span style={{ fontSize: 12.5, fontWeight: 600, color: colors.textSecondary }}>{imagePreview ? "Changer la photo" : "Ajouter une photo de groupe"}</span>
           </button>
@@ -8324,7 +8358,7 @@ function NotificationsPanel({ onClose, onOpenConversation, onOpenAuthor, onOpenP
                 return (
                   <button key={n.id} onClick={() => open(n)} className="flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ width: "100%", background: n.lu ? colors.surface : colors.accentSoft, border: "none", borderRadius: RADIUS.lg, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left", boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}>
                     <div style={{ width: 36, height: 36, borderRadius: RADIUS.pill, background: colors.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
-                      {n.actor?.avatar ? <img src={n.actor.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon size={16} color={colors.textFaint} />}
+                      {n.actor?.avatar ? <img loading="lazy" src={n.actor.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon size={16} color={colors.textFaint} />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.4 }}>{text}</div>
