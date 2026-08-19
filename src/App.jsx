@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import {
   Home, Plus, Users, User, Search, Bell, MessageCircle, ArrowLeft, X, Menu,
   Image as ImageIcon, CalendarDays, Settings, ChevronRight,
-  Check, Video, Film, Dog, Repeat2, MapPin,
+  Check, Film, Dog, Repeat2, MapPin,
   Bookmark, HelpCircle, AlertTriangle, LogOut, Moon, Sun, Monitor, BarChart3,
   Heart, MessageSquare, MoreHorizontal, Camera, Play, BookOpen, Mic,
   Volume2, VolumeX, Trash2, Footprints, Pause, Eye, Lock, Clock, Cloud,
@@ -5256,7 +5256,10 @@ function ScreenGroupes({ groups, addGroup, onToggleJoin, onCreatePost, onGroupUp
 const CREATE_OPTIONS = [
   { key: "trace", label: "Trace", icon: Footprints },
   { key: "video_courte", label: "Instant", icon: Film },
-  { key: "video", label: "Vidéo", icon: Video },
+  // Film (pas Video) : même icône que l'onglet "Vidéo" de BottomNav et que
+  // le reste de l'app — l'ancien "Video" (caméscope) créait une deuxième
+  // silhouette pour le même concept, visible d'un menu à l'autre.
+  { key: "video", label: "Vidéo", icon: Film },
   { key: "publication", label: "Publication", icon: Feather },
 ];
 // Depuis une communauté : ni Trace (jamais rattachée à un groupe), ni Vidéo
@@ -5661,7 +5664,7 @@ function ComposeScreen({ type, onClose, dogs, onPublished, authorName, editingPo
                     {f.type.startsWith("image") ? (
                       <img loading="lazy" src={mediaPreviewUrls[i]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : (
-                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Video size={18} color={colors.textFaint} /></div>
+                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Film size={18} color={colors.textFaint} /></div>
                     )}
                     {f.type.startsWith("image") && (
                       <button
