@@ -729,14 +729,6 @@ function formatCount(n) {
   if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10000 ? 1 : 0).replace(".", ",")}k`;
   return `${(n / 1_000_000).toFixed(1).replace(".", ",")}M`;
 }
-// "avec Jean" / "avec Jean et Marie" / "avec Jean, Marie et Paul" — jamais
-// juste une virgule avant le dernier nom, plus naturel à lire dans l'en-tête
-// d'une publication (voir authorRow, PostCard).
-function formatIdentifiedNames(users) {
-  const names = users.map((u) => u.nom || u.username);
-  if (names.length === 1) return names[0];
-  return `${names.slice(0, -1).join(", ")} et ${names[names.length - 1]}`;
-}
 function mapPostRow(row) {
   return {
     id: row.id,
@@ -2671,7 +2663,25 @@ function PostCard({ post, liked, saved, reposted, commentCount, onLike, onSave, 
           <div style={{ fontSize: 13, fontWeight: 700, color: overlay ? "#fff" : colors.text, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.nom}</div>
           <div style={{ fontSize: 11, color: overlay ? "rgba(255,255,255,0.8)" : colors.textFaint, textShadow: overlay ? "0 1px 3px rgba(0,0,0,0.4)" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {post.date}
-            {post.identifiedUsers && post.identifiedUsers.length > 0 && ` · avec ${formatIdentifiedNames(post.identifiedUsers)}`}
+            {post.identifiedUsers && post.identifiedUsers.length > 0 && (
+              <>
+                {" · avec "}
+                {post.identifiedUsers.map((u, i) => (
+                  <React.Fragment key={u.username}>
+                    {i > 0 && (i === post.identifiedUsers.length - 1 ? " et " : ", ")}
+                    {/* stopPropagation : sinon le clic remonte au bouton
+                        parent (onOpenAuthor) et ouvre le profil de l'AUTEUR
+                        du post au lieu de la personne identifiée cliquée. */}
+                    <span
+                      onClick={(e) => { e.stopPropagation(); onOpenProfile?.(u.username); }}
+                      style={{ color: overlay ? "#fff" : colors.text, fontWeight: 700, cursor: onOpenProfile ? "pointer" : "default" }}
+                    >
+                      {u.nom || u.username}
+                    </span>
+                  </React.Fragment>
+                ))}
+              </>
+            )}
           </div>
         </div>
       </button>
