@@ -968,7 +968,13 @@ function AuthBackdrop({ children }) {
     return () => clearTimeout(t);
   }, []);
   return (
-    <div style={{ position: "relative", height: "100%", overflow: "hidden", background: colors.background }}>
+    // overflow-y: auto (pas "hidden" sur les deux axes) : maintenant que la
+    // hauteur de cette chaîne est définie (voir Root()), un contenu de
+    // formulaire réellement plus haut que l'écran (erreur affichée, clavier
+    // ouvert qui réduit l'espace visible) doit pouvoir défiler au lieu
+    // d'être invisible/coupé — overflow-x reste "hidden" pour continuer à
+    // rogner proprement les deux halos décoratifs positionnés hors-cadre.
+    <div style={{ position: "relative", height: "100%", overflowX: "hidden", overflowY: "auto", background: colors.background }}>
       <div style={{ position: "absolute", top: -90, left: -70, width: 220, height: 220, borderRadius: "50%", background: colors.accent, opacity: 0.2, filter: "blur(60px)", animation: "pisteFloatBlob 9s ease-in-out infinite", pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: -110, right: -80, width: 260, height: 260, borderRadius: "50%", background: colors.accent, opacity: 0.14, filter: "blur(70px)", animation: "pisteFloatBlob 11s ease-in-out infinite reverse", pointerEvents: "none" }} />
       <div style={{ position: "relative", height: "100%", opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(16px)", transition: "opacity 480ms ease, transform 480ms ease" }}>
@@ -9934,8 +9940,17 @@ function Root() {
   if (stage === "app") return <MainApp session={null} onboardingData={data} ageInfo={ageInfo} />;
 
   return (
-    <div style={{ minHeight: "100dvh", background: colors.background, display: "flex", justifyContent: "center", fontFamily: FONT }}>
-      <div style={{ width: "100%", maxWidth: 480, minHeight: "100dvh" }}>{flow[stage]}</div>
+    // height (pas minHeight) sur les deux niveaux : chaque écran de l'onboarding/
+    // connexion (StepBirthdate, StepWhoYouAre, LoginScreen...) a lui-même un
+    // wrapper en height:"100%" pour occuper tout l'écran — un height en
+    // pourcentage ne se résout QUE si un ancêtre a une hauteur définie, jamais
+    // avec un simple min-height. Avec minHeight ici, ces écrans se réduisaient
+    // à leur propre hauteur de contenu (surtout visible sur les étapes courtes,
+    // ex. StepWhoYouAre) plutôt que de remplir l'écran — sans perte si un
+    // contenu est réellement plus grand : rien n'est en overflow:hidden dans
+    // cette chaîne, un contenu plus haut continue de s'afficher normalement.
+    <div style={{ height: "100dvh", background: colors.background, display: "flex", justifyContent: "center", fontFamily: FONT }}>
+      <div style={{ width: "100%", maxWidth: 480, height: "100dvh" }}>{flow[stage]}</div>
     </div>
   );
 }

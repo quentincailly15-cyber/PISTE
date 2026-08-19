@@ -19,7 +19,12 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#B85A28" />
+    <!-- Couleur de fond réelle de l'app (mode sombre, toujours actif par
+         défaut — voir ThemeProvider), pas l'accent orange du thème clair :
+         c'est cette couleur que la barre d'adresse Safari/Chrome teinte,
+         donc elle doit correspondre à ce qui s'affiche vraiment, pas à un
+         thème que l'app ne montre jamais au premier lancement. -->
+    <meta name="theme-color" content="#0D0F08" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <!-- Version standard (non préfixée) du même réglage — iOS ne lit que la
          version "apple-", mais l'inclure prépare le terrain pour les
